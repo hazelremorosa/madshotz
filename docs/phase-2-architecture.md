@@ -65,13 +65,55 @@ code changes when the DSLR lands.**
 
 ### Window topology
 
-**Target hardware: a tablet PC — single screen, touch-only, staff and customer share it.**
-This is decided, and it forces a single-window design.
+**Target hardware: a tablet PC — primary. A laptop — supported, secondary.** Single screen; staff
+and customer share it. Two consequences: a single-window design, and an **adaptive shell** (§1.1).
+
+> **Tiebreaker rule.** The tablet is the device that earns money at events; the laptop is for setup,
+> demos and smaller gigs. **When a portrait-touch design and a landscape-mouse design conflict,
+> portrait touch wins.** The laptop adapts to the tablet's design language, never the reverse.
 
 | Window | Purpose |
 |--------|---------|
 | **Kiosk window** | Fullscreen, always-on-top, frameless, `kiosk: true`. Hosts **both** the customer flow and the admin UI as protected routes. |
 | **Offscreen render window** | Hidden, sized to exact print pixels. Renders the composition at print resolution. See §7. |
+
+### 1.1 The adaptive shell — two orientations, two input modalities, one component tree
+
+The booth runs primarily on a portrait-mounted touch tablet at events, and optionally on a landscape
+laptop for setup, demos and smaller gigs. **These are not two applications and not two sets of
+screens.** Portrait is the canonical design; landscape is a re-arrangement of it.
+
+Every kiosk screen is composed from a shared `KioskScreen` primitive with four named slots:
+
+```
+   PORTRAIT  (tablet, 9:16)              LANDSCAPE  (laptop, 16:9)
+  ┌───────────────────────┐        ┌──────────────┬────────────────┐
+  │        HEADER         │        │              │     HEADER     │
+  ├───────────────────────┤        │              ├────────────────┤
+  │                       │        │    STAGE     │                │
+  │        STAGE          │        │              │    CONTROLS    │
+  │                       │        │  (camera /   │                │
+  ├───────────────────────┤        │   artwork)   │                │
+  │       CONTROLS        │        │              ├────────────────┤
+  ├───────────────────────┤        │              │     FOOTER     │
+  │        FOOTER         │        └──────────────┴────────────────┘
+  └───────────────────────┘
+```
+
+A screen declares *what* goes in each slot; the shell decides *where* the slots go. Orientation is a
+runtime layout concern, not a variant of every screen. Adding a screen means filling four slots
+once — it works in both orientations by construction.
+
+**Input modality is detected, not assumed.** A `useInputModality()` hook reports `touch` or
+`pointer`, and the design system adapts: editor drag handles grow on touch, hover affordances are
+*permitted* on pointer but **never required** anywhere, and the attendant gesture (§below) has a
+keyboard equivalent on laptop. The rule from §14 stands regardless of device — **no hover state may
+ever carry meaning.**
+
+**The artwork is unaffected by any of this.** A `CompositionSpec` is resolution- and
+orientation-independent (§7); its aspect comes from layout × paper, never from the screen. A print
+composed on a landscape laptop is byte-identical to the same print composed on a portrait tablet.
+This is the normalised-coordinate decision paying off a second time.
 
 ### Single-screen staff access
 
@@ -603,7 +645,8 @@ worth its cost.
 | **Logging** | Structured, rotating, correlation-id threaded from IPC call to log line. Viewable in the admin panel. |
 | **Type safety** | `strict` TypeScript; Zod at every external boundary (IPC, filesystem manifests, theme manifests, cloud responses). |
 | **Dark mode** | Design tokens (Phase 4). The kiosk ships dark; the admin panel supports both. |
-| **Touch-first (tablet PC)** | **48 px** minimum targets; **no hover state carries meaning anywhere** — a tablet has no hover, so every affordance must be visible at rest. Multi-touch pinch/rotate in the editor. On-screen keyboard for all admin text entry, with numeric keypads for prices and PINs. Physical keyboard shortcuts are an optional accelerator, never the only path. |
+| **Touch-first, mouse-capable** | **48 px** minimum targets; **no hover state carries meaning anywhere** — a tablet has no hover, so every affordance must be visible at rest. Multi-touch pinch/rotate in the editor, with equivalent handle-drag and modifier-key paths for mouse. On-screen keyboard for admin text entry when modality is `touch`, native input when `pointer`; numeric keypads for prices and PINs. Physical keyboard shortcuts are an accelerator on laptop, never the only path. |
+| **Adaptive layout** | One component tree, two orientations, via the §1.1 slot shell. Portrait and landscape are layout states, not screen variants — no screen is designed twice. |
 | **Tablet thermals & power** | Print-resolution rendering, Sharp derivatives and GIF encoding are queued and serialised rather than run concurrently — a fanless tablet throttles under sustained load. Battery and thermal state surface on the admin dashboard alongside camera and printer health. |
 | **Testing** | Vitest for domain/application (fast, no mocks); integration tests for adapters; Playwright for the kiosk flow; a golden-image test asserting preview and print render identically. |
 | **Licensing** | Activation module — required before selling to other operators. |
@@ -616,27 +659,24 @@ worth its cost.
 |----------|--------|
 | **Attendant workflow** | ✅ Staff share the customer screen. Resolved by the two-tier drawer/admin design in §1. |
 | **Consent moment** | ✅ Attract screen, acknowledged once per session, non-blocking. `Session.consentAcceptedAt` is stamped on acknowledgement and retained with the financial record after photo purge (§4). |
-| **Device class** | ✅ Tablet PC — single screen, touch-only. |
-| **Operating system** | ⚠️ **OPEN — blocking.** See risk below. |
-| **Orientation** | ⚠️ Open. Portrait-mounted is assumed (the prototype's 9:16); confirm before wireframes. |
+| **Device class** | ✅ **Tablet PC primary; laptop supported, secondary.** Portrait touch wins design conflicts (§1). |
+| **Orientation** | ✅ **Portrait canonical**, landscape a re-arrangement of it, via the §1.1 adaptive shell. |
+| **Operating system** | ✅ A desktop OS — implied by the laptop requirement, so the Electron stack is sound. **Windows assumed primary**; confirm before Phase 8 packaging. |
 
-### ⚠️ Blocking risk: tablet OS
+### Why the laptop requirement resolved the stack risk
 
-**Electron runs on Windows, macOS and Linux. It does not run on Android or iPadOS.** If the intended
-device is an Android tablet or an iPad, the entire approved stack is invalid and Phase 2 must be
-re-planned around a different runtime.
+Electron runs on Windows, macOS and Linux, and **not** on Android or iPadOS. "Tablet PC *and*
+laptop, same application" only holds on a desktop OS, so the approved stack is valid. Windows is
+assumed primary — it is where dye-sub vendor drivers are best supported and it matches a Surface- or
+convertible-class tablet PC.
 
-| Device | Verdict |
-|--------|---------|
-| **Windows x86/x64 tablet** (Surface Pro class) | ✅ Fully supported. Best dye-sub driver availability. **Recommended.** |
-| **Windows on ARM** tablet | ⚠️ Electron supports ARM64, but dye-sub vendor drivers frequently do not. Printer must be verified first. |
-| **Android tablet / iPad** | ❌ Electron cannot run. Requires a different architecture entirely. |
+Two items to settle before Phase 8, neither blocking Phase 3:
 
-A secondary hardware question follows from the answer: **how the printer connects.** Dye-sub
-printers are USB-B and draw meaningful power; many tablets expose only USB-C. Options are a powered
-USB hub, a network print server, or a small always-on mini-PC hosting the printer with the tablet
-acting purely as the kiosk. This affects the `PrinterGateway` adapter and must be settled before
-Phase 8.
+1. **Windows on ARM?** Electron supports ARM64, but dye-sub vendor drivers frequently do not. If the
+   tablet is ARM, the printer must be verified against it first.
+2. **Printer connection.** Dye-sub printers are USB-B and draw real power; many tablets expose only
+   USB-C. Options: a powered USB hub, a network print server, or a small always-on mini-PC hosting
+   the printer with the tablet acting purely as kiosk. This selects the `PrinterGateway` adapter.
 
 ---
 
