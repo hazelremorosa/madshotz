@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>MAD SHOT'Z - Silent Auto-Save Receipt Photobooth</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <style>
+            .mirror {
+                transform: scaleX(-1);
+            }
+            .booth-core-bg {
+                background-color: #fafafa;
+                background-image: radial-gradient(#e5e5e5 1px, transparent 1px);
+                background-size: 16px 16px;
+            }
+            .receipt-edge {
+                background: #ffffff;
+                position: relative;
+            }
+            .receipt-edge::after {
+                content: "";
+                position: absolute;
+                left: 0;
+                bottom: -8px;
+                width: 100%;
+                height: 8px;
+                background-image:
+                    linear-gradient(135deg, transparent 50%, #ffffff 50%),
+                    linear-gradient(225deg, transparent 50%, #ffffff 50%);
+                background-size: 8px 8px;
+                background-repeat: repeat-x;
+            }
+            .draggable-stamp {
+                touch-action: none;
+                cursor: grab;
+            }
+            .draggable-stamp:active {
+                cursor: grabbing;
+            }
+        </style>
+    </head>
+    <body
+        class="bg-zinc-950 min-h-screen flex items-center justify-center p-2 select-none font-sans"
+    >
+        <div
+            id="kioskShell"
+            class="w-full max-w-[420px] aspect-[9/16] bg-zinc-900 rounded-[40px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border-[12px] border-zinc-800/90 relative overflow-hidden flex flex-col"
+        >
+            <!-- ==================== SCREEN 1: BRAND WELCOME SCREEN ==================== -->
+            <div
+                id="view1"
+                class="absolute inset-0 bg-[#12161a] flex flex-col items-center justify-center z-10 p-6 text-center transition-all duration-300"
+            >
+                <div
+                    id="btnLaunchApp"
+                    class="w-full bg-[#0a0c0e] border border-zinc-800/60 rounded-2xl py-14 px-6 shadow-2xl cursor-pointer hover:border-zinc-700 transition duration-300 group"
+                >
+                    <div
+                        class="w-20 h-20 bg-zinc-900/60 border border-zinc-800 rounded-full flex items-center justify-center mx-auto mb-6 transition group-hover:scale-105"
+                    >
+                        <i
+                            class="fa-light fa-camera-viewfinder text-3xl text-zinc-400"
+                        ></i>
+                    </div>
+                    <h1
+                        class="text-2xl font-black tracking-[0.2em] text-white font-mono"
+                    >
+                        MAD SHOT'Z
+                    </h1>
+                    <p
+                        class="text-[9px] uppercase tracking-[0.4em] text-zinc-500 font-bold mt-1 mb-8"
+                    >
+                        STUDIO CREATIVE
+                    </p>
+                    <div
+                        class="text-[10px] font-mono tracking-widest text-zinc-400 border border-zinc-800/80 inline-block px-4 py-2 rounded-lg bg-zinc-900/30"
+                    >
+                        RECEIPT PHOTOBOOTH
+                    </div>
+                    <p class="text-[9px] text-zinc-500 mt-4 italic">
+                        Tap to open booth. Pictures auto-save silently to
+                        background storage.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ==================== SCREEN 2: LAYOUT SELECTION ==================== -->
+            <div
+                id="view2"
+                class="absolute inset-0 booth-core-bg hidden flex flex-col items-center justify-between p-6 pt-12"
+            >
+                <div class="text-center">
+                    <h2
+                        class="text-xl font-black text-zinc-900 font-mono tracking-tight uppercase"
+                    >
+                        Select Layout
+                    </h2>
+                    <div class="h-0.5 w-12 bg-zinc-900 mx-auto mt-1"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 w-full px-2 my-auto">
+                    <button
+                        onclick="setLayoutFormat('vertical-strip')"
+                        class="bg-white p-4 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-zinc-200/80 hover:border-zinc-900 transition flex flex-col items-center gap-3"
+                    >
+                        <div
+                            class="w-10 h-24 border border-zinc-300 bg-zinc-50 p-1 flex flex-col gap-1"
+                        >
+                            <div class="w-full h-6 bg-zinc-200"></div>
+                            <div class="w-full h-6 bg-zinc-200"></div>
+                            <div class="w-full h-6 bg-zinc-200"></div>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold uppercase tracking-wider text-zinc-700 font-mono"
+                            >3-Frame Strip</span
+                        >
+                    </button>
+
+                    <button
+                        onclick="setLayoutFormat('single-portrait')"
+                        class="bg-white p-4 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-zinc-200/80 hover:border-zinc-900 transition flex flex-col items-center gap-3"
+                    >
+                        <div
+                            class="w-14 h-24 border border-zinc-300 bg-zinc-50 p-1 flex flex-col justify-between"
+                        >
+                            <div class="w-full h-16 bg-zinc-200"></div>
+                            <div class="w-full h-3 bg-zinc-900"></div>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold uppercase tracking-wider text-zinc-700 font-mono"
+                            >Single Frame</span
+                        >
+                    </button>
+
+                    <button
+                        onclick="setLayoutFormat('window-grid')"
+                        class="bg-white p-4 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-zinc-200/80 hover:border-zinc-900 transition flex flex-col items-center gap-3"
+                    >
+                        <div
+                            class="w-16 h-20 border border-zinc-300 bg-zinc-50 p-1 grid grid-cols-2 grid-rows-2 gap-1"
+                        >
+                            <div class="w-full h-7 bg-zinc-200"></div>
+                            <div class="w-full h-7 bg-zinc-200"></div>
+                            <div class="w-full h-7 bg-zinc-200"></div>
+                            <div class="w-full h-7 bg-zinc-200"></div>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold uppercase tracking-wider text-zinc-700 font-mono"
+                            >Window Grid</span
+                        >
+                    </button>
+
+                    <button
+                        onclick="setLayoutFormat('horizontal-row')"
+                        class="bg-white p-4 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-zinc-200/80 hover:border-zinc-900 transition flex flex-col items-center gap-3"
+                    >
+                        <div
+                            class="w-20 h-20 border border-zinc-300 bg-zinc-50 p-1 flex flex-col justify-end"
+                        >
+                            <div class="grid grid-cols-3 gap-0.5 w-full h-6">
+                                <div class="bg-zinc-200"></div>
+                                <div class="bg-zinc-200"></div>
+                                <div class="bg-zinc-200"></div>
+                            </div>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold uppercase tracking-wider text-zinc-700 font-mono"
+                            >Bottom Row</span
+                        >
+                    </button>
+                </div>
+                <div class="w-full h-4"></div>
+            </div>
+
+            <!-- ==================== SCREEN 3: CAPTURE IMAGES ==================== -->
+            <div
+                id="view3"
+                class="absolute inset-0 booth-core-bg hidden flex flex-col items-center justify-between p-6 pt-12"
+            >
+                <div
+                    class="bg-zinc-900 text-white text-[10px] font-mono tracking-widest py-1.5 px-5 rounded-md shadow-sm"
+                >
+                    <span id="txtCaptureProgress">CAPTURE RUNNING</span>
+                </div>
+
+                <div
+                    class="relative w-full aspect-[4/5] bg-white p-3 rounded-xl shadow-xl border border-zinc-200/60 flex items-center justify-center overflow-hidden"
+                >
+                    <video
+                        id="liveFeedStream"
+                        autoplay
+                        playsinline
+                        class="absolute inset-0 w-full h-full object-cover mirror"
+                    ></video>
+                    <div
+                        id="layoutTargetOverlay"
+                        class="absolute inset-3 grid grid-cols-2 grid-rows-2 gap-2 pointer-events-none hidden"
+                    >
+                        <div class="border border-dashed border-black/5"></div>
+                        <div class="border border-dashed border-black/5"></div>
+                        <div class="border border-dashed border-black/5"></div>
+                        <div class="border border-dashed border-black/5"></div>
+                    </div>
+                    <div
+                        id="lblCountdownValue"
+                        class="hidden absolute inset-0 bg-black/20 backdrop-blur-xs flex items-center justify-center text-white font-mono font-bold text-7xl"
+                    >
+                        3
+                    </div>
+                    <div
+                        id="shutterFlashMatrix"
+                        class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-700"
+                    ></div>
+                </div>
+
+                <button
+                    id="btnExecuteCapture"
+                    class="w-16 h-16 bg-zinc-900 hover:bg-zinc-800 border-4 border-white rounded-full shadow-xl flex items-center justify-center text-white transition active:scale-95 mb-4"
+                >
+                    <i
+                        class="fa-solid fa-circle text-lg text-red-500 animate-pulse"
+                    ></i>
+                </button>
+            </div>
+
+            <!-- ==================== SCREEN 4: STAMPS EDIT PANEL (10 DESIGN STICKERS) ==================== -->
+            <div
+                id="view4"
+                class="absolute inset-0 booth-core-bg hidden flex flex-col items-center justify-between p-4 pt-10"
+            >
+                <div
+                    class="w-full flex items-center justify-between bg-zinc-900 text-white p-2 rounded-lg text-[10px] font-mono tracking-wider"
+                >
+                    <span>CONCEPT PREVIEW</span>
+                    <span class="text-zinc-500">DRAG DESIGNS BELOW</span>
+                </div>
+
+                <div
+                    id="stickerWorkspacePanel"
+                    class="relative w-[85%] aspect-[4/5] bg-white p-3 rounded-lg shadow-xl flex flex-col justify-between overflow-hidden border border-zinc-200"
+                >
+                    <div
+                        id="canvasAssemblyWrapper"
+                        class="w-full h-full relative"
+                    ></div>
+                </div>
+
+                <!-- Sticker Dock with all 10 custom designs from wireframe -->
+                <div
+                    class="w-full bg-white p-2 rounded-xl shadow-lg border border-zinc-200 flex flex-col gap-2"
+                >
+                    <div
+                        class="grid grid-cols-5 gap-1 overflow-y-auto max-h-[88px] p-1"
+                    >
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M12 2L2 22h20L12 2z'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="dino-party"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='orange' stroke-width='2'><circle cx='12' cy='12' r='8'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="bday-cupcake"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M12 3v18M3 12h18'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="cat-stretch"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='8' cy='8' r='4'/><circle cx='16' cy='8' r='4'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="cat-balloons"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><rect x='4' y='4' width='16' height='16'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="gift-balloons"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M12 22V12M12 12l8-4M12 12L4 8'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="wedding-frame"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><rect x='3' y='8' width='18' height='8'/><path d='M12 8V3'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="wedding-sign"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><text x='2' y='16' font-size='8' font-weight='bold'>Wed</text></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="happy-wedding"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='12' cy='14' r='6'/><path d='M12 8V4'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="cat-partyhat"
+                            />
+                        </div>
+                        <div
+                            class="draggable-stamp w-11 h-11 bg-zinc-50 border border-zinc-200 rounded p-1 flex items-center justify-center"
+                        >
+                            <img
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><rect x='5' y='9' width='14' height='10'/><path d='M5 9l7-5 7 5'/></svg>"
+                                class="max-w-full max-h-full"
+                                data-name="bday-cake"
+                            />
+                        </div>
+                    </div>
+                    <button
+                        onclick="renderFinalPrintOutputReceipt()"
+                        class="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs font-bold py-2 rounded-lg tracking-widest transition"
+                    >
+                        GENERATE & SILENT SAVE
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==================== SCREEN 5: RECEIPT PREVIEW & QR CODE ==================== -->
+            <div
+                id="view5"
+                class="absolute inset-0 booth-core-bg hidden flex flex-col items-center justify-between p-4 pt-8 overflow-y-auto"
+            >
+                <h2
+                    class="text-xs font-bold font-mono uppercase tracking-widest text-zinc-900"
+                >
+                    PRINT READY
+                </h2>
+                <div
+                    class="w-[65%] receipt-edge p-3 shadow-xl flex flex-col items-center justify-center border bg-white"
+                >
+                    <div
+                        id="printRenderingBoxOutput"
+                        class="w-full aspect-[4/5] bg-zinc-50 border rounded-xs overflow-hidden"
+                    ></div>
+                    <div
+                        class="w-full border-t border-dashed border-zinc-300 mt-4 pt-2 text-center text-[7px] font-mono tracking-tight text-zinc-400"
+                    >
+                        * MAD SHOT'Z PHOTO EVENT *
+                    </div>
+                </div>
+                <div
+                    class="w-full flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-md border border-zinc-200 mt-4"
+                >
+                    <div
+                        id="liveQRCodeTargetDisplay"
+                        class="p-1 bg-white border rounded shadow-sm"
+                    ></div>
+                    <span
+                        class="text-[8px] font-mono text-zinc-500 uppercase tracking-wider text-center"
+                        >Scan to Access Print Link</span
+                    >
+                    <button
+                        onclick="navigateToTargetView('view6')"
+                        class="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[9px] font-mono font-bold tracking-widest uppercase py-2 rounded border border-zinc-300 transition mt-1"
+                    >
+                        Complete Session
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==================== SCREEN 6: CLOSING CREDITS ==================== -->
+            <div
+                id="view6"
+                class="absolute inset-0 bg-[#12161a] hidden flex flex-col items-center justify-between p-6 py-14 text-center"
+            >
+                <div
+                    class="w-full bg-[#0a0c0e] border border-zinc-800/60 p-6 rounded-2xl shadow-xl my-auto flex flex-col items-center gap-4"
+                >
+                    <h3
+                        class="text-xs font-bold text-zinc-400 font-mono tracking-widest uppercase"
+                    >
+                        Follow Us Online
+                    </h3>
+                    <p
+                        class="text-sm font-semibold text-white leading-relaxed font-mono"
+                    >
+                        @madshotzstudio
+                    </p>
+                </div>
+                <button
+                    onclick="restoreApplicationStateDefaults()"
+                    class="w-full bg-white hover:bg-zinc-100 text-zinc-950 font-mono font-bold py-4 rounded-xl shadow-xl tracking-widest transition"
+                >
+                    NEXT SESSION
+                    <i class="fa-solid fa-arrow-right-long text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <canvas
+            id="internalFrameBufferCanvas"
+            class="hidden"
+            width="640"
+            height="480"
+        ></canvas>
+        <canvas
+            id="compositionExportCanvas"
+            class="hidden"
+            width="800"
+            height="1000"
+        ></canvas>
+
+        <script>
+            const video = document.getElementById("liveFeedStream");
+            const bufferCanvas = document.getElementById(
+                "internalFrameBufferCanvas",
+            );
+            const exportCanvas = document.getElementById(
+                "compositionExportCanvas",
+            );
+            const captureBtn = document.getElementById("btnExecuteCapture");
+            const timerLabel = document.getElementById("lblCountdownValue");
+            const shutterFlash = document.getElementById("shutterFlashMatrix");
+
+            let currentLayoutSelection = "window-grid";
+            let rawImageBufferQueue = [];
+            let completedPhotoCount = 0;
+            let expectedTotalImages = 4;
+
+            function navigateToTargetView(viewId) {
+                ["view1", "view2", "view3", "view4", "view5", "view6"].forEach(
+                    (id) => {
+                        document.getElementById(id).classList.add("hidden");
+                    },
+                );
+                document.getElementById(viewId).classList.remove("hidden");
+            }
+
+            async function startKioskCameraFeed() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 640, height: 480 },
+                        audio: false,
+                    });
+                    video.srcObject = stream;
+                } catch (err) {
+                    alert("Camera connection missing.");
+                }
+            }
+
+            document
+                .getElementById("btnLaunchApp")
+                .addEventListener("click", () => {
+                    startKioskCameraFeed();
+                    navigateToTargetView("view2");
+                });
+
+            function setLayoutFormat(formatType) {
+                currentLayoutSelection = formatType;
+                if (formatType === "single-portrait") expectedTotalImages = 1;
+                else if (
+                    formatType === "vertical-strip" ||
+                    formatType === "horizontal-row"
+                )
+                    expectedTotalImages = 3;
+                else expectedTotalImages = 4;
+
+                document
+                    .getElementById("layoutTargetOverlay")
+                    .classList.toggle("hidden", formatType !== "window-grid");
+                rawImageBufferQueue = [];
+                completedPhotoCount = 0;
+                refreshCaptureProgressHeaderLabelText();
+                navigateToTargetView("view3");
+            }
+
+            function refreshCaptureProgressHeaderLabelText() {
+                document.getElementById("txtCaptureProgress").innerText =
+                    `POSE FOR FRAME (${completedPhotoCount + 1}/${expectedTotalImages})`;
+            }
+
+            captureBtn.addEventListener("click", () => {
+                captureBtn.disabled = true;
+                runShutterTimerCountdown();
+            });
+
+            function runShutterTimerCountdown() {
+                let count = 3;
+                timerLabel.innerText = count;
+                timerLabel.classList.remove("hidden");
+                const trackingInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) timerLabel.innerText = count;
+                    else {
+                        clearInterval(trackingInterval);
+                        timerLabel.classList.add("hidden");
+                        processHardwareSnapshotFrame();
+                    }
+                }, 750);
+            }
+
+            function processHardwareSnapshotFrame() {
+                shutterFlash.style.opacity = "1";
+                setTimeout(() => {
+                    shutterFlash.style.opacity = "0";
+                }, 100);
+
+                const ctx = bufferCanvas.getContext("2d");
+                ctx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+                ctx.save();
+                ctx.translate(bufferCanvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(
+                    video,
+                    0,
+                    0,
+                    bufferCanvas.width,
+                    bufferCanvas.height,
+                );
+                ctx.restore();
+
+                rawImageBufferQueue.push(bufferCanvas.toDataURL("image/jpeg"));
+                completedPhotoCount++;
+
+                if (completedPhotoCount < expectedTotalImages) {
+                    refreshCaptureProgressHeaderLabelText();
+                    captureBtn.disabled = false;
+                } else {
+                    buildStickerWorkspaceMatrixBlueprint();
+                    navigateToTargetView("view4");
+                    bindDragCapabilitiesToStamps();
+                    captureBtn.disabled = false;
+                }
+            }
+
+            function buildStickerWorkspaceMatrixBlueprint() {
+                const wrapper = document.getElementById(
+                    "canvasAssemblyWrapper",
+                );
+                wrapper.innerHTML = "";
+                let frameGridContainer = document.createElement("div");
+
+                if (currentLayoutSelection === "window-grid")
+                    frameGridContainer.className =
+                        "w-full h-full grid grid-cols-2 grid-rows-2 gap-1 p-0.5 bg-white border";
+                else if (currentLayoutSelection === "vertical-strip")
+                    frameGridContainer.className =
+                        "w-[65%] h-full mx-auto flex flex-col gap-1 p-0.5 bg-white border";
+                else if (currentLayoutSelection === "horizontal-row") {
+                    frameGridContainer.className =
+                        "w-full h-full flex flex-col justify-end bg-white border p-0.5";
+                    let stripRow = document.createElement("div");
+                    stripRow.className =
+                        "grid grid-cols-3 gap-0.5 w-full h-[35%]";
+                    rawImageBufferQueue.forEach((src) => {
+                        let frame = document.createElement("div");
+                        frame.className =
+                            "bg-cover bg-center border border-zinc-300";
+                        frame.style.backgroundImage = `url(${src})`;
+                        stripRow.appendChild(frame);
+                    });
+                    frameGridContainer.appendChild(stripRow);
+                    wrapper.appendChild(frameGridContainer);
+                    return;
+                } else
+                    frameGridContainer.className =
+                        "w-full h-full flex flex-col gap-0.5 p-0.5 bg-white border";
+
+                rawImageBufferQueue.forEach((data) => {
+                    let imageElementFrameBlock = document.createElement("div");
+                    imageElementFrameBlock.className =
+                        "w-full h-full bg-cover bg-center border";
+                    imageElementFrameBlock.style.backgroundImage = `url(${data})`;
+                    frameGridContainer.appendChild(imageElementFrameBlock);
+                });
+                wrapper.appendChild(frameGridContainer);
+            }
+
+            function bindDragCapabilitiesToStamps() {
+                const stamps = document.querySelectorAll(".draggable-stamp");
+                const panel = document.getElementById("canvasAssemblyWrapper");
+                stamps.forEach((stamp) => {
+                    const imgInside = stamp.querySelector("img");
+                    stamp.onmousedown = (e) =>
+                        spawnStampInstanceElement(e, imgInside, panel);
+                    stamp.ontouchstart = (e) =>
+                        spawnStampInstanceElement(e, imgInside, panel);
+                });
+            }
+
+            function spawnStampInstanceElement(event, imgElement, viewParent) {
+                event.preventDefault();
+                const instance = document.createElement("div");
+                instance.className =
+                    "absolute draggable-stamp z-30 cursor-grab active:cursor-grabbing w-14 h-14 flex items-center justify-center stamp-item-node";
+
+                const imageClone = document.createElement("img");
+                imageClone.src = imgElement.src;
+                imageClone.className =
+                    "max-w-full max-h-full object-contain pointer-events-none";
+                instance.appendChild(imageClone);
+
+                const areaRect = viewParent.getBoundingClientRect();
+                let clickX =
+                    event.pageX || (event.touches ? event.touches[0].pageX : 0);
+                let clickY =
+                    event.pageY || (event.touches ? event.touches[0].pageY : 0);
+
+                instance.style.left = `${clickX - areaRect.left - 28}px`;
+                instance.style.top = `${clickY - areaRect.top - 28}px`;
+                viewParent.appendChild(instance);
+
+                trackDragPositionalUpdates(event, instance, viewParent);
+            }
+
+            function trackDragPositionalUpdates(
+                initialEvent,
+                TargetNode,
+                containmentArea,
+            ) {
+                const isTouch = initialEvent.type.startsWith("touch");
+                function moveHandler(e) {
+                    const rect = containmentArea.getBoundingClientRect();
+                    let x = isTouch ? e.touches[0].clientX : e.clientX;
+                    let y = isTouch ? e.touches[0].clientY : e.clientY;
+                    let calculatedLeftX = x - rect.left - 28;
+                    let calculatedTopY = y - rect.top - 28;
+
+                    calculatedLeftX = Math.max(
+                        0,
+                        Math.min(calculatedLeftX, rect.width - 56),
+                    );
+                    calculatedTopY = Math.max(
+                        0,
+                        Math.min(calculatedTopY, rect.height - 56),
+                    );
+                    TargetNode.style.left = `${calculatedLeftX}px`;
+                    TargetNode.style.top = `${calculatedTopY}px`;
+                }
+                function endHandler() {
+                    document.removeEventListener(
+                        isTouch ? "touchmove" : "mousemove",
+                        moveHandler,
+                    );
+                    document.removeEventListener(
+                        isTouch ? "touchend" : "mouseup",
+                        endHandler,
+                    );
+                }
+                document.addEventListener(
+                    isTouch ? "touchmove" : "mousemove",
+                    moveHandler,
+                    { passive: false },
+                );
+                document.addEventListener(
+                    isTouch ? "touchend" : "mouseup",
+                    endHandler,
+                );
+            }
+
+            // Handles rendering and direct pipeline save manipulation to browser sandboxes silently
+            async function renderFinalPrintOutputReceipt() {
+                navigateToTargetView("view5");
+                const canvasWorkspaceClone = document
+                    .getElementById("canvasAssemblyWrapper")
+                    .cloneNode(true);
+                const printingTargetBox = document.getElementById(
+                    "printRenderingBoxOutput",
+                );
+                printingTargetBox.innerHTML = "";
+                printingTargetBox.appendChild(canvasWorkspaceClone);
+
+                const stampDate = new Date()
+                    .toISOString()
+                    .replace(/T/, "-")
+                    .replace(/\..+/, "")
+                    .replace(/:/g, "");
+                const targetFilename = `receipt-${stampDate}.png`;
+
+                const ctx = exportCanvas.getContext("2d");
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+                if (rawImageBufferQueue.length > 0) {
+                    let imgObjects = await Promise.all(
+                        rawImageBufferQueue.map((src) => {
+                            return new Promise((resolve) => {
+                                let img = new Image();
+                                img.onload = () => resolve(img);
+                                img.src = src;
+                            });
+                        }),
+                    );
+
+                    if (currentLayoutSelection === "window-grid") {
+                        ctx.drawImage(imgObjects[0], 20, 20, 370, 470);
+                        ctx.drawImage(imgObjects[1], 410, 20, 370, 470);
+                        ctx.drawImage(imgObjects[2], 20, 510, 370, 470);
+                        ctx.drawImage(imgObjects[3], 410, 510, 370, 470);
+                    } else if (currentLayoutSelection === "vertical-strip") {
+                        ctx.drawImage(imgObjects[0], 200, 20, 400, 300);
+                        ctx.drawImage(imgObjects[1], 200, 340, 400, 300);
+                        ctx.drawImage(imgObjects[2], 200, 660, 400, 300);
+                    } else {
+                        ctx.drawImage(imgObjects[0], 20, 20, 760, 960);
+                    }
+                }
+
+                // Draw stamp imagery components explicitly onto background engine
+                const activeStamps = document.querySelectorAll(
+                    ".stamp-item-node img",
+                );
+                const areaRect = document
+                    .getElementById("canvasAssemblyWrapper")
+                    .getBoundingClientRect();
+
+                for (let stampImg of activeStamps) {
+                    let parentNode = stampImg.parentNode;
+                    let relX =
+                        (parseFloat(parentNode.style.left) / areaRect.width) *
+                        exportCanvas.width;
+                    let relY =
+                        (parseFloat(parentNode.style.top) / areaRect.height) *
+                        exportCanvas.height;
+                    ctx.drawImage(stampImg, relX, relY, 110, 110);
+                }
+
+                // Silent Automatic Background Storage Cache execution loop pipelines
+                const dataUrlOutput = exportCanvas.toDataURL("image/png");
+                if ("caches" in window) {
+                    try {
+                        const cacheEngine = await caches.open(
+                            "photobooth-silent-vault",
+                        );
+                        await cacheEngine.put(
+                            new Request(`/photobooth/${targetFilename}`),
+                            new Response(dataUrlOutput),
+                        );
+                    } catch (e) {
+                        console.warn(
+                            "Silent virtual storage full, handling alternative system streams.",
+                        );
+                    }
+                }
+
+                // Trigger silent asset processing pipelines tracking channel layouts download links
+                const dynamicDownloadTriggerAnchor =
+                    document.createElement("a");
+                dynamicDownloadTriggerAnchor.href = dataUrlOutput;
+                dynamicDownloadTriggerAnchor.setAttribute(
+                    "download",
+                    `photobooth/${targetFilename}`,
+                );
+                dynamicDownloadTriggerAnchor.click();
+
+                generateLiveQRCodeBlock(targetFilename);
+            }
+
+            function generateLiveQRCodeBlock(sourceTargetEndpointText) {
+                const qrTargetContainer = document.getElementById(
+                    "liveQRCodeTargetDisplay",
+                );
+                qrTargetContainer.innerHTML = "";
+                new QRCode(qrTargetContainer, {
+                    text: `https://madshotz.local/prints/${sourceTargetEndpointText}`,
+                    width: 70,
+                    height: 70,
+                    colorDark: "#09090b",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H,
+                });
+            }
+
+            function restoreApplicationStateDefaults() {
+                rawImageBufferQueue = [];
+                completedPhotoCount = 0;
+                navigateToTargetView("view2");
+            }
+        </script>
+    </body>
+</html>
