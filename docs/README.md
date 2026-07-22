@@ -9,7 +9,7 @@ designed to be sold to photobooth operators.
 |-------|----------|--------|
 | 1 | [Prototype Audit](./phase-1-prototype-audit.md) | ✅ Approved |
 | 2 | [Application Architecture](./phase-2-architecture.md) | ✅ Approved |
-| 3 | Wireframes — every screen | ⬜ Ready to start |
+| 3 | Wireframes — [Kiosk](./phase-3-wireframes-kiosk.md) · [Admin](./phase-3-wireframes-admin.md) · [System states](./phase-3-wireframes-system-states.md) | 🔵 In review |
 | 4 | UI/UX Design System | ⬜ Pending |
 | 5 | SQLite Schema (full Prisma DSL, indexes, migrations) | ⬜ Pending |
 | 6 | API Layer (local delivery server + cloud sync contract) | ⬜ Pending |
@@ -17,6 +17,13 @@ designed to be sold to photobooth operators.
 | 8 | Feature-by-feature implementation | ⬜ Pending |
 
 Each phase requires sign-off before the next begins.
+
+## Practical guides
+
+- [Hardware Recommendations](./hardware-recommendations.md) — read before buying the tablet,
+  camera or printer
+- [Testing Without Hardware](./testing-without-hardware.md) — how the whole app runs and is
+  testable on a laptop
 
 ## Locked decisions
 
