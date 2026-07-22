@@ -10,7 +10,7 @@ designed to be sold to photobooth operators.
 | 1 | [Prototype Audit](./phase-1-prototype-audit.md) | ✅ Approved |
 | 2 | [Application Architecture](./phase-2-architecture.md) | ✅ Approved |
 | 3 | Wireframes — [Kiosk](./phase-3-wireframes-kiosk.md) · [Admin](./phase-3-wireframes-admin.md) · [System states](./phase-3-wireframes-system-states.md) | 🔵 In review |
-| 4 | UI/UX Design System | ⬜ Pending |
+| 4 | [UI/UX Design System](./phase-4-design-system.md) — [**live version**](./phase-4-design-system.html) | 🔵 In review |
 | 5 | SQLite Schema (full Prisma DSL, indexes, migrations) | ⬜ Pending |
 | 6 | API Layer (local delivery server + cloud sync contract) | ⬜ Pending |
 | 7 | Reusable Component Library | ⬜ Pending |

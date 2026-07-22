@@ -1,0 +1,868 @@
+<title>MAD SHOT'Z — Design System</title>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   MAD SHOT'Z DESIGN SYSTEM — "Instrument & Paper"
+   Two grounds: the machined black booth, and the warm receipt it prints.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Type ─────────────────────────────────────────────── */
+  --f-mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --f-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* ── Instrument (the booth) ───────────────────────────── */
+  --ink-950:#08080a; --ink-900:#0d0d11; --ink-850:#131316; --ink-800:#1a1a20;
+  --ink-700:#26262e; --ink-600:#35353f; --ink-400:#6e6e7c; --ink-200:#a8a8b4; --ink-50:#ededf0;
+
+  /* ── Paper (the print) ────────────────────────────────── */
+  --pap-0:#fbf9f5; --pap-100:#f3f0e9; --pap-200:#e6e1d6;
+  --pap-400:#b9b2a4; --pap-700:#6a6459; --pap-900:#1a1815;
+
+  /* ── Accent: the indicator lamp ───────────────────────── */
+  --gold-300:#f3d07a; --gold-400:#edbe55; --gold-500:#e0a62e; --gold-600:#c98500; --gold-700:#9a6600;
+
+  /* ── Status (reserved — never a chart series) ─────────── */
+  --st-good:#35b87c; --st-warn:#e08a1e; --st-crit:#e2555a; --st-info:#5b9be8;
+
+  /* ── Motion ───────────────────────────────────────────── */
+  --e-standard: cubic-bezier(.2,0,0,1);
+  --e-entrance: cubic-bezier(.16,1,.3,1);
+  --e-exit:     cubic-bezier(.4,0,1,1);
+  --e-shutter:  cubic-bezier(.9,0,.1,1);
+  --e-spring:   linear(0,.006,.025 2.8%,.101 6.1%,.539 18.9%,.717 25.3%,.837 31.5%,.938 38.7%,.999 45.5%,1.036 53.6%,1.046 60.6%,1.033 70.2%,1.004 85%,1);
+  --d-instant:80ms; --d-quick:140ms; --d-base:220ms; --d-slow:380ms; --d-deliberate:600ms;
+
+  /* ── Space & form ─────────────────────────────────────── */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px; --s9:96px;
+  --r-sm:6px; --r-md:10px; --r-lg:16px; --r-xl:24px; --r-pill:999px;
+
+  /* ── Page shell (theme-responsive) ────────────────────── */
+  --shell:#0d0d11; --shell-2:#131316; --shell-line:#26262e;
+  --tx-1:#ededf0; --tx-2:#a8a8b4; --tx-3:#6e6e7c; --accent:var(--gold-500);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) {
+    --shell:#fbf9f5; --shell-2:#f3f0e9; --shell-line:#e6e1d6;
+    --tx-1:#1a1815; --tx-2:#6a6459; --tx-3:#b9b2a4; --accent:var(--gold-700);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --shell:#fbf9f5; --shell-2:#f3f0e9; --shell-line:#e6e1d6;
+  --tx-1:#1a1815; --tx-2:#6a6459; --tx-3:#b9b2a4; --accent:var(--gold-700);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --shell:#0d0d11; --shell-2:#131316; --shell-line:#26262e;
+  --tx-1:#ededf0; --tx-2:#a8a8b4; --tx-3:#6e6e7c; --accent:var(--gold-500);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.ds {
+  background: var(--shell); color: var(--tx-1);
+  font-family: var(--f-sans); font-size: 16px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 var(--s5) var(--s9);
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+.ds :focus-visible { outline: 2px solid var(--gold-500); outline-offset: 3px; border-radius: 3px; }
+
+/* ── Typographic system ─────────────────────────────────── */
+.eyebrow {
+  font-family: var(--f-mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--tx-3);
+  display: flex; align-items: center; gap: var(--s3);
+}
+.eyebrow::after { content:""; flex:1; height:1px; background: var(--shell-line); }
+.h1 { font-family: var(--f-mono); font-size: clamp(38px,7vw,76px); font-weight:700;
+      letter-spacing:-.045em; line-height:.94; margin:0; text-wrap: balance; }
+.h2 { font-family: var(--f-mono); font-size: clamp(24px,3.4vw,36px); font-weight:700;
+      letter-spacing:-.035em; line-height:1.05; margin:0; text-wrap: balance; }
+.h3 { font-size:19px; font-weight:650; letter-spacing:-.015em; margin:0; }
+.lede { font-size:clamp(16px,2vw,19px); color: var(--tx-2); max-width:62ch; margin:0; line-height:1.62; }
+.p { color: var(--tx-2); max-width:68ch; margin:0; }
+.p strong { color: var(--tx-1); font-weight:600; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing:-.02em; }
+
+section { padding-top: var(--s9); scroll-margin-top: var(--s5); }
+.stack { display:flex; flex-direction:column; gap: var(--s5); }
+.stack-sm { display:flex; flex-direction:column; gap: var(--s3); }
+.head { display:flex; flex-direction:column; gap: var(--s4); margin-bottom: var(--s7); }
+
+/* ═══════ HERO ═══════════════════════════════════════════ */
+.hero {
+  min-height: 78vh; display:flex; flex-direction:column; justify-content:center;
+  gap: var(--s7); padding: var(--s9) 0 var(--s8); position:relative;
+}
+.hero-grid { display:grid; grid-template-columns: 1.15fr .85fr; gap: var(--s8); align-items:center; }
+@media (max-width: 860px) { .hero-grid { grid-template-columns:1fr; gap:var(--s7);} }
+
+.lamp { display:inline-flex; align-items:center; gap:var(--s2);
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--tx-3); }
+.lamp b { width:7px; height:7px; border-radius:50%; background:var(--gold-500);
+  box-shadow:0 0 0 0 rgba(224,166,46,.55); animation: pulse 2.6s var(--e-standard) infinite; }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(224,166,46,.5)} 70%{box-shadow:0 0 0 9px rgba(224,166,46,0)} 100%{box-shadow:0 0 0 0 rgba(224,166,46,0)} }
+
+/* ── The booth: live capture ceremony ── */
+.booth {
+  background: linear-gradient(180deg,#16161b,#0b0b0e); border:1px solid #2a2a33;
+  border-radius: var(--r-xl); padding: var(--s5); position:relative; overflow:hidden;
+  box-shadow: 0 40px 80px -30px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+  aspect-ratio: 3/4; display:flex; flex-direction:column; gap:var(--s3);
+}
+.booth-top { display:flex; justify-content:space-between; align-items:center;
+  font-family:var(--f-mono); font-size:9.5px; letter-spacing:.18em; color:#5a5a68; text-transform:uppercase; }
+.viewfinder {
+  flex:1; border-radius: var(--r-md); position:relative; overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 50% 15%, #3a3a46 0%, #202028 45%, #131318 100%);
+  display:grid; place-items:center;
+}
+.vf-slots { position:absolute; inset:10px; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px; }
+.vf-slots i { border:1px dashed rgba(255,255,255,.10); border-radius:4px; display:block;
+  background:rgba(255,255,255,.02); transition: background var(--d-base) var(--e-standard), border-color var(--d-base) var(--e-standard); }
+.vf-slots i.lit { background:rgba(224,166,46,.10); border-color:rgba(224,166,46,.45); border-style:solid; }
+.count { font-family:var(--f-mono); font-size:64px; font-weight:700; color:#fff; letter-spacing:-.05em;
+  text-shadow:0 4px 30px rgba(0,0,0,.6); position:relative; z-index:2; }
+.count[data-anim] { animation: countIn var(--d-deliberate) var(--e-spring); }
+@keyframes countIn { 0%{opacity:0;transform:scale(1.5)} 45%{opacity:1} 100%{opacity:1;transform:scale(1)} }
+.flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:3; }
+.flash[data-fire] { animation: flash 700ms var(--e-shutter); }
+@keyframes flash { 0%{opacity:0} 6%{opacity:.95} 100%{opacity:0} }
+.booth-bot { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); }
+.dots { display:flex; gap:6px; }
+.dots span { width:7px; height:7px; border-radius:50%; background:#33333d;
+  transition: background var(--d-base) var(--e-standard), transform var(--d-base) var(--e-spring); }
+.dots span.on { background:var(--gold-500); transform:scale(1.25); }
+.shutter { width:44px; height:44px; border-radius:50%; border:3px solid #fff; background:#17171d;
+  display:grid; place-items:center; }
+.shutter i { width:13px; height:13px; border-radius:50%; background:var(--st-crit); display:block;
+  animation: breathe 2s var(--e-standard) infinite; }
+@keyframes breathe { 0%,100%{opacity:1} 50%{opacity:.45} }
+
+/* ── The receipt that slides out ── */
+.receipt-out { position:relative; height:0; }
+.receipt {
+  position:absolute; left:50%; top:-6px; transform:translateX(-50%) translateY(-100%);
+  width:66%; background:var(--pap-0); border-radius:3px 3px 0 0; padding:10px 10px 14px;
+  box-shadow:0 20px 40px -12px rgba(0,0,0,.7); opacity:0;
+}
+.receipt[data-print] { animation: printOut 1400ms var(--e-entrance) forwards; }
+@keyframes printOut { 0%{opacity:0;transform:translateX(-50%) translateY(-100%)} 12%{opacity:1} 100%{opacity:1;transform:translateX(-50%) translateY(6%)} }
+.receipt-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+.receipt-grid i { aspect-ratio:1; background:linear-gradient(135deg,#d9d3c6,#b9b2a4); border-radius:2px; display:block; }
+.receipt-cap { font-family:var(--f-mono); font-size:6.5px; letter-spacing:.16em; color:var(--pap-700);
+  text-align:center; margin-top:7px; padding-top:5px; border-top:1px dashed var(--pap-400); }
+.perf { height:6px; background:
+  linear-gradient(135deg,transparent 50%,var(--pap-0) 50%),
+  linear-gradient(225deg,transparent 50%,var(--pap-0) 50%);
+  background-size:6px 6px; background-repeat:repeat-x; position:absolute; left:0; right:0; bottom:-6px; }
+
+/* ═══════ GROUND PANELS ══════════════════════════════════ */
+.grounds { display:grid; grid-template-columns:1fr 1fr; gap:var(--s5); }
+@media (max-width:760px){ .grounds{grid-template-columns:1fr} }
+.ground { border-radius:var(--r-lg); padding:var(--s6); min-height:230px;
+  display:flex; flex-direction:column; justify-content:space-between; gap:var(--s5); position:relative; overflow:hidden; }
+.ground.dark { background:var(--ink-900); border:1px solid var(--ink-700); color:var(--ink-50); }
+.ground.paper { background:var(--pap-0); color:var(--pap-900); border:1px solid var(--pap-200);
+  background-image: radial-gradient(var(--pap-200) 1px, transparent 1px); background-size:15px 15px; }
+.ground h4 { font-family:var(--f-mono); font-size:13px; letter-spacing:.15em; text-transform:uppercase; margin:0; }
+.ground p { font-size:14px; line-height:1.55; margin:0; }
+.ground.dark p { color:var(--ink-200); }
+.ground.paper p { color:var(--pap-700); }
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { font-family:var(--f-mono); font-size:10px; letter-spacing:.08em; padding:4px 8px; border-radius:var(--r-pill); }
+.ground.dark .chip { background:var(--ink-800); border:1px solid var(--ink-700); color:var(--ink-200); }
+.ground.paper .chip { background:var(--pap-100); border:1px solid var(--pap-200); color:var(--pap-700); }
+
+/* ═══════ SWATCHES ═══════════════════════════════════════ */
+.ramp { display:grid; grid-template-columns:repeat(auto-fit,minmax(88px,1fr)); gap:var(--s2); }
+.sw { border-radius:var(--r-sm); overflow:hidden; border:1px solid var(--shell-line);
+  transition: transform var(--d-quick) var(--e-standard); }
+.sw:hover { transform: translateY(-3px); }
+.sw b { display:block; height:56px; }
+.sw span { display:block; font-family:var(--f-mono); font-size:9.5px; padding:6px 7px; background:var(--shell-2); color:var(--tx-3); line-height:1.35; }
+.sw span em { display:block; font-style:normal; color:var(--tx-1); font-size:10px; }
+
+.status-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:var(--s3); }
+.st { display:flex; align-items:center; gap:var(--s3); padding:var(--s3) var(--s4);
+  border-radius:var(--r-md); background:var(--shell-2); border:1px solid var(--shell-line); }
+.st b { width:9px; height:9px; border-radius:2px; flex:none; }
+.st div { font-size:13px; }
+.st div em { display:block; font-style:normal; font-family:var(--f-mono); font-size:10px; color:var(--tx-3); letter-spacing:.06em; }
+
+/* ═══════ TYPE SPECIMEN ══════════════════════════════════ */
+.spec { border-top:1px solid var(--shell-line); padding:var(--s5) 0; display:grid;
+  grid-template-columns:150px 1fr; gap:var(--s5); align-items:baseline; }
+@media (max-width:700px){ .spec{grid-template-columns:1fr; gap:var(--s2)} }
+.spec-meta { font-family:var(--f-mono); font-size:10.5px; color:var(--tx-3); letter-spacing:.1em; line-height:1.7; }
+.spec-meta em { display:block; font-style:normal; color:var(--accent); }
+
+/* ═══════ MOTION LAB ═════════════════════════════════════ */
+.curves { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:var(--s4); }
+.curve { background:var(--shell-2); border:1px solid var(--shell-line); border-radius:var(--r-lg);
+  padding:var(--s4); display:flex; flex-direction:column; gap:var(--s3); cursor:pointer;
+  transition: border-color var(--d-quick) var(--e-standard), transform var(--d-quick) var(--e-standard); }
+.curve:hover { border-color:var(--gold-500); transform:translateY(-2px); }
+.curve-top { display:flex; justify-content:space-between; align-items:flex-start; gap:var(--s2); }
+.curve-name { font-family:var(--f-mono); font-size:12px; font-weight:600; color:var(--tx-1); letter-spacing:-.01em; }
+.curve-use { font-size:11.5px; color:var(--tx-3); line-height:1.45; margin-top:2px; }
+.curve svg { width:100%; height:88px; display:block; }
+.curve .grid-l { stroke:var(--shell-line); stroke-width:1; }
+.curve .path { stroke:var(--accent); stroke-width:2; fill:none; stroke-linecap:round; }
+.curve .puck-track { height:26px; border-radius:var(--r-pill); background:var(--shell);
+  border:1px solid var(--shell-line); position:relative; overflow:hidden; }
+.curve .puck { position:absolute; top:5px; left:5px; width:14px; height:14px; border-radius:50%;
+  background:var(--accent); }
+.curve .puck[data-run] { animation: puck var(--dur,600ms) var(--ez,linear) forwards; }
+@keyframes puck { from{transform:translateX(0)} to{transform:translateX(var(--travel,200px))} }
+.curve code { font-family:var(--f-mono); font-size:9.5px; color:var(--tx-3); word-break:break-all; line-height:1.5; }
+
+.durs { display:flex; flex-direction:column; gap:var(--s2); }
+.dur { display:grid; grid-template-columns:112px 64px 1fr; gap:var(--s3); align-items:center; }
+@media (max-width:620px){ .dur{grid-template-columns:100px 56px 1fr} }
+.dur-name { font-family:var(--f-mono); font-size:11.5px; color:var(--tx-1); }
+.dur-ms { font-family:var(--f-mono); font-size:11.5px; color:var(--accent); font-variant-numeric:tabular-nums; }
+.dur-bar { height:22px; border-radius:var(--r-sm); background:var(--shell-2);
+  border:1px solid var(--shell-line); position:relative; overflow:hidden; }
+.dur-bar b { position:absolute; inset:0; background:linear-gradient(90deg,var(--gold-700),var(--gold-400));
+  transform-origin:left; transform:scaleX(0); border-radius:inherit; }
+.dur-bar b[data-run] { animation: fill var(--dur) var(--e-standard) forwards; }
+@keyframes fill { to { transform:scaleX(1) } }
+
+.stagger-demo { display:flex; gap:var(--s2); flex-wrap:wrap; }
+.stagger-demo i { width:46px; height:58px; border-radius:var(--r-sm); display:block;
+  background:linear-gradient(160deg,var(--shell-2),var(--shell)); border:1px solid var(--shell-line); }
+.stagger-demo i[data-run] { animation: rise 520ms var(--e-entrance) both; animation-delay:var(--dly); }
+@keyframes rise { from{opacity:0; transform:translateY(20px) scale(.94)} to{opacity:1; transform:none} }
+
+/* ═══════ COMPONENTS ═════════════════════════════════════ */
+.demo { background:var(--shell-2); border:1px solid var(--shell-line); border-radius:var(--r-lg); padding:var(--s6); }
+.demo + .demo { margin-top:var(--s4); }
+.row { display:flex; flex-wrap:wrap; gap:var(--s3); align-items:center; }
+
+.btn { font-family:var(--f-mono); font-size:12px; font-weight:600; letter-spacing:.14em;
+  text-transform:uppercase; border-radius:var(--r-md); padding:0 var(--s5); height:48px;
+  min-width:48px; border:1px solid transparent; cursor:pointer; display:inline-flex;
+  align-items:center; justify-content:center; gap:var(--s2);
+  transition: transform var(--d-quick) var(--e-standard), background var(--d-quick) var(--e-standard),
+              border-color var(--d-quick) var(--e-standard), box-shadow var(--d-base) var(--e-standard); }
+.btn:active { transform: scale(.965); }
+.btn-primary { background:var(--gold-500); color:#17130a; box-shadow:0 6px 20px -8px rgba(224,166,46,.7); }
+.btn-primary:hover { background:var(--gold-400); box-shadow:0 10px 28px -8px rgba(224,166,46,.85); }
+.btn-ghost { background:transparent; color:var(--tx-1); border-color:var(--shell-line); }
+.btn-ghost:hover { border-color:var(--tx-3); background:color-mix(in oklab, var(--tx-1) 6%, transparent); }
+.btn-quiet { background:transparent; color:var(--tx-3); }
+.btn-quiet:hover { color:var(--tx-1); }
+.btn[disabled] { opacity:.38; cursor:not-allowed; transform:none; }
+
+.field { display:flex; flex-direction:column; gap:var(--s2); min-width:230px; }
+.field label { font-family:var(--f-mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--tx-3); }
+.field input { height:48px; border-radius:var(--r-md); border:1px solid var(--shell-line);
+  background:var(--shell); color:var(--tx-1); padding:0 var(--s4); font-family:var(--f-sans); font-size:15px;
+  transition: border-color var(--d-quick) var(--e-standard), box-shadow var(--d-quick) var(--e-standard); }
+.field input:focus { outline:none; border-color:var(--gold-500); box-shadow:0 0 0 3px color-mix(in oklab, var(--gold-500) 22%, transparent); }
+
+.card { background:var(--shell); border:1px solid var(--shell-line); border-radius:var(--r-lg);
+  padding:var(--s5); display:flex; flex-direction:column; gap:var(--s3); cursor:pointer;
+  transition: transform var(--d-base) var(--e-standard), border-color var(--d-base) var(--e-standard), box-shadow var(--d-base) var(--e-standard); }
+.card:hover { transform:translateY(-4px); border-color:var(--gold-500); box-shadow:0 22px 44px -22px rgba(0,0,0,.6); }
+.card-head { display:flex; justify-content:space-between; align-items:baseline; gap:var(--s3); }
+.card-title { font-family:var(--f-mono); font-size:13px; letter-spacing:.12em; text-transform:uppercase; }
+.card-price { font-family:var(--f-mono); font-size:19px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+.card-feat { font-size:13px; color:var(--tx-2); }
+.badge { font-family:var(--f-mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase;
+  background:var(--gold-500); color:#17130a; padding:3px 7px; border-radius:var(--r-pill); }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:var(--s3); }
+
+.toast { display:flex; align-items:center; gap:var(--s3); background:var(--shell);
+  border:1px solid var(--shell-line); border-left:3px solid var(--st-good);
+  border-radius:var(--r-md); padding:var(--s3) var(--s4); font-size:14px; max-width:400px; }
+.toast[data-run] { animation: toastIn 420ms var(--e-spring) both; }
+@keyframes toastIn { from{opacity:0;transform:translateX(28px)} to{opacity:1;transform:none} }
+.toast b { width:8px; height:8px; border-radius:50%; background:var(--st-good); flex:none; }
+
+.meter { height:10px; border-radius:var(--r-pill); background:var(--shell); border:1px solid var(--shell-line); overflow:hidden; }
+.meter b { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--gold-700),var(--gold-400)); }
+
+/* ═══════ TABLES ═════════════════════════════════════════ */
+.tbl-wrap { overflow-x:auto; border:1px solid var(--shell-line); border-radius:var(--r-md); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:520px; }
+th, td { text-align:left; padding:11px var(--s4); border-bottom:1px solid var(--shell-line); }
+th { font-family:var(--f-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+     color:var(--tx-3); font-weight:600; background:var(--shell-2); }
+td { color:var(--tx-2); }
+td:first-child { color:var(--tx-1); font-family:var(--f-mono); font-size:12px; }
+tr:last-child td { border-bottom:none; }
+
+.note { border-left:2px solid var(--accent); padding:var(--s2) 0 var(--s2) var(--s4);
+  color:var(--tx-2); font-size:14.5px; max-width:70ch; }
+.note strong { color:var(--tx-1); }
+
+.foot { margin-top:var(--s9); padding-top:var(--s5); border-top:1px solid var(--shell-line);
+  font-family:var(--f-mono); font-size:11px; color:var(--tx-3); letter-spacing:.08em;
+  display:flex; justify-content:space-between; flex-wrap:wrap; gap:var(--s3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds *, .ds *::before, .ds *::after {
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+}
+</style>
+
+<div class="ds">
+<div class="wrap">
+
+<!-- ════════════ HERO ════════════ -->
+<header class="hero">
+  <div class="hero-grid">
+    <div class="stack">
+      <span class="lamp"><b></b> Phase 4 · Design System</span>
+      <h1 class="h1">INSTRUMENT<br>&amp; PAPER</h1>
+      <p class="lede">MAD SHOT'Z has two materials: the machined black booth a guest walks up to,
+        and the warm receipt it hands back. Every token in this system comes from one of them.</p>
+      <div class="row" style="margin-top:8px">
+        <button class="btn btn-primary" id="run-ceremony">Run the capture</button>
+        <span class="mono" style="font-size:11px;color:var(--tx-3);letter-spacing:.12em">THE SIGNATURE MOMENT →</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="booth">
+        <div class="booth-top"><span>MAD SHOT'Z</span><span id="booth-status">READY</span></div>
+        <div class="viewfinder">
+          <div class="vf-slots" id="vf-slots"><i></i><i></i><i></i><i></i></div>
+          <div class="count" id="count"></div>
+          <div class="flash" id="flash"></div>
+        </div>
+        <div class="booth-bot">
+          <div class="dots" id="dots"><span></span><span></span><span></span><span></span></div>
+          <div class="shutter"><i></i></div>
+        </div>
+      </div>
+      <div class="receipt-out">
+        <div class="receipt" id="receipt">
+          <div class="receipt-grid"><i></i><i></i><i></i><i></i></div>
+          <div class="receipt-cap">* MAD SHOT'Z PHOTO EVENT *</div>
+          <div class="perf"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════ 01 GROUNDS ════════════ -->
+<section id="grounds">
+  <div class="head">
+    <span class="eyebrow">The two grounds</span>
+    <h2 class="h2">Not a dark theme. A dark object.</h2>
+    <p class="p">Most kiosk software picks one surface and stays there. Ours alternates, because the
+      product does: the customer touches a <strong>black instrument</strong> and walks away holding
+      <strong>warm paper</strong>. Screens that stage the experience use the instrument ground.
+      Screens that show the artwork use the paper ground — so the print always looks like a print,
+      never like a UI element.</p>
+  </div>
+
+  <div class="grounds">
+    <div class="ground dark">
+      <div class="stack-sm">
+        <h4>Instrument</h4>
+        <p>Cool near-black, biased slightly toward violet so the gold lamp reads warm against it.
+          Machined edges, one indicator light, nothing decorative.</p>
+      </div>
+      <div class="chips">
+        <span class="chip">attract</span><span class="chip">capture</span>
+        <span class="chip">printing</span><span class="chip">admin</span>
+      </div>
+    </div>
+    <div class="ground paper">
+      <div class="stack-sm">
+        <h4>Paper</h4>
+        <p>Warm off-white with the dot-grid of thermal stock, carried straight from the prototype.
+          Used wherever the customer's artwork is on screen.</p>
+      </div>
+      <div class="chips">
+        <span class="chip">layout</span><span class="chip">editor</span>
+        <span class="chip">approve</span><span class="chip">delivery</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ 02 COLOR ════════════ -->
+<section id="color">
+  <div class="head">
+    <span class="eyebrow">Color</span>
+    <h2 class="h2">One lamp, two grounds.</h2>
+    <p class="p">The accent is a single warm gold — the indicator light on a piece of photographic
+      equipment. It is the only saturated hue in the interface chrome, which is what makes it read
+      as premium rather than busy. <strong>Spend boldness in one place; keep everything around it quiet.</strong></p>
+  </div>
+
+  <div class="stack">
+    <span class="eyebrow">Instrument neutrals</span>
+    <div class="ramp">
+      <div class="sw"><b style="background:#08080a"></b><span><em>ink-950</em>#08080a</span></div>
+      <div class="sw"><b style="background:#0d0d11"></b><span><em>ink-900</em>#0d0d11</span></div>
+      <div class="sw"><b style="background:#131316"></b><span><em>ink-850</em>#131316</span></div>
+      <div class="sw"><b style="background:#1a1a20"></b><span><em>ink-800</em>#1a1a20</span></div>
+      <div class="sw"><b style="background:#26262e"></b><span><em>ink-700</em>#26262e</span></div>
+      <div class="sw"><b style="background:#6e6e7c"></b><span><em>ink-400</em>#6e6e7c</span></div>
+      <div class="sw"><b style="background:#a8a8b4"></b><span><em>ink-200</em>#a8a8b4</span></div>
+      <div class="sw"><b style="background:#ededf0"></b><span><em>ink-50</em>#ededf0</span></div>
+    </div>
+
+    <span class="eyebrow">Paper neutrals</span>
+    <div class="ramp">
+      <div class="sw"><b style="background:#fbf9f5"></b><span><em>pap-0</em>#fbf9f5</span></div>
+      <div class="sw"><b style="background:#f3f0e9"></b><span><em>pap-100</em>#f3f0e9</span></div>
+      <div class="sw"><b style="background:#e6e1d6"></b><span><em>pap-200</em>#e6e1d6</span></div>
+      <div class="sw"><b style="background:#b9b2a4"></b><span><em>pap-400</em>#b9b2a4</span></div>
+      <div class="sw"><b style="background:#6a6459"></b><span><em>pap-700</em>#6a6459</span></div>
+      <div class="sw"><b style="background:#1a1815"></b><span><em>pap-900</em>#1a1815</span></div>
+    </div>
+
+    <span class="eyebrow">Accent — the lamp</span>
+    <div class="ramp">
+      <div class="sw"><b style="background:#f3d07a"></b><span><em>gold-300</em>#f3d07a</span></div>
+      <div class="sw"><b style="background:#edbe55"></b><span><em>gold-400</em>#edbe55</span></div>
+      <div class="sw"><b style="background:#e0a62e"></b><span><em>gold-500</em>#e0a62e</span></div>
+      <div class="sw"><b style="background:#c98500"></b><span><em>gold-600</em>#c98500</span></div>
+      <div class="sw"><b style="background:#9a6600"></b><span><em>gold-700</em>#9a6600</span></div>
+    </div>
+
+    <span class="eyebrow">Status — reserved, never a chart series</span>
+    <div class="status-row">
+      <div class="st"><b style="background:#35b87c"></b><div>Ready<em>--st-good</em></div></div>
+      <div class="st"><b style="background:#e08a1e"></b><div>Ribbon low<em>--st-warn</em></div></div>
+      <div class="st"><b style="background:#e2555a"></b><div>Print failed<em>--st-crit</em></div></div>
+      <div class="st"><b style="background:#5b9be8"></b><div>Syncing<em>--st-info</em></div></div>
+    </div>
+
+    <p class="note"><strong>Status color always ships with an icon and a word.</strong> A red dot alone
+      is meaningless to a colorblind operator across a dark venue — and the operator is the person who
+      most needs to read it at a glance.</p>
+
+    <span class="eyebrow">Analytics series — validated, gold-led</span>
+    <div class="ramp">
+      <div class="sw"><b style="background:#c98500"></b><span><em>series 1</em>#c98500</span></div>
+      <div class="sw"><b style="background:#d55181"></b><span><em>series 2</em>#d55181</span></div>
+      <div class="sw"><b style="background:#008300"></b><span><em>series 3</em>#008300</span></div>
+      <div class="sw"><b style="background:#3987e5"></b><span><em>series 4</em>#3987e5</span></div>
+      <div class="sw"><b style="background:#d95926"></b><span><em>series 5</em>#d95926</span></div>
+      <div class="sw"><b style="background:#199e70"></b><span><em>series 6</em>#199e70</span></div>
+      <div class="sw"><b style="background:#9085e9"></b><span><em>series 7</em>#9085e9</span></div>
+      <div class="sw"><b style="background:#e66767"></b><span><em>series 8</em>#e66767</span></div>
+    </div>
+    <p class="note">Series hues are assigned in this fixed order and <strong>never cycled</strong> —
+      color follows the entity, so filtering a chart never repaints the survivors. This ordering was
+      chosen by running every gold-leading permutation through colorblindness simulation and keeping
+      only those that passed both grounds: worst adjacent separation <span class="mono">ΔE 9.4</span> on
+      the instrument and <span class="mono">9.2</span> on paper, against a target of 8.</p>
+  </div>
+</section>
+
+<!-- ════════════ 03 TYPE ════════════ -->
+<section id="type">
+  <div class="head">
+    <span class="eyebrow">Typography</span>
+    <h2 class="h2">Monospace is the voice, not the caption.</h2>
+    <p class="p">Most systems bury mono in code blocks. Here it leads — because a receipt is
+      monospaced, and that is what the brand already sounded like. Set tight and large it reads as
+      precision equipment; set small with wide tracking it reads as instrument labelling. A neutral
+      grotesque carries running text so the mono never has to be comfortable, only characterful.</p>
+  </div>
+
+  <div>
+    <div class="spec">
+      <div class="spec-meta"><em>display</em>mono · 700<br>tracking −0.045em<br>clamp 38→76px</div>
+      <div class="h1" style="font-size:clamp(32px,5.5vw,60px)">MAD SHOT'Z</div>
+    </div>
+    <div class="spec">
+      <div class="spec-meta"><em>heading</em>mono · 700<br>tracking −0.035em<br>clamp 24→36px</div>
+      <div class="h2">Choose your layout</div>
+    </div>
+    <div class="spec">
+      <div class="spec-meta"><em>label</em>mono · 600<br>tracking 0.22em<br>11px uppercase</div>
+      <div class="mono" style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--tx-3)">Pose for frame 2 / 4</div>
+    </div>
+    <div class="spec">
+      <div class="spec-meta"><em>metric</em>mono · 700<br>tabular figures<br>32px</div>
+      <div class="num" style="font-size:32px;font-weight:700;color:var(--accent)">₱ 8,450.00</div>
+    </div>
+    <div class="spec">
+      <div class="spec-meta"><em>body</em>grotesque · 400<br>16px / 1.6<br>max 68ch</div>
+      <div style="color:var(--tx-2);max-width:60ch">Tapping start means we photograph, print and store
+        your photos for thirty days. Your download code works whether or not the booth is online.</div>
+    </div>
+    <div class="spec">
+      <div class="spec-meta"><em>caption</em>grotesque · 400<br>13px / 1.5</div>
+      <div style="color:var(--tx-3);font-size:13px">Prints as 4×6 · ribbon 612 remaining</div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:var(--s5)"><strong>Numerals are always tabular.</strong> Prices,
+    counters, ribbon counts and timers sit in columns or update in place — proportional figures make
+    them jitter, and a jittering countdown is the most visible bug on a kiosk.</p>
+</section>
+
+<!-- ════════════ 04 SPACE ════════════ -->
+<section id="space">
+  <div class="head">
+    <span class="eyebrow">Space, form &amp; depth</span>
+    <h2 class="h2">A 4px spine, and light from one direction.</h2>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Token</th><th>Value</th><th>Where it is used</th></tr></thead>
+      <tbody>
+        <tr><td>--s1 … --s4</td><td>4 · 8 · 12 · 16</td><td>Inside components — icon gaps, chip padding, label spacing</td></tr>
+        <tr><td>--s5 · --s6</td><td>24 · 32</td><td>Between components, card padding</td></tr>
+        <tr><td>--s7 … --s9</td><td>48 · 64 · 96</td><td>Between sections; the kiosk breathes more than the admin panel</td></tr>
+        <tr><td>--r-sm … --r-xl</td><td>6 · 10 · 16 · 24</td><td>Chips · inputs and buttons · cards · the booth shell</td></tr>
+        <tr><td>--r-pill</td><td>999</td><td>Dots, meters, badges only — never a button</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note" style="margin-top:var(--s5)">Elevation is <strong>one light source, high and
+    front</strong>: a long soft shadow downward plus a 1px inner highlight along the top edge. That
+    top highlight is what makes a dark panel read as a machined object instead of a flat rectangle —
+    it is the single most valuable pixel in the system.</p>
+</section>
+
+<!-- ════════════ 05 MOTION ════════════ -->
+<section id="motion">
+  <div class="head">
+    <span class="eyebrow">Motion</span>
+    <h2 class="h2">Every transition answers a question.</h2>
+    <p class="p">Motion here is not decoration — it is the kiosk explaining itself to someone who has
+      never used it and will use it once. Each curve has a job: <strong>where did this come from</strong>,
+      <strong>is the machine working</strong>, <strong>did my tap register</strong>. Tap any curve to
+      replay it.</p>
+  </div>
+
+  <div class="curves" id="curves"></div>
+
+  <div class="stack" style="margin-top:var(--s7)">
+    <span class="eyebrow">Duration scale</span>
+    <div class="durs" id="durs"></div>
+    <p class="note">Duration scales with <strong>distance and consequence</strong>, never with
+      importance. A chip toggling is 80 ms because it moved 2 px. A kiosk screen change is 600 ms
+      because the whole surface moved and the customer must follow it. Anything past 600 ms must be
+      a deliberate ceremony — the countdown, the flash, the print emerging — or it just feels slow.</p>
+  </div>
+
+  <div class="stack" style="margin-top:var(--s7)">
+    <span class="eyebrow">Choreography — stagger, don't swarm</span>
+    <div class="demo">
+      <div class="row" style="justify-content:space-between;margin-bottom:var(--s5)">
+        <span style="font-size:14px;color:var(--tx-2)">40 ms between siblings, capped at 8</span>
+        <button class="btn btn-ghost" id="run-stagger">Replay</button>
+      </div>
+      <div class="stagger-demo" id="stagger"></div>
+    </div>
+    <p class="note">Items enter in reading order, 40 ms apart, and stop staggering after the eighth —
+      past that the delay is longer than anyone will wait. <strong>Exits never stagger.</strong> Leaving
+      is uniform and fast, because nobody wants to watch a screen they have already dismissed.</p>
+  </div>
+
+  <div class="stack" style="margin-top:var(--s7)">
+    <span class="eyebrow">The four rules</span>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Transform &amp; opacity only</td><td>The only two properties the GPU animates for free. Animating width, top or filter drops a fanless tablet to single-digit frame rates mid-session.</td></tr>
+          <tr><td>Motion has an origin</td><td>A panel opened from the top-right corner enters <em>from</em> the top-right. Motion without an origin reads as noise.</td></tr>
+          <tr><td>Interrupt, never queue</td><td>A customer tapping twice must not wait through two animations. Every transition is cancellable and reversible from wherever it is.</td></tr>
+          <tr><td>Ceremony is earned</td><td>Only three moments get more than 600 ms — countdown, shutter flash, print emerging. They are the product. Everything else gets out of the way.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ 06 COMPONENTS ════════════ -->
+<section id="components">
+  <div class="head">
+    <span class="eyebrow">Components</span>
+    <h2 class="h2">Built for a thumb, at arm's length.</h2>
+  </div>
+
+  <div class="demo">
+    <span class="eyebrow" style="margin-bottom:var(--s4)">Buttons — 48px minimum, always</span>
+    <div class="row">
+      <button class="btn btn-primary">Tap to start</button>
+      <button class="btn btn-ghost">Keep editing</button>
+      <button class="btn btn-quiet">Skip</button>
+      <button class="btn btn-primary" disabled>Waiting for attendant</button>
+    </div>
+    <p class="note" style="margin-top:var(--s5)">Press feedback is a 3.5% scale-down over 140 ms.
+      On a touchscreen with no hover, <strong>the press <em>is</em> the affordance</strong> — it is the
+      only confirmation a guest gets that the glass heard them.</p>
+  </div>
+
+  <div class="demo">
+    <span class="eyebrow" style="margin-bottom:var(--s4)">Package cards</span>
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Basic</span><span class="card-price">₱199</span></div>
+        <span class="card-feat">4 photos · 1 print · 3 layouts</span>
+      </div>
+      <div class="card" style="border-color:var(--gold-500)">
+        <div class="card-head"><span class="card-title">Premium</span><span class="card-price">₱349</span></div>
+        <div class="row" style="gap:6px"><span class="badge">Most popular</span></div>
+        <span class="card-feat">8 photos · 2 prints · full editing</span>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Unlimited</span><span class="card-price">₱599</span></div>
+        <span class="card-feat">Unlimited photos · 4 prints</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <span class="eyebrow" style="margin-bottom:var(--s4)">Inputs, meters &amp; feedback</span>
+    <div class="row" style="align-items:flex-end;gap:var(--s5)">
+      <div class="field">
+        <label for="ds-email">Send my photos to</label>
+        <input id="ds-email" type="email" placeholder="ana@example.com">
+      </div>
+      <div class="field" style="flex:1;min-width:220px">
+        <label>Ribbon remaining · 612 / 700</label>
+        <div class="meter"><b style="width:87%"></b></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:var(--s5)">
+      <button class="btn btn-ghost" id="run-toast">Trigger confirmation</button>
+      <div id="toast-slot"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ 07 ERGONOMICS ════════════ -->
+<section id="ergonomics">
+  <div class="head">
+    <span class="eyebrow">Kiosk ergonomics</span>
+    <h2 class="h2">Designed for one use, by a stranger, in bad light.</h2>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Constraint</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Viewing distance</td><td>Body text never below 15px; primary actions never below 48px tall. A guest stands further from a kiosk than from a laptop.</td></tr>
+        <tr><td>No hover</td><td>No hover state may carry meaning anywhere. Every affordance is visible at rest — hover is a bonus on the laptop build only.</td></tr>
+        <tr><td>Thumb reach</td><td>Primary actions sit in the lower third of the portrait screen. The header is for orientation, never for controls.</td></tr>
+        <tr><td>One decision per screen</td><td>Tapping a choice advances immediately. No choose-then-confirm — it doubles the taps and halves the throughput at a busy event.</td></tr>
+        <tr><td>Venue lighting</td><td>Body text holds 7:1 against its ground, not 4.5:1. Booths run in dim receptions and blown-out daylight, sometimes in the same hour.</td></tr>
+        <tr><td>Wet, cold, gloved hands</td><td>Nothing depends on a precise gesture. Pinch and rotate always have a handle-drag equivalent.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════════ 08 PERFORMANCE ════════════ -->
+<section id="performance">
+  <div class="head">
+    <span class="eyebrow">The honest constraint</span>
+    <h2 class="h2">A fanless tablet is also rendering your print.</h2>
+    <p class="p">This is the tension in the brief worth naming. The same device running these
+      animations is compositing a 1200×1800 print, running Sharp, writing SQLite and serving a local
+      HTTP server — and it has no fan. A luxurious system that throttles the machine is not luxurious;
+      it is a booth that stutters in front of a paying customer.</p>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Budget</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Compositor only</td><td><span class="mono">transform</span> and <span class="mono">opacity</span>. Nothing else animates, ever.</td></tr>
+        <tr><td>Blur is rationed</td><td>At most one backdrop-filter layer on screen. It is the most expensive effect in the system and the easiest to over-use.</td></tr>
+        <tr><td>Nothing loops idle</td><td>Except the attract screen, which is the one moment the machine has nothing else to do.</td></tr>
+        <tr><td>Render yields</td><td>Print composition and animation never run in the same frame — the print render is queued behind the transition, not raced against it.</td></tr>
+        <tr><td>Reduced motion is real</td><td><span class="mono">prefers-reduced-motion</span> collapses every duration to near-zero and disables the attract loop. State still changes; it just stops moving.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:var(--s5)"><strong>The kiosk ships with a performance tier.</strong>
+    If frame time exceeds budget for a sustained window, the shell drops blur, then parallax, then
+    stagger — in that order — and keeps the core transitions. The booth degrades gracefully instead of
+    stuttering proudly.</p>
+</section>
+
+<div class="foot">
+  <span>MAD SHOT'Z · Design System v1.0 · Phase 4</span>
+  <span>Instrument &amp; Paper</span>
+</div>
+
+</div>
+</div>
+
+<script type="module">
+const rm = matchMedia("(prefers-reduced-motion: reduce)");
+
+/* ─────────── Hero: the capture ceremony ─────────── */
+const flash = document.getElementById("flash");
+const count = document.getElementById("count");
+const status = document.getElementById("booth-status");
+const receipt = document.getElementById("receipt");
+const slots = [...document.getElementById("vf-slots").children];
+const dots  = [...document.getElementById("dots").children];
+let running = false;
+
+const wait = ms => new Promise(r => setTimeout(r, rm.matches ? Math.min(ms, 60) : ms));
+const fire = (el, attr) => { el.removeAttribute(attr); void el.offsetWidth; el.setAttribute(attr, ""); };
+
+function reset() {
+  slots.forEach(s => s.classList.remove("lit"));
+  dots.forEach(d => d.classList.remove("on"));
+  receipt.removeAttribute("data-print");
+  count.textContent = "";
+  status.textContent = "READY";
+}
+
+async function ceremony() {
+  if (running) return;
+  running = true; reset();
+  for (let frame = 0; frame < 4; frame++) {
+    status.textContent = `FRAME ${frame + 1} / 4`;
+    for (let n = 3; n > 0; n--) {
+      count.textContent = n;
+      fire(count, "data-anim");
+      await wait(600);
+    }
+    count.textContent = "";
+    fire(flash, "data-fire");
+    slots[frame].classList.add("lit");
+    dots[frame].classList.add("on");
+    await wait(520);
+  }
+  status.textContent = "PRINTING";
+  await wait(260);
+  fire(receipt, "data-print");
+  await wait(1500);
+  status.textContent = "COMPLETE";
+  running = false;
+}
+document.getElementById("run-ceremony").addEventListener("click", ceremony);
+
+/* ─────────── Motion lab: curves ─────────── */
+const CURVES = [
+  { name: "--e-standard", css: "cubic-bezier(.2, 0, 0, 1)", bez: [.2,0,0,1], dur: 220,
+    use: "The workhorse. Anything moving between two resting states." },
+  { name: "--e-entrance", css: "cubic-bezier(.16, 1, .3, 1)", bez: [.16,1,.3,1], dur: 380,
+    use: "Arrivals. Fast out of the gate, long settle — reads as confident." },
+  { name: "--e-exit", css: "cubic-bezier(.4, 0, 1, 1)", bez: [.4,0,1,1], dur: 160,
+    use: "Departures. Accelerates away and never looks back." },
+  { name: "--e-shutter", css: "cubic-bezier(.9, 0, .1, 1)", bez: [.9,0,.1,1], dur: 700,
+    use: "The flash. Holds, snaps, holds — a mechanical shutter, not a fade." },
+  { name: "--e-spring", css: "linear(0, .006, .101 6.1%, .717 25.3%, 1.046 60.6%, 1)", spring: true, dur: 520,
+    use: "Overshoot for things that should feel physical: toasts, chips, the countdown numeral." },
+];
+
+function bezPath([x1,y1,x2,y2]) {
+  return `M0,100 C${x1*100},${100-y1*100} ${x2*100},${100-y2*100} 100,0`;
+}
+function springPath() {
+  const pts = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    const v = 1 - Math.exp(-6.2 * t) * Math.cos(11.5 * t);
+    pts.push(`${(t*100).toFixed(1)},${(100 - v*100).toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
+
+const curvesEl = document.getElementById("curves");
+curvesEl.innerHTML = CURVES.map(c => `
+  <div class="curve" data-ez="${c.spring ? 'var(--e-spring)' : c.css}" data-dur="${c.dur}ms" tabindex="0" role="button">
+    <div class="curve-top">
+      <div>
+        <div class="curve-name">${c.name}</div>
+        <div class="curve-use">${c.use}</div>
+      </div>
+      <div class="mono" style="font-size:10px;color:var(--accent);white-space:nowrap">${c.dur}ms</div>
+    </div>
+    <svg viewBox="-6 -14 112 128" aria-hidden="true">
+      <line class="grid-l" x1="0" y1="100" x2="100" y2="100"></line>
+      <line class="grid-l" x1="0" y1="0" x2="100" y2="0"></line>
+      <line class="grid-l" x1="0" y1="0" x2="0" y2="100"></line>
+      ${c.spring
+        ? `<polyline class="path" points="${springPath()}"></polyline>`
+        : `<path class="path" d="${bezPath(c.bez)}"></path>`}
+    </svg>
+    <div class="puck-track"><div class="puck"></div></div>
+    <code>${c.spring ? 'linear(…) spring' : c.css}</code>
+  </div>`).join("");
+
+function runCurve(card) {
+  const puck = card.querySelector(".puck");
+  const track = card.querySelector(".puck-track");
+  puck.style.setProperty("--travel", (track.clientWidth - 24) + "px");
+  puck.style.setProperty("--ez", card.dataset.ez);
+  puck.style.setProperty("--dur", card.dataset.dur);
+  fire(puck, "data-run");
+}
+curvesEl.querySelectorAll(".curve").forEach(card => {
+  card.addEventListener("click", () => runCurve(card));
+  card.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); runCurve(card); }
+  });
+});
+
+/* ─────────── Motion lab: durations ─────────── */
+const DURS = [
+  ["--d-instant", 80,  "Chip toggle, checkbox, tally tick"],
+  ["--d-quick",   140, "Press feedback, hover, focus ring"],
+  ["--d-base",    220, "Most things — cards, drawers, tooltips"],
+  ["--d-slow",    380, "Panels, sheets, the attendant drawer"],
+  ["--d-deliberate", 600, "Full kiosk screen change"],
+];
+const dursEl = document.getElementById("durs");
+dursEl.innerHTML = DURS.map(([n, ms, use]) => `
+  <div class="dur">
+    <span class="dur-name">${n}</span>
+    <span class="dur-ms">${ms}ms</span>
+    <div class="dur-bar" title="${use}"><b style="--dur:${ms}ms"></b></div>
+  </div>`).join("");
+
+function runDurs() { dursEl.querySelectorAll(".dur-bar b").forEach(b => fire(b, "data-run")); }
+dursEl.addEventListener("click", runDurs);
+
+/* ─────────── Motion lab: stagger ─────────── */
+const stagEl = document.getElementById("stagger");
+stagEl.innerHTML = Array.from({ length: 8 }, (_, i) =>
+  `<i style="--dly:${i * 40}ms"></i>`).join("");
+function runStagger() { stagEl.querySelectorAll("i").forEach(i => fire(i, "data-run")); }
+document.getElementById("run-stagger").addEventListener("click", runStagger);
+
+/* ─────────── Toast ─────────── */
+document.getElementById("run-toast").addEventListener("click", () => {
+  const slot = document.getElementById("toast-slot");
+  slot.innerHTML = `<div class="toast"><b></b><span>Sent to ana@example.com</span></div>`;
+  fire(slot.firstElementChild, "data-run");
+});
+
+/* ─────────── Play sections when they scroll into view ─────────── */
+if (!rm.matches && "IntersectionObserver" in window) {
+  const seen = new WeakSet();
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (!e.isIntersecting || seen.has(e.target)) continue;
+      seen.add(e.target);
+      if (e.target === dursEl) runDurs();
+      if (e.target === stagEl) runStagger();
+      if (e.target === curvesEl) curvesEl.querySelectorAll(".curve").forEach((c, i) => setTimeout(() => runCurve(c), i * 120));
+    }
+  }, { threshold: .4 });
+  [dursEl, stagEl, curvesEl].forEach(el => io.observe(el));
+  setTimeout(ceremony, 700);
+}
+</script>
