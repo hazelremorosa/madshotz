@@ -8,8 +8,8 @@ designed to be sold to photobooth operators.
 | Phase | Document | Status |
 |-------|----------|--------|
 | 1 | [Prototype Audit](./phase-1-prototype-audit.md) | ✅ Approved |
-| 2 | [Application Architecture](./phase-2-architecture.md) | 🔵 In review |
-| 3 | Wireframes — every screen | ⬜ Pending |
+| 2 | [Application Architecture](./phase-2-architecture.md) | ✅ Approved |
+| 3 | Wireframes — every screen | 🔵 Blocked on tablet OS |
 | 4 | UI/UX Design System | ⬜ Pending |
 | 5 | SQLite Schema (full Prisma DSL, indexes, migrations) | ⬜ Pending |
 | 6 | API Layer (local delivery server + cloud sync contract) | ⬜ Pending |

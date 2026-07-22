@@ -65,11 +65,31 @@ code changes when the DSLR lands.**
 
 ### Window topology
 
+**Target hardware: a tablet PC — single screen, touch-only, staff and customer share it.**
+This is decided, and it forces a single-window design.
+
 | Window | Purpose |
 |--------|---------|
-| **Kiosk window** | Fullscreen, always-on-top, frameless, `kiosk: true`. Customer-facing. |
-| **Admin window** | Separate window, opened by password gate. Never rendered inside the kiosk tree. |
+| **Kiosk window** | Fullscreen, always-on-top, frameless, `kiosk: true`. Hosts **both** the customer flow and the admin UI as protected routes. |
 | **Offscreen render window** | Hidden, sized to exact print pixels. Renders the composition at print resolution. See §7. |
+
+### Single-screen staff access
+
+There is no second monitor and no second device, so staff controls are layered onto the same
+window in two tiers:
+
+| Tier | Entry | Contains | Leaves customer flow? |
+|------|-------|----------|----------------------|
+| **Attendant drawer** | Hidden gesture (long-press a fixed corner ≥1.5 s) + 4-digit PIN | Start/void session, mark paid, reprint last, cancel print, skip step, consumable status | No — overlays the current screen, dismissible, session state untouched |
+| **Admin panel** | Attendant drawer → *Admin*, + full password | Dashboard, analytics, packages, themes, layouts, printers, events, users, settings, logs | Yes — a protected route; the customer session must be closed or parked first |
+
+The drawer exists because the common attendant actions (take payment, reprint a bad print) happen
+**mid-session, in front of a waiting customer**. Routing those through a full admin login would make
+the booth unusable at a busy event. The gesture is deliberately undiscoverable by a customer and
+deliberately trivial for trained staff.
+
+**Consequence for the offscreen render window:** it must never steal focus or flash on screen. On a
+single-display tablet a mis-configured `show: true` would be visible to the customer mid-session.
 
 ### Security posture
 
@@ -583,22 +603,40 @@ worth its cost.
 | **Logging** | Structured, rotating, correlation-id threaded from IPC call to log line. Viewable in the admin panel. |
 | **Type safety** | `strict` TypeScript; Zod at every external boundary (IPC, filesystem manifests, theme manifests, cloud responses). |
 | **Dark mode** | Design tokens (Phase 4). The kiosk ships dark; the admin panel supports both. |
-| **Touch + mouse** | 44 px minimum targets, no hover-only affordances, gesture support in the editor, full keyboard shortcuts in admin. |
+| **Touch-first (tablet PC)** | **48 px** minimum targets; **no hover state carries meaning anywhere** — a tablet has no hover, so every affordance must be visible at rest. Multi-touch pinch/rotate in the editor. On-screen keyboard for all admin text entry, with numeric keypads for prices and PINs. Physical keyboard shortcuts are an optional accelerator, never the only path. |
+| **Tablet thermals & power** | Print-resolution rendering, Sharp derivatives and GIF encoding are queued and serialised rather than run concurrently — a fanless tablet throttles under sustained load. Battery and thermal state surface on the admin dashboard alongside camera and printer health. |
 | **Testing** | Vitest for domain/application (fast, no mocks); integration tests for adapters; Playwright for the kiosk flow; a golden-image test asserting preview and print render identically. |
 | **Licensing** | Activation module — required before selling to other operators. |
 
 ---
 
-## 15. Open questions for Phase 3
+## 15. Hardware decisions
 
-1. **Target OS** — Windows-only, or Windows + Linux? It affects the print gateway implementation
-   and the packaging story.
-2. **Screen size and orientation** — the prototype assumes 9:16 portrait. Confirm the physical
-   panel; wireframes depend on it.
-3. **Attendant workflow** — in `ATTENDED` mode, does staff use the same screen (a hidden gesture to
-   open controls) or a second device?
-4. **Consent moment** — where in the flow does the privacy notice appear? My recommendation is the
-   attract screen, acknowledged once per session, non-blocking.
+| Question | Answer |
+|----------|--------|
+| **Attendant workflow** | ✅ Staff share the customer screen. Resolved by the two-tier drawer/admin design in §1. |
+| **Consent moment** | ✅ Attract screen, acknowledged once per session, non-blocking. `Session.consentAcceptedAt` is stamped on acknowledgement and retained with the financial record after photo purge (§4). |
+| **Device class** | ✅ Tablet PC — single screen, touch-only. |
+| **Operating system** | ⚠️ **OPEN — blocking.** See risk below. |
+| **Orientation** | ⚠️ Open. Portrait-mounted is assumed (the prototype's 9:16); confirm before wireframes. |
+
+### ⚠️ Blocking risk: tablet OS
+
+**Electron runs on Windows, macOS and Linux. It does not run on Android or iPadOS.** If the intended
+device is an Android tablet or an iPad, the entire approved stack is invalid and Phase 2 must be
+re-planned around a different runtime.
+
+| Device | Verdict |
+|--------|---------|
+| **Windows x86/x64 tablet** (Surface Pro class) | ✅ Fully supported. Best dye-sub driver availability. **Recommended.** |
+| **Windows on ARM** tablet | ⚠️ Electron supports ARM64, but dye-sub vendor drivers frequently do not. Printer must be verified first. |
+| **Android tablet / iPad** | ❌ Electron cannot run. Requires a different architecture entirely. |
+
+A secondary hardware question follows from the answer: **how the printer connects.** Dye-sub
+printers are USB-B and draw meaningful power; many tablets expose only USB-C. Options are a powered
+USB hub, a network print server, or a small always-on mini-PC hosting the printer with the tablet
+acting purely as the kiosk. This affects the `PrinterGateway` adapter and must be settled before
+Phase 8.
 
 ---
 
