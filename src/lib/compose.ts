@@ -251,7 +251,7 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   // Subtle wordmark.
   ctx.font = `600 ${Math.round(W * 0.033)}px ui-monospace, monospace`;
   ctx.fillStyle = "#9c8794";
-  ctx.fillText("M A D   S H O T ' Z", W / 2, Math.round(W * 0.1));
+  ctx.fillText("M A D   S H O T S", W / 2, Math.round(W * 0.1));
   dashed(ctx, pad, headerH - 10, W - pad, headerH - 10);
 
   // Frame mat.

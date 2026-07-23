@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * MAD SHOT'Z Design System — tokens.
+ * Mad Shots Design System — tokens.
  * The three "brand-*" hues are CSS variables so a selected Theme can recolor the
  * entire room at runtime (see src/store/session.ts + index.css).
  */

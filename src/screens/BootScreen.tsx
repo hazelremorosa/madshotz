@@ -21,7 +21,7 @@ export function BootScreen() {
         className="relative overflow-hidden"
       >
         <div className="text-3xl font-extrabold tracking-[0.2em] brand-text">
-          MAD SHOT'Z
+          MAD SHOTS
         </div>
         <motion.div
           className="absolute inset-y-0 w-1/3 bg-white/40 blur-md"

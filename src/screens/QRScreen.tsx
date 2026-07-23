@@ -57,7 +57,7 @@ export function QRScreen() {
     if (!composite) return;
     const a = document.createElement("a");
     a.href = composite;
-    a.download = `madshotz-${code}.jpg`;
+    a.download = `mad-shots-${code}.jpg`;
     a.click();
     setToast("Saved to your device");
     window.setTimeout(() => setToast(null), 1800);
@@ -70,14 +70,14 @@ export function QRScreen() {
       };
       if (composite && nav.share) {
         const blob = await (await fetch(composite)).blob();
-        const file = new File([blob], `madshotz-${code}.jpg`, {
+        const file = new File([blob], `mad-shots-${code}.jpg`, {
           type: "image/jpeg",
         });
         if (nav.canShare?.({ files: [file] })) {
-          await nav.share({ files: [file], title: "MAD SHOT'Z" });
+          await nav.share({ files: [file], title: "Mad Shots" });
           return;
         }
-        await nav.share({ title: "MAD SHOT'Z", text: "My photos!", url });
+        await nav.share({ title: "Mad Shots", text: "My photos!", url });
         return;
       }
       await navigator.clipboard.writeText(url);

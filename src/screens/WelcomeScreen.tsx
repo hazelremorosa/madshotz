@@ -48,7 +48,7 @@ export function WelcomeScreen() {
         transition={{ delay: 0.15 }}
         className="mt-8 text-5xl font-extrabold tracking-tight text-cocoa"
       >
-        MAD <span className="brand-text">SHOT'Z</span>
+        MAD <span className="brand-text">SHOTS</span>
       </motion.h1>
       <motion.p
         initial={{ opacity: 0 }}

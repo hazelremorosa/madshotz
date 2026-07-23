@@ -49,7 +49,7 @@ export const THEMES: Theme[] = [
     brand: ["226 232 240", "148 163 184", "100 116 139"],
     defaultFilter: "natural",
     stickers: ["◻️", "○", "✦", "—", "•", "⌗", "△", "☉"],
-    header: "MAD SHOT'Z",
+    header: "MAD SHOTS",
   },
   {
     id: "christmas",
@@ -102,7 +102,7 @@ export const CUTE_THEME: Theme = {
   brand: ["255 122 173", "178 148 255", "122 224 196"],
   defaultFilter: "soft",
   stickers: ["🎀", "💖", "⭐", "🌸", "🧸", "🍓", "☁️", "🌈", "✨", "🍡", "🐰", "💐"],
-  header: "MAD SHOT'Z",
+  header: "MAD SHOTS",
 };
 
 export const DEFAULT_THEME = CUTE_THEME;
