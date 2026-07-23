@@ -1,0 +1,165 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { useSession } from "@/store/session";
+import { FILTER_BY_ID } from "@/data/filters";
+import {
+  FRAME_STYLES,
+  FRAME_STYLE_BY_ID,
+  PHOTO_SHAPES,
+} from "@/data/frames";
+import { Receipt } from "@/components/Receipt";
+import { ActionBar } from "@/components/shell/ActionBar";
+import { formatDate } from "@/lib/date";
+import { sfx } from "@/lib/sound";
+import { cn } from "@/lib/cn";
+
+export function FramesScreen() {
+  const layout = useSession((s) => s.layout);
+  const photos = useSession((s) => s.photos);
+  const theme = useSession((s) => s.theme);
+  const code = useSession((s) => s.sessionCode);
+  const filterId = useSession((s) => s.filterId);
+  const frameStyleId = useSession((s) => s.frameStyleId);
+  const photoShape = useSession((s) => s.photoShape);
+  const setFrameStyle = useSession((s) => s.setFrameStyle);
+  const setPhotoShape = useSession((s) => s.setPhotoShape);
+  const soundOn = useSession((s) => s.soundOn);
+  const go = useSession((s) => s.go);
+
+  const [tab, setTab] = useState<"color" | "pattern">("color");
+  const filterCss = FILTER_BY_ID(filterId).css;
+  const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const styles = FRAME_STYLES.filter((f) => f.kind === tab);
+
+  const pick = (fn: () => void) => {
+    fn();
+    if (soundOn) sfx.pop();
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
+      <div className="px-8 text-center">
+        <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
+          Dress it <span className="brand-text">up</span>
+        </h2>
+        <p className="mt-1 text-sm text-cocoa/50">Frame & shape</p>
+      </div>
+
+      {/* Live preview */}
+      <div className="flex flex-1 items-center justify-center px-10 pb-2">
+        <motion.div
+          key={`${frameStyleId}-${photoShape}`}
+          initial={{ scale: 0.96, opacity: 0.7 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 22 }}
+          className="w-full max-w-[210px]"
+        >
+          <Receipt
+            layout={layout}
+            photos={photos}
+            filterCss={filterCss}
+            frameBg={frameBg}
+            shape={photoShape}
+            theme={theme}
+            code={code}
+            dateLabel={formatDate()}
+          />
+        </motion.div>
+      </div>
+
+      {/* Shape row */}
+      <div className="px-5">
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+          Photo shape
+        </p>
+        <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
+          {PHOTO_SHAPES.map((s) => {
+            const active = photoShape === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => pick(() => setPhotoShape(s.id))}
+                className={cn(
+                  "flex shrink-0 flex-col items-center gap-1 rounded-2xl px-4 py-2 transition-all",
+                  active ? "glass-strong shadow-bloom" : "glass",
+                )}
+              >
+                <span className="text-2xl leading-none text-cocoa">{s.emoji}</span>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    active ? "text-cocoa" : "text-cocoa/60",
+                  )}
+                >
+                  {s.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Frame design */}
+      <div className="mb-32 mt-4 px-5">
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+            Frame
+          </p>
+          <div className="ml-auto flex gap-1 rounded-full glass p-1">
+            {(["color", "pattern"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
+                  tab === t ? "brand-fill text-white" : "text-cocoa/60",
+                )}
+              >
+                {t === "color" ? "Colors" : "Patterns"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="no-bar flex gap-3 overflow-x-auto pb-1">
+          {styles.map((f) => {
+            const active = frameStyleId === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => pick(() => setFrameStyle(f.id))}
+                className="flex shrink-0 flex-col items-center gap-1.5"
+              >
+                <span
+                  className={cn(
+                    "h-14 w-14 rounded-2xl border-2 transition-all",
+                    active
+                      ? "scale-105 border-[rgb(var(--brand-a))] shadow-bloom"
+                      : "border-white/70",
+                  )}
+                  style={{ background: f.bg }}
+                />
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    active ? "text-cocoa" : "text-cocoa/60",
+                  )}
+                >
+                  {f.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <ActionBar
+        onBack={() => go("review", -1)}
+        primaryLabel="Continue"
+        onPrimary={() => go("filter", 1)}
+      />
+    </div>
+  );
+}

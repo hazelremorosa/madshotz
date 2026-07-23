@@ -9,7 +9,7 @@ export function WelcomeScreen() {
   const begin = () => {
     // Warm the camera on the first user gesture so Capture is instant.
     ensureCameraStream().catch(() => undefined);
-    go("theme", 1);
+    go("layout", 1);
   };
 
   return (
@@ -31,7 +31,7 @@ export function WelcomeScreen() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="mt-8 text-5xl font-extrabold tracking-tight text-white"
+        className="mt-8 text-5xl font-extrabold tracking-tight text-cocoa"
       >
         MAD <span className="brand-text">SHOT'Z</span>
       </motion.h1>
@@ -39,7 +39,7 @@ export function WelcomeScreen() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="mt-3 font-mono text-xs uppercase tracking-[0.5em] text-white/50"
+        className="mt-3 font-mono text-xs uppercase tracking-[0.5em] text-cocoa/50"
       >
         Studio Creative
       </motion.p>
@@ -50,10 +50,10 @@ export function WelcomeScreen() {
         transition={{ delay: 0.5 }}
         className="mt-20 flex flex-col items-center gap-3"
       >
-        <span className="glass rounded-full px-7 py-3 text-sm font-semibold tracking-widest text-white/90 animate-breathe">
+        <span className="glass rounded-full px-7 py-3 text-sm font-semibold tracking-widest text-cocoa shadow-glass animate-breathe">
           TOUCH ANYWHERE TO BEGIN
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/30">
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-cocoa/40">
           Your memories, printed in seconds
         </span>
       </motion.div>

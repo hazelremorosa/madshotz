@@ -7,13 +7,14 @@ import { AmbientBackground } from "@/components/shell/AmbientBackground";
 import { ParticleField } from "@/components/shell/ParticleField";
 import { RippleLayer } from "@/components/shell/RippleLayer";
 import { ProgressRail } from "@/components/shell/ProgressRail";
+import { ShapeDefs } from "@/components/ShapeDefs";
 
 import { BootScreen } from "@/screens/BootScreen";
 import { WelcomeScreen } from "@/screens/WelcomeScreen";
-import { ThemeScreen } from "@/screens/ThemeScreen";
 import { LayoutScreen } from "@/screens/LayoutScreen";
 import { CaptureScreen } from "@/screens/CaptureScreen";
 import { ReviewScreen } from "@/screens/ReviewScreen";
+import { FramesScreen } from "@/screens/FramesScreen";
 import { FilterScreen } from "@/screens/FilterScreen";
 import { EditorScreen } from "@/screens/EditorScreen";
 import { PreviewScreen } from "@/screens/PreviewScreen";
@@ -23,10 +24,10 @@ import { QRScreen } from "@/screens/QRScreen";
 const SCREENS: Record<ScreenId, () => JSX.Element> = {
   boot: BootScreen,
   welcome: WelcomeScreen,
-  theme: ThemeScreen,
   layout: LayoutScreen,
   capture: CaptureScreen,
   review: ReviewScreen,
+  frames: FramesScreen,
   filter: FilterScreen,
   editor: EditorScreen,
   preview: PreviewScreen,
@@ -61,7 +62,8 @@ export default function App() {
   const Screen = SCREENS[screen];
 
   return (
-    <div className="relative h-[100dvh] w-full max-w-[540px] overflow-hidden bg-ink text-white">
+    <div className="relative h-[100dvh] w-full max-w-[540px] overflow-hidden bg-cream text-cocoa">
+      <ShapeDefs />
       <AmbientBackground />
       <ParticleField />
 
@@ -82,7 +84,7 @@ export default function App() {
         type="button"
         onClick={toggleSound}
         aria-label="Toggle sound"
-        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-9 w-9 items-center justify-center rounded-full glass text-sm text-white/70"
+        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-9 w-9 items-center justify-center rounded-full glass text-sm text-cocoa/70 shadow-glass"
       >
         {soundOn ? "🔊" : "🔇"}
       </button>

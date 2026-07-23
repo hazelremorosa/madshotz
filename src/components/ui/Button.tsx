@@ -23,7 +23,7 @@ export function Button({
     primary:
       "brand-fill text-white shadow-bloom",
     ghost:
-      "glass text-white/90 hover:text-white",
+      "glass text-cocoa shadow-glass",
     paper:
       "bg-paper text-paper-ink shadow-paper",
   };

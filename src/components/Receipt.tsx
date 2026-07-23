@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode } from "react";
-import type { CapturedPhoto, LayoutDef, Theme } from "@/types";
+import type { CapturedPhoto, LayoutDef, PhotoShape, Theme } from "@/types";
 import { FrameStack } from "@/components/FrameStack";
 import { cn } from "@/lib/cn";
 
@@ -11,6 +11,9 @@ interface Props {
   code: string;
   dateLabel: string;
   activeIndex?: number;
+  /** CSS background for the mat/frame behind the photos. */
+  frameBg?: string;
+  shape?: PhotoShape;
   /** Interactive overlay (editor) or static items (preview). */
   overlay?: ReactNode;
   className?: string;
@@ -42,6 +45,8 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
     code,
     dateLabel,
     activeIndex,
+    frameBg,
+    shape = "rounded",
     overlay,
     className,
   },
@@ -70,14 +75,20 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
         <div className="mt-[3cqw] border-t border-dashed border-paper-ink/30" />
       </div>
 
-      {/* Frames */}
+      {/* Frames (with mat) */}
       <div className="min-h-0 flex-1 px-[6cqw] py-[4cqw]">
-        <FrameStack
-          layout={layout}
-          photos={photos}
-          filterCss={filterCss}
-          activeIndex={activeIndex}
-        />
+        <div
+          className="h-full w-full rounded-[3.5cqw] p-[3cqw]"
+          style={frameBg ? { background: frameBg } : undefined}
+        >
+          <FrameStack
+            layout={layout}
+            photos={photos}
+            filterCss={filterCss}
+            shape={shape}
+            activeIndex={activeIndex}
+          />
+        </div>
       </div>
 
       {/* Footer */}

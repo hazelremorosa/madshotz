@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { FILTER_BY_ID } from "@/data/filters";
+import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { Receipt } from "@/components/Receipt";
 import { EditorItem } from "@/components/EditorItem";
 import { ActionBar } from "@/components/shell/ActionBar";
@@ -17,6 +18,8 @@ export function EditorScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const frameStyleId = useSession((s) => s.frameStyleId);
+  const photoShape = useSession((s) => s.photoShape);
   const items = useSession((s) => s.items);
   const selectedId = useSession((s) => s.selectedItemId);
   const addItem = useSession((s) => s.addItem);
@@ -32,6 +35,7 @@ export function EditorScreen() {
   const [sheet, setSheet] = useState(false);
   const [draft, setDraft] = useState("");
   const filterCss = FILTER_BY_ID(filterId).css;
+  const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
 
   const rnd = () => (Math.random() - 0.5) * 0.14;
 
@@ -59,7 +63,7 @@ export function EditorScreen() {
   return (
     <div className="flex h-full w-full flex-col pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))]">
       <div className="px-8 text-center">
-        <h2 className="text-2xl font-extrabold tracking-tight text-white">
+        <h2 className="text-2xl font-extrabold tracking-tight text-cocoa">
           Make it <span className="brand-text">yours</span>
         </h2>
       </div>
@@ -93,6 +97,8 @@ export function EditorScreen() {
             layout={layout}
             photos={photos}
             filterCss={filterCss}
+            frameBg={frameBg}
+            shape={photoShape}
             theme={theme}
             code={code}
             dateLabel={formatDate()}
@@ -123,7 +129,7 @@ export function EditorScreen() {
                 onClick={() => setTab(t)}
                 className={cn(
                   "rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition-colors",
-                  tab === t ? "brand-fill text-white" : "text-white/60",
+                  tab === t ? "brand-fill text-white" : "text-cocoa/60",
                 )}
               >
                 {t}
@@ -132,7 +138,7 @@ export function EditorScreen() {
             <button
               type="button"
               onClick={clearItems}
-              className="ml-auto text-xs uppercase tracking-widest text-white/40"
+              className="ml-auto text-xs uppercase tracking-widest text-cocoa/40"
             >
               Reset
             </button>
@@ -146,7 +152,7 @@ export function EditorScreen() {
                   type="button"
                   whileTap={{ scale: 0.85 }}
                   onClick={() => addSticker(g)}
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/10 text-3xl"
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-cocoa/5 text-3xl"
                 >
                   {g}
                 </motion.button>
@@ -192,14 +198,14 @@ export function EditorScreen() {
               onPointerDown={(e) => e.stopPropagation()}
               className="glass-strong w-full rounded-t-xl3 p-6 pb-10"
             >
-              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/30" />
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-cocoa/20" />
               <input
                 autoFocus
                 value={draft}
                 maxLength={24}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Type something…"
-                className="w-full rounded-2xl bg-white/10 px-5 py-4 text-lg text-white outline-none placeholder:text-white/40"
+                className="w-full rounded-2xl bg-cocoa/5 px-5 py-4 text-lg text-cocoa outline-none placeholder:text-cocoa/40"
               />
               <button
                 type="button"
@@ -238,7 +244,7 @@ function ToolBtn({
       aria-label={label}
       className={cn(
         "flex h-10 w-10 items-center justify-center rounded-full text-lg",
-        danger ? "bg-red-500/80 text-white" : "bg-white/10 text-white",
+        danger ? "bg-red-400 text-white" : "bg-cocoa/5 text-cocoa",
       )}
     >
       {children}
@@ -261,7 +267,7 @@ function Chip({
       onClick={onClick}
       className={cn(
         "rounded-full px-4 py-2 text-sm font-semibold",
-        accent ? "brand-fill text-white" : "bg-white/10 text-white/90",
+        accent ? "brand-fill text-white" : "bg-cocoa/5 text-cocoa",
       )}
     >
       {children}

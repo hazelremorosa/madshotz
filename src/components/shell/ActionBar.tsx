@@ -33,7 +33,7 @@ export function ActionBar({
         <span />
       )}
       {hint && (
-        <span className="pointer-events-none flex-1 text-center text-xs font-medium uppercase tracking-[0.25em] text-white/50">
+        <span className="pointer-events-none flex-1 text-center text-xs font-medium uppercase tracking-[0.25em] text-cocoa/50">
           {hint}
         </span>
       )}

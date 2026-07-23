@@ -18,10 +18,10 @@ export function ReviewScreen() {
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
       <div className="px-8 text-center">
-        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Love <span className="brand-text">them?</span>
         </h2>
-        <p className="mt-1 text-sm text-white/50">
+        <p className="mt-1 text-sm text-cocoa/50">
           Swipe through · retake any single shot
         </p>
       </div>
@@ -42,14 +42,14 @@ export function ReviewScreen() {
                 className="h-full w-full object-cover"
                 style={{ filter: filterCss === "none" ? undefined : filterCss }}
               />
-              <span className="absolute left-3 top-3 rounded-full glass px-3 py-1 font-mono text-[10px] text-white/90">
+              <span className="absolute left-3 top-3 rounded-full glass px-3 py-1 font-mono text-[10px] text-cocoa shadow-glass">
                 {i + 1} / {photos.length}
               </span>
             </div>
             <button
               type="button"
               onClick={() => retake(i)}
-              className="glass rounded-full px-6 py-2.5 text-sm font-semibold text-white/90"
+              className="glass rounded-full px-6 py-2.5 text-sm font-semibold text-cocoa shadow-glass"
             >
               ↺ Retake this
             </button>
@@ -60,7 +60,7 @@ export function ReviewScreen() {
       <ActionBar
         onBack={() => go("capture", -1)}
         primaryLabel="Looks great"
-        onPrimary={() => go("filter", 1)}
+        onPrimary={() => go("frames", 1)}
       />
     </div>
   );

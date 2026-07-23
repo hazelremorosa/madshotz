@@ -1,10 +1,10 @@
 export type ScreenId =
   | "boot"
   | "welcome"
-  | "theme"
   | "layout"
   | "capture"
   | "review"
+  | "frames"
   | "filter"
   | "editor"
   | "preview"
@@ -45,6 +45,23 @@ export interface FilterDef {
   name: string;
   /** CSS filter string applied live + baked into the composite. */
   css: string;
+}
+
+export type PhotoShape = "rounded" | "circle" | "arch" | "heart" | "sharp";
+
+/** The mat/frame behind the photos — a solid color or a repeating pattern. */
+export interface FrameStyle {
+  id: string;
+  name: string;
+  kind: "color" | "pattern";
+  /** CSS background for the DOM preview. */
+  bg: string;
+  /** Base fill color used by the canvas compositor. */
+  base: string;
+  /** For emoji-tiled patterns (hearts/stars). */
+  emoji?: string;
+  /** For geometric patterns drawn on canvas. */
+  motif?: "dots" | "stripes" | "checks";
 }
 
 export interface Sticker {

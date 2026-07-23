@@ -26,12 +26,14 @@ export function ParticleField({ count = 22 }: Props) {
       {dots.map((d) => (
         <motion.span
           key={d.id}
-          className="absolute rounded-full bg-white/50"
+          className="absolute rounded-full"
           style={{
             left: `${d.left}%`,
             top: `${d.top}%`,
             width: d.size,
             height: d.size,
+            background: "rgb(var(--brand-a))",
+            opacity: 0.4,
             filter: "blur(0.5px)",
           }}
           animate={{ y: [0, d.drift, 0], opacity: [0, 0.8, 0] }}
