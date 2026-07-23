@@ -317,7 +317,11 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   ctx.fillText(`NO. ${code}  ·  ${dateLabel}`, W / 2, qy + qrSize + Math.round(W * 0.055));
   ctx.fillText("SCAN FOR YOUR PHOTOS ♥", W / 2, qy + qrSize + Math.round(W * 0.095));
 
-  return canvas.toDataURL("image/png");
+  // JPEG keeps the stored/uploaded file small (~5-10x smaller than PNG). The
+  // paper background is opaque so no transparency is lost. Lower QUALITY for even
+  // smaller files (0.7 ≈ tiny, 0.9 ≈ crisp). WebP is smaller still if you prefer.
+  const QUALITY = 0.82;
+  return canvas.toDataURL("image/jpeg", QUALITY);
 }
 
 function dashed(

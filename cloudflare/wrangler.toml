@@ -1,0 +1,9 @@
+name = "madshotz-delivery"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# R2 bucket that stores the photos. Create it first:
+#   npx wrangler r2 bucket create madshotz-photos
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "madshotz-photos"
