@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const exe = "/root/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome";
+const browser = await chromium.launch({ executablePath: exe });
+const ctx = await browser.newContext({ viewport: { width: 430, height: 900 }, hasTouch: true, isMobile: true });
+const page = await ctx.newPage();
+const heading = () => page.evaluate(() => document.querySelector("h1,h2")?.textContent?.trim());
+await page.goto("http://localhost:4173/", { waitUntil: "networkidle" });
+await page.waitForTimeout(2500);
+await page.tap("body"); await page.waitForTimeout(900);
+await page.getByText("Birthday", { exact: true }).tap(); await page.waitForTimeout(500);
+await page.getByText("Continue", { exact: true }).tap(); await page.waitForTimeout(600);
+console.log("after 1st Continue tap:", await heading());
+await page.getByText("Continue", { exact: true }).tap().catch(()=>{}); await page.waitForTimeout(800);
+console.log("after 2nd Continue tap:", await heading());
+await browser.close();
