@@ -93,4 +93,16 @@ export const THEMES: Theme[] = [
   },
 ];
 
-export const DEFAULT_THEME = THEMES[4]; // Minimal
+/** Fixed cute identity used everywhere (the vibe-picker was removed). */
+export const CUTE_THEME: Theme = {
+  id: "cute",
+  name: "Cute",
+  tagline: "Soft & sweet",
+  emoji: "🎀",
+  brand: ["255 122 173", "178 148 255", "122 224 196"],
+  defaultFilter: "soft",
+  stickers: ["🎀", "💖", "⭐", "🌸", "🧸", "🍓", "☁️", "🌈", "✨", "🍡", "🐰", "💐"],
+  header: "MAD SHOT'Z",
+};
+
+export const DEFAULT_THEME = CUTE_THEME;

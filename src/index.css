@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  /* Brand hues (R G B triplets) — overwritten per Theme at runtime. */
-  --brand-a: 255 77 141; /* pink   */
-  --brand-b: 168 85 247; /* violet */
-  --brand-c: 34 211 238; /* cyan   */
-  color-scheme: dark;
+  /* Cute pastel brand (R G B triplets). */
+  --brand-a: 255 122 173; /* candy pink   */
+  --brand-b: 178 148 255; /* soft lavender */
+  --brand-c: 122 224 196; /* mint          */
+  color-scheme: light;
 }
 
 * {
@@ -22,8 +22,8 @@ body,
 
 body {
   margin: 0;
-  background: #06060a;
-  color: #f4f4f6;
+  background: #f7eef4;
+  color: #5a4552;
   font-family: theme("fontFamily.sans");
   overflow: hidden;
   overscroll-behavior: none;
@@ -34,7 +34,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* The kiosk stage — portrait-first, centered on desktop for testing. */
 #root {
   display: flex;
   align-items: center;
@@ -45,22 +44,22 @@ body {
   .glass {
     background: linear-gradient(
       145deg,
-      rgba(255, 255, 255, 0.09),
-      rgba(255, 255, 255, 0.03)
+      rgba(255, 255, 255, 0.78),
+      rgba(255, 255, 255, 0.5)
     );
-    backdrop-filter: blur(24px) saturate(1.3);
-    -webkit-backdrop-filter: blur(24px) saturate(1.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px) saturate(1.25);
+    -webkit-backdrop-filter: blur(20px) saturate(1.25);
+    border: 1px solid rgba(255, 255, 255, 0.85);
   }
   .glass-strong {
     background: linear-gradient(
       145deg,
-      rgba(255, 255, 255, 0.14),
-      rgba(255, 255, 255, 0.05)
+      rgba(255, 255, 255, 0.92),
+      rgba(255, 255, 255, 0.72)
     );
-    backdrop-filter: blur(32px) saturate(1.4);
-    -webkit-backdrop-filter: blur(32px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(28px) saturate(1.3);
+    -webkit-backdrop-filter: blur(28px) saturate(1.3);
+    border: 1px solid rgba(255, 255, 255, 0.9);
   }
   .brand-text {
     background-image: linear-gradient(
@@ -77,36 +76,22 @@ body {
     background-image: linear-gradient(
       110deg,
       rgb(var(--brand-a)),
-      rgb(var(--brand-b)) 55%,
+      rgb(var(--brand-b)) 60%,
       rgb(var(--brand-c))
     );
   }
-  /* Thermal-style receipt paper. */
   .paper {
-    background-color: #f8f4ea;
+    background-color: #fffdfa;
     background-image:
-      radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0) 12%);
+      radial-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.012), rgba(0, 0, 0, 0) 12%);
     background-size:
       4px 4px,
       100% 100%;
-    color: #211d17;
-  }
-  .perf-edge {
-    -webkit-mask-image: radial-gradient(
-      circle at 6px 0,
-      transparent 0 5px,
-      #000 5.5px
-    );
-    mask-image: radial-gradient(circle at 6px 0, transparent 0 5px, #000 5.5px);
-    -webkit-mask-size: 12px 12px;
-    mask-size: 12px 12px;
-    -webkit-mask-repeat: repeat-x;
-    mask-repeat: repeat-x;
+    color: #4a3a44;
   }
 }
 
-/* Hide scrollbars but keep scroll. */
 .no-bar {
   scrollbar-width: none;
   -ms-overflow-style: none;

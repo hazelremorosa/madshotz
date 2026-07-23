@@ -2,12 +2,14 @@ import { create } from "zustand";
 import type {
   CapturedPhoto,
   LayoutDef,
+  PhotoShape,
   PlacedItem,
   ScreenId,
   Theme,
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_LAYOUT } from "@/data/layouts";
+import { DEFAULT_FRAME_STYLE } from "@/data/frames";
 
 function applyBrand(theme: Theme) {
   const root = document.documentElement;
@@ -36,6 +38,8 @@ export interface SessionState {
   theme: Theme;
   layout: LayoutDef;
   filterId: string;
+  frameStyleId: string;
+  photoShape: PhotoShape;
 
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
@@ -54,6 +58,8 @@ export interface SessionState {
   setTheme: (theme: Theme) => void;
   setLayout: (layout: LayoutDef) => void;
   setFilter: (id: string) => void;
+  setFrameStyle: (id: string) => void;
+  setPhotoShape: (shape: PhotoShape) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -77,6 +83,8 @@ export const useSession = create<SessionState>((set, get) => ({
   theme: DEFAULT_THEME,
   layout: DEFAULT_LAYOUT,
   filterId: DEFAULT_THEME.defaultFilter,
+  frameStyleId: DEFAULT_FRAME_STYLE.id,
+  photoShape: "rounded",
 
   photos: [],
   retakeIndex: null,
@@ -102,6 +110,8 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   setFilter: (id) => set({ filterId: id }),
+  setFrameStyle: (id) => set({ frameStyleId: id }),
+  setPhotoShape: (shape) => set({ photoShape: shape }),
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -150,6 +160,8 @@ export const useSession = create<SessionState>((set, get) => ({
       theme: DEFAULT_THEME,
       layout: DEFAULT_LAYOUT,
       filterId: DEFAULT_THEME.defaultFilter,
+      frameStyleId: DEFAULT_FRAME_STYLE.id,
+      photoShape: "rounded",
       photos: [],
       retakeIndex: null,
       items: [],
@@ -162,10 +174,10 @@ export const useSession = create<SessionState>((set, get) => ({
 
 /** Ordered steps shown in the progress rail. */
 export const FLOW_STEPS: { id: ScreenId; label: string }[] = [
-  { id: "theme", label: "Theme" },
   { id: "layout", label: "Layout" },
   { id: "capture", label: "Capture" },
   { id: "review", label: "Review" },
+  { id: "frames", label: "Frames" },
   { id: "filter", label: "Filter" },
   { id: "editor", label: "Decorate" },
   { id: "preview", label: "Print" },

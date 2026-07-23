@@ -1,11 +1,13 @@
 import { motion } from "framer-motion";
-import type { CapturedPhoto, LayoutDef } from "@/types";
+import type { CapturedPhoto, LayoutDef, PhotoShape } from "@/types";
+import { shapeRadius } from "@/data/frames";
 import { cn } from "@/lib/cn";
 
 interface Props {
   layout: LayoutDef;
   photos: CapturedPhoto[];
   filterCss: string;
+  shape?: PhotoShape;
   /** Slot to visually highlight (next capture). */
   activeIndex?: number;
   className?: string;
@@ -16,12 +18,19 @@ function Cell({
   filterCss,
   active,
   index,
+  shape,
 }: {
   photo?: CapturedPhoto;
   filterCss: string;
   active?: boolean;
   index: number;
+  shape: PhotoShape;
 }) {
+  const shapeStyle =
+    shape === "heart"
+      ? { clipPath: "url(#heartClip)" as const }
+      : { borderRadius: shapeRadius(shape) };
+
   return (
     <motion.div
       layout
@@ -29,9 +38,10 @@ function Cell({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
       className={cn(
-        "relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl bg-paper-shade",
-        active && "ring-2 ring-[rgb(var(--brand-a))] ring-offset-2 ring-offset-paper",
+        "relative min-h-0 min-w-0 flex-1 overflow-hidden bg-paper-shade",
+        active && "ring-[3px] ring-[rgb(var(--brand-a))] ring-offset-2 ring-offset-white/40",
       )}
+      style={shapeStyle}
     >
       {photo ? (
         <img
@@ -43,7 +53,7 @@ function Cell({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
-          <span className="font-mono text-2xl font-bold text-paper-ink/25">
+          <span className="font-mono text-2xl font-bold text-paper-ink/20">
             {index + 1}
           </span>
         </div>
@@ -57,6 +67,7 @@ export function FrameStack({
   layout,
   photos,
   filterCss,
+  shape = "rounded",
   activeIndex,
   className,
 }: Props) {
@@ -67,6 +78,7 @@ export function FrameStack({
       photo={photos[i]}
       filterCss={filterCss}
       active={activeIndex === i}
+      shape={shape}
     />
   ));
 

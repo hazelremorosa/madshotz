@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  AnimatePresence,
-  motion,
-  useAnimationControls,
-} from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useCamera } from "@/lib/camera";
 import { useSession } from "@/store/session";
 import { FILTER_BY_ID } from "@/data/filters";
@@ -21,88 +17,94 @@ export function CaptureScreen() {
   const go = useSession((s) => s.go);
 
   const [count, setCount] = useState<number | null>(null);
-  const [shooting, setShooting] = useState(false);
   const [flash, setFlash] = useState(false);
   const [burst, setBurst] = useState(0);
-  const [toast, setToast] = useState<string | null>(null);
+  const [phase, setPhase] = useState("Get ready…");
   const shake = useAnimationControls();
   const filterCss = FILTER_BY_ID(filterId).css;
 
   const isRetake = retakeIndex !== null;
+  const cancelled = useRef(false);
+  const started = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
+
+  const wait = (ms: number) =>
+    new Promise<void>((res) => {
+      timer.current = window.setTimeout(res, ms);
+    });
 
   // Fresh-start guard: re-entering a completed capture means "reshoot".
-  const mounted = useRef(false);
   useEffect(() => {
-    if (mounted.current) return;
-    mounted.current = true;
+    cancelled.current = false;
+    started.current = false;
     const st = useSession.getState();
     if (st.retakeIndex === null && st.photos.length >= st.layout.shots) {
       st.setLayout(st.layout); // clears photos
     }
+    return () => {
+      cancelled.current = true;
+      window.clearTimeout(timer.current);
+    };
   }, []);
 
-  const doneCount = photos.length;
-  const finished = !isRetake && doneCount >= layout.shots;
+  // Auto-capture sequence — runs once the camera is live.
+  useEffect(() => {
+    if (status !== "ready" || started.current) return;
+    started.current = true;
 
-  const startShot = () => {
-    if (shooting || finished || status !== "ready") return;
-    setShooting(true);
-    let n = 3;
-    setCount(n);
-    if (soundOn) sfx.tick();
-    const iv = window.setInterval(() => {
-      n -= 1;
-      if (n > 0) {
-        setCount(n);
-        if (soundOn) sfx.tick();
-      } else {
-        window.clearInterval(iv);
+    const fire = () => {
+      const url = capture();
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 130);
+      shake.start({ x: [0, -6, 5, -3, 0], transition: { duration: 0.4 } });
+      setBurst((b) => b + 1);
+      if (soundOn) sfx.shutter();
+      if (url) addPhoto(url);
+    };
+
+    const run = async () => {
+      const st0 = useSession.getState();
+      const total = st0.layout.shots;
+      const retake = st0.retakeIndex !== null;
+      const todo = retake ? 1 : total - st0.photos.length;
+
+      setPhase(retake ? "Let's redo that one!" : "Get ready…");
+      await wait(1000);
+
+      for (let s = 0; s < todo; s++) {
+        if (cancelled.current) return;
+        const frameNo = retake
+          ? (st0.retakeIndex ?? 0) + 1
+          : useSession.getState().photos.length + 1;
+        setPhase(`Frame ${frameNo} of ${total}`);
+        for (let n = 3; n > 0; n--) {
+          if (cancelled.current) return;
+          setCount(n);
+          if (soundOn) sfx.tick();
+          await wait(800);
+        }
+        if (cancelled.current) return;
         setCount(null);
         fire();
+        setPhase(["Cute! ✨", "Adorable!", "Love it! 💖", "Perfect!"][s % 4]);
+        await wait(900);
       }
-    }, 800);
-  };
+      if (cancelled.current) return;
+      setPhase("All done!");
+      await wait(500);
+      if (!cancelled.current) go("review", retake ? -1 : 1);
+    };
 
-  const fire = () => {
-    const url = capture();
-    setFlash(true);
-    window.setTimeout(() => setFlash(false), 130);
-    shake.start({
-      x: [0, -6, 5, -3, 0],
-      transition: { duration: 0.4 },
-    });
-    setBurst((b) => b + 1);
-    if (soundOn) sfx.shutter();
-
-    const wasRetake = useSession.getState().retakeIndex !== null;
-    if (url) addPhoto(url);
-    const st = useSession.getState();
-    setShooting(false);
-
-    if (wasRetake) {
-      setToast("Got it!");
-      window.setTimeout(() => go("review", -1), 700);
-    } else if (st.photos.length >= st.layout.shots) {
-      setToast("Beautiful!");
-      window.setTimeout(() => go("review", 1), 750);
-    } else {
-      setToast("Nice! Next pose…");
-      window.setTimeout(() => setToast(null), 1400);
-    }
-  };
-
-  const label = isRetake
-    ? `Retaking frame ${(retakeIndex ?? 0) + 1}`
-    : `Frame ${Math.min(doneCount + 1, layout.shots)} of ${layout.shots}`;
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-6 pb-8 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))]">
-      {/* Progress chip */}
-      <div className="glass rounded-full px-5 py-2 font-mono text-xs uppercase tracking-[0.25em] text-white/90">
-        {label}
+    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-6 pb-10 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))]">
+      <div className="glass rounded-full px-5 py-2 font-mono text-xs uppercase tracking-[0.25em] text-cocoa shadow-glass">
+        {isRetake ? "Retaking" : phase}
       </div>
 
-      {/* Viewport */}
       <motion.div
         animate={shake}
         className="relative aspect-[4/5] w-full max-w-sm overflow-hidden rounded-xl3 bg-black shadow-float"
@@ -112,7 +114,7 @@ export function CaptureScreen() {
             <span className="text-5xl">👀</span>
             <p className="text-lg font-semibold text-white">We can't see you</p>
             <p className="text-sm text-white/60">
-              Please allow camera access, then tap below.
+              Please allow camera access to start.
             </p>
           </div>
         ) : (
@@ -126,16 +128,15 @@ export function CaptureScreen() {
           />
         )}
 
-        {/* corner guides */}
         <div className="pointer-events-none absolute inset-4">
           {["left-0 top-0", "right-0 top-0", "left-0 bottom-0", "right-0 bottom-0"].map(
             (pos, i) => (
               <span
                 key={i}
                 className={cn(
-                  "absolute h-6 w-6 border-white/40",
+                  "absolute h-6 w-6 border-white/50",
                   pos.includes("top") ? "border-t-2" : "border-b-2",
-                  pos.includes("left") ? "border-l-2 " : "border-r-2 ",
+                  pos.includes("left") ? "border-l-2" : "border-r-2",
                   pos,
                 )}
               />
@@ -143,7 +144,6 @@ export function CaptureScreen() {
           )}
         </div>
 
-        {/* Countdown */}
         <AnimatePresence>
           {count !== null && (
             <motion.div
@@ -161,14 +161,8 @@ export function CaptureScreen() {
           )}
         </AnimatePresence>
 
-        {/* Sparkle burst */}
-        <AnimatePresence>
-          {burst > 0 && (
-            <SparkleBurst key={burst} />
-          )}
-        </AnimatePresence>
+        <AnimatePresence>{burst > 0 && <SparkleBurst key={burst} />}</AnimatePresence>
 
-        {/* Flash */}
         <motion.div
           className="pointer-events-none absolute inset-0 bg-white"
           animate={{ opacity: flash ? 1 : 0 }}
@@ -183,10 +177,8 @@ export function CaptureScreen() {
             key={i}
             layout
             className={cn(
-              "h-11 w-11 overflow-hidden rounded-lg border",
-              retakeIndex === i
-                ? "border-[rgb(var(--brand-a))]"
-                : "border-white/20",
+              "h-11 w-11 overflow-hidden rounded-xl border-2",
+              retakeIndex === i ? "border-[rgb(var(--brand-a))]" : "border-white/70",
             )}
           >
             {photos[i] ? (
@@ -197,7 +189,7 @@ export function CaptureScreen() {
                 style={{ filter: filterCss === "none" ? undefined : filterCss }}
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-white/5 font-mono text-xs text-white/30">
+              <div className="flex h-full w-full items-center justify-center bg-white/60 font-mono text-xs text-cocoa/40">
                 {i + 1}
               </div>
             )}
@@ -205,40 +197,21 @@ export function CaptureScreen() {
         ))}
       </div>
 
-      {/* Toast */}
-      <div className="h-5">
-        <AnimatePresence>
-          {toast && (
-            <motion.p
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-sm font-semibold text-white/80"
-            >
-              {toast}
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Shutter */}
-      <motion.button
-        type="button"
-        onClick={startShot}
-        disabled={shooting || finished || status !== "ready"}
-        whileTap={{ scale: 0.9 }}
-        className="relative flex h-20 w-20 items-center justify-center rounded-full disabled:opacity-40"
-      >
-        <span className="absolute inset-0 rounded-full border-4 border-white/80" />
-        <span className="h-14 w-14 rounded-full brand-fill shadow-bloom" />
-      </motion.button>
+      <p className="text-sm font-medium text-cocoa/60">
+        {isRetake
+          ? "Hold still — one quick shot!"
+          : "Just relax and pose — we'll do the rest 💫"}
+      </p>
 
       <button
         type="button"
-        onClick={() => go(isRetake ? "review" : "layout", -1)}
-        className="text-xs font-medium uppercase tracking-[0.2em] text-white/40"
+        onClick={() => {
+          cancelled.current = true;
+          go(isRetake ? "review" : "layout", -1);
+        }}
+        className="text-xs font-medium uppercase tracking-[0.2em] text-cocoa/40"
       >
-        {isRetake ? "Cancel retake" : "Back"}
+        {isRetake ? "Cancel" : "Back"}
       </button>
     </div>
   );

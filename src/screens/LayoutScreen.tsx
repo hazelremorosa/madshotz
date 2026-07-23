@@ -15,10 +15,10 @@ export function LayoutScreen() {
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
       <div className="px-8 text-center">
-        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Choose your <span className="brand-text">layout</span>
         </h2>
-        <p className="mt-1 text-sm text-white/50">This sets how many shots</p>
+        <p className="mt-1 text-sm text-cocoa/50">This sets how many shots</p>
       </div>
 
       <div className="no-bar mt-4 grid flex-1 grid-cols-2 content-start gap-4 overflow-y-auto px-6 pb-40 pt-2">
@@ -52,14 +52,14 @@ export function LayoutScreen() {
                   <FrameStack layout={l} photos={[]} filterCss="none" />
                 </div>
               </div>
-              <span className="text-sm font-semibold text-white">{l.name}</span>
+              <span className="text-sm font-semibold text-cocoa">{l.name}</span>
             </motion.button>
           );
         })}
       </div>
 
       <ActionBar
-        onBack={() => go("theme", -1)}
+        onBack={() => go("welcome", -1)}
         primaryLabel="Start shooting"
         onPrimary={() => go("capture", 1)}
       />

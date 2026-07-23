@@ -98,10 +98,10 @@ export function QRScreen() {
         transition={{ type: "spring", stiffness: 220, damping: 16 }}
         className="text-center"
       >
-        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Your memories are <span className="brand-text">ready!</span>
         </h2>
-        <p className="mt-1 text-sm text-white/50">Scan to save your photos</p>
+        <p className="mt-1 text-sm text-cocoa/50">Scan to save your photos</p>
       </motion.div>
 
       <motion.div
@@ -116,7 +116,7 @@ export function QRScreen() {
         </div>
       </motion.div>
 
-      <div className="font-mono text-xs uppercase tracking-[0.3em] text-white/40">
+      <div className="font-mono text-xs uppercase tracking-[0.3em] text-cocoa/40">
         Code · {code}
       </div>
 
@@ -129,12 +129,12 @@ export function QRScreen() {
         </Button>
       </div>
 
-      <div className="h-5 text-sm text-white/70">{toast}</div>
+      <div className="h-5 text-sm text-cocoa/70">{toast}</div>
 
       <button
         type="button"
         onClick={reset}
-        className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-white/40"
+        className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-cocoa/40"
       >
         <span className="relative flex h-6 w-6 items-center justify-center">
           <svg viewBox="0 0 36 36" className="absolute h-6 w-6 -rotate-90">
@@ -143,7 +143,7 @@ export function QRScreen() {
               cy="18"
               r="16"
               fill="none"
-              stroke="rgba(255,255,255,0.15)"
+              stroke="rgba(90,69,82,0.15)"
               strokeWidth="3"
             />
             <circle

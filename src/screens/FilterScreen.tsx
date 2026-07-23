@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { FILTERS, FILTER_BY_ID } from "@/data/filters";
+import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { useSession } from "@/store/session";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { Receipt } from "@/components/Receipt";
@@ -13,15 +14,18 @@ export function FilterScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const frameStyleId = useSession((s) => s.frameStyleId);
+  const photoShape = useSession((s) => s.photoShape);
   const setFilter = useSession((s) => s.setFilter);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
   const filterCss = FILTER_BY_ID(filterId).css;
+  const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
 
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
       <div className="px-8 text-center">
-        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Set the <span className="brand-text">mood</span>
         </h2>
       </div>
@@ -39,6 +43,8 @@ export function FilterScreen() {
             layout={layout}
             photos={photos}
             filterCss={filterCss}
+            frameBg={frameBg}
+            shape={photoShape}
             theme={theme}
             code={code}
             dateLabel={formatDate()}
@@ -66,7 +72,7 @@ export function FilterScreen() {
                   "h-16 w-16 overflow-hidden rounded-xl border-2 transition-all",
                   active
                     ? "scale-105 border-[rgb(var(--brand-a))] shadow-bloom"
-                    : "border-white/15",
+                    : "border-white/70",
                 )}
               >
                 {thumb ? (
@@ -77,13 +83,13 @@ export function FilterScreen() {
                     style={{ filter: f.css === "none" ? undefined : f.css }}
                   />
                 ) : (
-                  <div className="h-full w-full bg-white/10" />
+                  <div className="h-full w-full bg-white/40" />
                 )}
               </div>
               <span
                 className={cn(
                   "text-[11px] font-medium",
-                  active ? "text-white" : "text-white/50",
+                  active ? "text-cocoa" : "text-cocoa/50",
                 )}
               >
                 {f.name}
@@ -94,8 +100,8 @@ export function FilterScreen() {
       </div>
 
       <ActionBar
-        onBack={() => go("review", -1)}
-        primaryLabel="Decorate"
+        onBack={() => go("frames", -1)}
+        primaryLabel="Add stickers"
         onPrimary={() => go("editor", 1)}
       />
     </div>

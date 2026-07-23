@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { FILTER_BY_ID } from "@/data/filters";
+import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { Receipt } from "@/components/Receipt";
 import { staticItems } from "@/components/StaticItems";
 import { composeReceipt } from "@/lib/compose";
@@ -23,11 +24,14 @@ export function PrintingScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const frameStyleId = useSession((s) => s.frameStyleId);
+  const photoShape = useSession((s) => s.photoShape);
   const items = useSession((s) => s.items);
   const setComposite = useSession((s) => s.setComposite);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
   const filterCss = FILTER_BY_ID(filterId).css;
+  const frameStyle = FRAME_STYLE_BY_ID(frameStyleId);
 
   const [caption, setCaption] = useState(0);
 
@@ -39,6 +43,8 @@ export function PrintingScreen() {
       photos,
       layout,
       filterCss,
+      frameStyle,
+      shape: photoShape,
       items,
       theme,
       code,
@@ -64,8 +70,8 @@ export function PrintingScreen() {
     <div className="flex h-full w-full flex-col items-center justify-center gap-8 px-10">
       {/* Printer slot */}
       <div className="relative w-full max-w-[300px]">
-        <div className="mx-auto h-4 w-[92%] rounded-full bg-ink-raised shadow-[inset_0_2px_6px_rgba(0,0,0,0.8)]" />
-        <div className="mx-auto -mt-1 h-1 w-[80%] rounded-full bg-black/60" />
+        <div className="mx-auto h-4 w-[92%] rounded-full bg-cocoa/20 shadow-[inset_0_2px_6px_rgba(90,69,82,0.3)]" />
+        <div className="mx-auto -mt-1 h-1 w-[80%] rounded-full bg-cocoa/30" />
 
         {/* Feeding receipt */}
         <div className="relative mx-auto mt-3 w-[86%] overflow-hidden">
@@ -78,6 +84,8 @@ export function PrintingScreen() {
               layout={layout}
               photos={photos}
               filterCss={filterCss}
+              frameBg={frameStyle.bg}
+              shape={photoShape}
               theme={theme}
               code={code}
               dateLabel={formatDate()}
@@ -96,7 +104,7 @@ export function PrintingScreen() {
 
       {/* Progress + caption */}
       <div className="w-full max-w-[260px]">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-cocoa/10">
           <motion.div
             className="h-full brand-fill"
             initial={{ width: "0%" }}
@@ -108,7 +116,7 @@ export function PrintingScreen() {
           key={caption}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 text-center text-sm font-medium text-white/80"
+          className="mt-4 text-center text-sm font-medium text-cocoa/80"
         >
           {CAPTIONS[caption]}
         </motion.p>

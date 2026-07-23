@@ -15,10 +15,19 @@ export default {
           soft: "#12121c",
           raised: "#1a1a28",
         },
+        // Warm cream stage + soft plum text for the cute/light theme.
+        cream: {
+          DEFAULT: "#fff6fb",
+          deep: "#ffeef6",
+        },
+        cocoa: {
+          DEFAULT: "#5a4552",
+          soft: "#9c8794",
+        },
         paper: {
-          DEFAULT: "#f8f4ea",
-          shade: "#ece5d3",
-          ink: "#211d17",
+          DEFAULT: "#fffdfa",
+          shade: "#f4ebe2",
+          ink: "#4a3a44",
         },
         brand: {
           a: "rgb(var(--brand-a) / <alpha-value>)",
@@ -59,10 +68,12 @@ export default {
         xl4: "3rem",
       },
       boxShadow: {
-        glass: "0 10px 40px -12px rgba(0,0,0,0.55), inset 0 1px 0 0 rgba(255,255,255,0.08)",
-        float: "0 30px 80px -30px rgba(0,0,0,0.85)",
-        bloom: "0 0 60px -8px rgb(var(--brand-a) / 0.55)",
-        paper: "0 24px 60px -20px rgba(0,0,0,0.7), 0 2px 0 0 rgba(0,0,0,0.04)",
+        glass:
+          "0 12px 34px -14px rgba(120,70,100,0.28), inset 0 1px 0 0 rgba(255,255,255,0.6)",
+        float: "0 26px 60px -24px rgba(150,90,120,0.4)",
+        bloom: "0 0 46px -10px rgb(var(--brand-a) / 0.6)",
+        paper:
+          "0 22px 48px -22px rgba(150,90,120,0.45), 0 2px 0 0 rgba(0,0,0,0.03)",
       },
       backdropBlur: {
         xs: "2px",

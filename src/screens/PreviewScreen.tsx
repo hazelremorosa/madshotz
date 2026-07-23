@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { FILTER_BY_ID } from "@/data/filters";
+import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { Receipt } from "@/components/Receipt";
 import { Button } from "@/components/ui/Button";
 import { formatDate } from "@/lib/date";
@@ -11,16 +12,19 @@ export function PreviewScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const frameStyleId = useSession((s) => s.frameStyleId);
+  const photoShape = useSession((s) => s.photoShape);
   const items = useSession((s) => s.items);
   const go = useSession((s) => s.go);
   const filterCss = FILTER_BY_ID(filterId).css;
+  const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-8 px-8">
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="font-mono text-xs uppercase tracking-[0.4em] text-white/50"
+        className="font-mono text-xs uppercase tracking-[0.4em] text-cocoa/50"
       >
         Your receipt
       </motion.p>
@@ -38,6 +42,8 @@ export function PreviewScreen() {
           layout={layout}
           photos={photos}
           filterCss={filterCss}
+          frameBg={frameBg}
+          shape={photoShape}
           theme={theme}
           code={code}
           dateLabel={formatDate()}

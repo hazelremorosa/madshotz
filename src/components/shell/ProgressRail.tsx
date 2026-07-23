@@ -36,8 +36,8 @@ export function ProgressRail() {
                     isActive
                       ? "brand-fill w-7 shadow-bloom"
                       : done
-                        ? "w-2 bg-white/80"
-                        : "w-2 bg-white/25",
+                        ? "w-2 bg-cocoa/60"
+                        : "w-2 bg-cocoa/20",
                   )}
                 />
               </span>
