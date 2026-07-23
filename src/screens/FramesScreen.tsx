@@ -9,6 +9,7 @@ import {
 } from "@/data/frames";
 import { Receipt } from "@/components/Receipt";
 import { ActionBar } from "@/components/shell/ActionBar";
+import { CheckBadge } from "@/components/ui/CheckBadge";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/cn";
@@ -86,15 +87,18 @@ export function FramesScreen() {
                 type="button"
                 onClick={() => pick(() => setPhotoShape(s.id))}
                 className={cn(
-                  "flex shrink-0 flex-col items-center gap-1 rounded-2xl px-4 py-2 transition-all",
-                  active ? "glass-strong shadow-bloom" : "glass",
+                  "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-4 py-2 transition-all",
+                  active
+                    ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
+                    : "glass opacity-65",
                 )}
               >
+                {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
                 <span className="text-2xl leading-none text-cocoa">{s.emoji}</span>
                 <span
                   className={cn(
                     "text-[11px] font-medium",
-                    active ? "text-cocoa" : "text-cocoa/60",
+                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
                   )}
                 >
                   {s.name}
@@ -135,21 +139,27 @@ export function FramesScreen() {
                 key={f.id}
                 type="button"
                 onClick={() => pick(() => setFrameStyle(f.id))}
-                className="flex shrink-0 flex-col items-center gap-1.5"
+                className={cn(
+                  "flex shrink-0 flex-col items-center gap-1.5 transition-opacity",
+                  active ? "opacity-100" : "opacity-70",
+                )}
               >
-                <span
-                  className={cn(
-                    "h-14 w-14 rounded-2xl border-2 transition-all",
-                    active
-                      ? "scale-105 border-[rgb(var(--brand-a))] shadow-bloom"
-                      : "border-white/70",
-                  )}
-                  style={{ background: f.bg }}
-                />
+                <span className="relative block">
+                  <span
+                    className={cn(
+                      "block h-14 w-14 rounded-2xl transition-all",
+                      active
+                        ? "scale-110 border-[3px] border-[rgb(var(--brand-a))] shadow-bloom"
+                        : "border-2 border-white/70",
+                    )}
+                    style={{ background: f.bg }}
+                  />
+                  {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+                </span>
                 <span
                   className={cn(
                     "text-[11px] font-medium",
-                    active ? "text-cocoa" : "text-cocoa/60",
+                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
                   )}
                 >
                   {f.name}

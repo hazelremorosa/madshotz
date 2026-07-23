@@ -4,6 +4,7 @@ import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { useSession } from "@/store/session";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { Receipt } from "@/components/Receipt";
+import { CheckBadge } from "@/components/ui/CheckBadge";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/cn";
@@ -68,31 +69,37 @@ export function FilterScreen() {
                 setFilter(f.id);
                 if (soundOn) sfx.whoosh();
               }}
-              className="flex shrink-0 snap-center flex-col items-center gap-1.5"
+              className={cn(
+                "flex shrink-0 snap-center flex-col items-center gap-1.5 transition-opacity",
+                active ? "opacity-100" : "opacity-70",
+              )}
             >
-              <div
-                className={cn(
-                  "h-16 w-16 overflow-hidden rounded-xl border-2 transition-all",
-                  active
-                    ? "scale-105 border-[rgb(var(--brand-a))] shadow-bloom"
-                    : "border-white/70",
-                )}
-              >
-                {thumb ? (
-                  <img
-                    src={thumb}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    style={{ filter: f.css === "none" ? undefined : f.css }}
-                  />
-                ) : (
-                  <div className="h-full w-full bg-white/40" />
-                )}
-              </div>
+              <span className="relative block">
+                <span
+                  className={cn(
+                    "block h-16 w-16 overflow-hidden rounded-xl transition-all",
+                    active
+                      ? "scale-105 border-[3px] border-[rgb(var(--brand-a))] shadow-bloom"
+                      : "border-2 border-white/70",
+                  )}
+                >
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      style={{ filter: f.css === "none" ? undefined : f.css }}
+                    />
+                  ) : (
+                    <span className="block h-full w-full bg-white/40" />
+                  )}
+                </span>
+                {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+              </span>
               <span
                 className={cn(
                   "text-[11px] font-medium",
-                  active ? "text-cocoa" : "text-cocoa/50",
+                  active ? "font-semibold text-cocoa" : "text-cocoa/50",
                 )}
               >
                 {f.name}

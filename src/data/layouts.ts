@@ -26,20 +26,20 @@ export const LAYOUTS: LayoutDef[] = [
     paperAspect: 2 / 5,
   },
   {
+    id: "quad",
+    name: "4 Strip",
+    shots: 4,
+    kind: "strip",
+    frameAspect: 4 / 3,
+    paperAspect: 1 / 3,
+  },
+  {
     id: "grid",
     name: "4 Grid",
     shots: 4,
     kind: "grid",
     frameAspect: 1,
     paperAspect: 4 / 5,
-  },
-  {
-    id: "row",
-    name: "Landscape",
-    shots: 3,
-    kind: "row",
-    frameAspect: 1,
-    paperAspect: 5 / 4,
   },
   {
     id: "magazine",
