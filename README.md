@@ -83,10 +83,45 @@ Welcome (also fired by a 90s idle timeout for privacy).
 
 - **New theme / layout / filter** → add an entry to the matching file in `src/data/`.
   Themes carry their own brand hues, sticker pack, default filter, and receipt header.
-- **Real delivery** → implement `DeliveryService.publish()` in `src/lib/delivery.ts`
-  to upload the composite and return a share URL. The QR already encodes a session code.
+- **Real delivery** → see "Photo delivery" below. `DeliveryService` in
+  `src/lib/delivery.ts` uploads the composite to a Cloudflare Worker (R2) and the QR points to it.
 - **Real printer** → the `PrintingScreen` animation is cosmetic; send
   `useSession.getState().composite` (a PNG data URL) to your print pipeline there.
+
+---
+
+## Photo delivery (cloud, 24h expiry)
+
+By default the QR is a **placeholder** — the app is fully usable (Download/Share work),
+but scanning the QR won't show a photo until you connect cloud storage. It uses
+**Cloudflare R2 + a Worker** (free tier is plenty).
+
+The Worker (upload + branded viewer page + 24h expiry) lives in **`cloudflare/`** —
+see [`cloudflare/README.md`](cloudflare/README.md) for the deploy steps. In short:
+
+```bash
+cd cloudflare
+wrangler login
+wrangler r2 bucket create madshotz-photos
+wrangler deploy          # prints your Worker URL
+```
+
+Then copy `.env.example` to `.env` and set the Worker URL:
+
+```
+VITE_DELIVERY_BASE=https://madshotz-delivery.YOURNAME.workers.dev
+```
+
+Rebuild/restart (`npm run dev` or `npm run build`) — Vite reads env at build time.
+
+Now finishing a session uploads the photo, and the QR (both the on-screen one and the
+small one on the receipt) opens a branded page showing the image with a **Save** button.
+The Worker refuses to serve anything older than **24h**, so links expire after a day.
+Guests who tapped **Download/Share** keep their copy regardless.
+
+> **Note:** uploads are open (no auth) so the browser kiosk can post directly; the
+> Worker's 8 MB cap + 24h expiry keep abuse cheap. Add a shared-secret header or
+> Cloudflare Access later if you want to lock it down.
 
 ---
 

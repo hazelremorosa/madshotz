@@ -1,7 +1,13 @@
 /**
- * Delivery is stubbed for this frontend-only build. The QR encodes a SESSION
- * CODE (never a file path). Swap this implementation for a real uploader/CDN
- * later without touching any screen — the interface stays the same.
+ * Photo delivery — Cloudflare (R2 + Worker).
+ *
+ * `VITE_DELIVERY_BASE` is the deployed Worker's base URL (see cloudflare/ and
+ * README → "Photo delivery"). The app uploads the finished composite to
+ * `<base>/upload/<code>`, and both the on-screen QR and the receipt's baked QR
+ * point to `<base>/s/<code>` — a branded page that shows the photo. The Worker
+ * refuses to serve anything older than 24h, so links expire after a day.
+ *
+ * With no base configured, it falls back to a placeholder link so dev still runs.
  */
 
 export interface PublishResult {
@@ -9,17 +15,50 @@ export interface PublishResult {
   url: string;
 }
 
-const BASE = "https://madshotz.link";
+const BASE = (import.meta.env.VITE_DELIVERY_BASE || "").replace(/\/+$/, "");
+const configured = Boolean(BASE);
 
 export const DeliveryService = {
-  /** Pretend to upload; return the shareable link for a session code. */
-  async publish(code: string, _composite: string): Promise<PublishResult> {
-    // Simulate a short network round-trip so the QR "draw-in" has room to breathe.
-    await new Promise((r) => setTimeout(r, 650));
-    return { code, url: `${BASE}/s/${code}` };
+  isConfigured: configured,
+
+  /** Public viewer URL for a session (works until the 24h expiry). */
+  linkFor(code: string): string {
+    if (configured) return `${BASE}/s/${code}`;
+    return `https://madshotz.link/s/${code}`; // placeholder until cloud is configured
   },
 
-  linkFor(code: string): string {
-    return `${BASE}/s/${code}`;
+  /** Uploads the composite to the Worker and returns its public link. */
+  async publish(code: string, composite: string): Promise<PublishResult> {
+    const url = this.linkFor(code);
+
+    if (!configured || !composite) {
+      await new Promise((r) => setTimeout(r, 650)); // keep the QR draw-in breathing
+      if (!configured) {
+        console.info(
+          "[MAD SHOT'Z] Cloud delivery not configured — the QR is a placeholder. See README → Photo delivery.",
+        );
+      }
+      return { code, url };
+    }
+
+    try {
+      const blob = await (await fetch(composite)).blob();
+      const res = await fetch(`${BASE}/upload/${code}`, {
+        method: "POST",
+        headers: { "content-type": "image/jpeg" },
+        body: blob,
+      });
+      if (!res.ok) {
+        console.warn(
+          "[MAD SHOT'Z] Upload failed:",
+          res.status,
+          await res.text().catch(() => ""),
+        );
+      }
+    } catch (e) {
+      console.warn("[MAD SHOT'Z] Upload error:", e);
+    }
+
+    return { code, url };
   },
 };
