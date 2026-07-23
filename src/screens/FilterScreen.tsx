@@ -21,6 +21,8 @@ export function FilterScreen() {
   const go = useSession((s) => s.go);
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const fit =
+    layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
@@ -31,13 +33,13 @@ export function FilterScreen() {
       </div>
 
       {/* Live preview */}
-      <div className="flex flex-1 items-center justify-center px-10 pb-2">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-10 py-1">
         <motion.div
           key={filterId}
           initial={{ filter: "blur(10px)", opacity: 0.6 }}
           animate={{ filter: "blur(0px)", opacity: 1 }}
           transition={{ duration: 0.35 }}
-          className="w-full max-w-[240px]"
+          className="flex h-full w-full items-center justify-center"
         >
           <Receipt
             layout={layout}
@@ -48,12 +50,13 @@ export function FilterScreen() {
             theme={theme}
             code={code}
             dateLabel={formatDate()}
+            className={fit}
           />
         </motion.div>
       </div>
 
       {/* Filter reel */}
-      <div className="no-bar mb-32 flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 py-3">
+      <div className="no-bar mb-28 flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 py-3">
         {FILTERS.map((f) => {
           const active = f.id === filterId;
           const thumb = photos[0]?.dataUrl;

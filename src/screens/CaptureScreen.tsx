@@ -20,6 +20,7 @@ export function CaptureScreen() {
   const [flash, setFlash] = useState(false);
   const [burst, setBurst] = useState(0);
   const [phase, setPhase] = useState("Get ready…");
+  const [hasStarted, setHasStarted] = useState(false);
   const shake = useAnimationControls();
   const filterCss = FILTER_BY_ID(filterId).css;
 
@@ -47,10 +48,12 @@ export function CaptureScreen() {
     };
   }, []);
 
-  // Auto-capture sequence — runs once the camera is live.
-  useEffect(() => {
-    if (status !== "ready" || started.current) return;
+  // Capture sequence — starts when the guest taps "Start shooting", then
+  // shoots every frame the layout needs automatically.
+  const startCapture = () => {
+    if (started.current || status !== "ready") return;
     started.current = true;
+    setHasStarted(true);
 
     const fire = () => {
       const url = capture();
@@ -96,8 +99,7 @@ export function CaptureScreen() {
     };
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  };
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-6 pb-10 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))]">
@@ -197,11 +199,32 @@ export function CaptureScreen() {
         ))}
       </div>
 
-      <p className="text-sm font-medium text-cocoa/60">
-        {isRetake
-          ? "Hold still — one quick shot!"
-          : "Just relax and pose — we'll do the rest 💫"}
-      </p>
+      {!hasStarted ? (
+        <div className="flex flex-col items-center gap-3">
+          <motion.button
+            type="button"
+            onClick={startCapture}
+            disabled={status !== "ready"}
+            whileTap={{ scale: 0.94 }}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="flex items-center gap-2 rounded-full brand-fill px-9 py-4 text-lg font-bold text-white shadow-bloom disabled:opacity-40"
+          >
+            📸 {isRetake ? "Shoot again" : "Start shooting"}
+          </motion.button>
+          <span className="text-xs font-medium text-cocoa/50">
+            {status === "ready"
+              ? "Strike a pose, then tap when you're ready"
+              : "Warming up the camera…"}
+          </span>
+        </div>
+      ) : (
+        <p className="text-sm font-medium text-cocoa/60">
+          {isRetake
+            ? "Hold still — one quick shot!"
+            : "Just relax and pose — we'll do the rest 💫"}
+        </p>
+      )}
 
       <button
         type="button"

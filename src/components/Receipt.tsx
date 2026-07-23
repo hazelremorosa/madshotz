@@ -1,6 +1,8 @@
 import { forwardRef, type ReactNode } from "react";
 import type { CapturedPhoto, LayoutDef, PhotoShape, Theme } from "@/types";
 import { FrameStack } from "@/components/FrameStack";
+import { MiniQR } from "@/components/MiniQR";
+import { DeliveryService } from "@/lib/delivery";
 import { cn } from "@/lib/cn";
 
 interface Props {
@@ -41,7 +43,6 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
     layout,
     photos,
     filterCss,
-    theme,
     code,
     dateLabel,
     activeIndex,
@@ -64,15 +65,12 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
       <TearStrip side="top" />
       <TearStrip side="bottom" />
 
-      {/* Header */}
+      {/* Header — subtle wordmark */}
       <div className="px-[6cqw] pt-[5cqw] text-center">
-        <div className="text-[7cqw] font-extrabold leading-none tracking-tight text-paper-ink">
+        <div className="font-mono text-[3.2cqw] font-semibold uppercase tracking-[0.4em] text-paper-ink/60">
           MAD SHOT'Z
         </div>
-        <div className="mt-[1.5cqw] font-mono text-[3cqw] uppercase tracking-[0.3em] text-paper-ink/50">
-          {theme.header}
-        </div>
-        <div className="mt-[3cqw] border-t border-dashed border-paper-ink/30" />
+        <div className="mt-[2.5cqw] border-t border-dashed border-paper-ink/30" />
       </div>
 
       {/* Frames (with mat) */}
@@ -91,21 +89,18 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer — small QR + details */}
       <div className="px-[6cqw] pb-[6cqw] text-center">
         <div className="mb-[3cqw] border-t border-dashed border-paper-ink/30" />
-        <div
-          className="mx-auto h-[9cqw] w-[70%]"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(90deg, #211d17 0 2px, transparent 2px 4px, #211d17 4px 5px, transparent 5px 9px)",
-          }}
+        <MiniQR
+          text={DeliveryService.linkFor(code)}
+          className="mx-auto h-[15cqw] w-[15cqw]"
         />
-        <div className="mt-[3cqw] font-mono text-[3cqw] tracking-widest text-paper-ink/60">
+        <div className="mt-[2.5cqw] font-mono text-[3cqw] tracking-widest text-paper-ink/60">
           NO. {code} · {dateLabel}
         </div>
         <div className="mt-[1cqw] font-mono text-[3cqw] tracking-widest text-paper-ink/40">
-          ★ THANK YOU FOR VISITING ★
+          SCAN FOR YOUR PHOTOS ♥
         </div>
       </div>
 

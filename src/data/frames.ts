@@ -58,7 +58,7 @@ export const FRAME_STYLES: FrameStyle[] = [
   },
 ];
 
-export const DEFAULT_FRAME_STYLE = FRAME_STYLES[1]; // Blush
+export const DEFAULT_FRAME_STYLE = FRAME_STYLES[0]; // Cream
 
 export const FRAME_STYLE_BY_ID = (id: string): FrameStyle =>
   FRAME_STYLES.find((f) => f.id === id) ?? FRAME_STYLES[0];

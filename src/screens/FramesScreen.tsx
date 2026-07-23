@@ -30,6 +30,10 @@ export function FramesScreen() {
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const styles = FRAME_STYLES.filter((f) => f.kind === tab);
+  // Let the receipt shrink to fit so the controls below never get pushed
+  // under the fixed action bar (tall layouts like 3-strip).
+  const fit =
+    layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
   const pick = (fn: () => void) => {
     fn();
@@ -46,13 +50,13 @@ export function FramesScreen() {
       </div>
 
       {/* Live preview */}
-      <div className="flex flex-1 items-center justify-center px-10 pb-2">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-10 py-1">
         <motion.div
           key={`${frameStyleId}-${photoShape}`}
           initial={{ scale: 0.96, opacity: 0.7 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 22 }}
-          className="w-full max-w-[210px]"
+          className="flex h-full w-full items-center justify-center"
         >
           <Receipt
             layout={layout}
@@ -63,6 +67,7 @@ export function FramesScreen() {
             theme={theme}
             code={code}
             dateLabel={formatDate()}
+            className={fit}
           />
         </motion.div>
       </div>
@@ -101,7 +106,7 @@ export function FramesScreen() {
       </div>
 
       {/* Frame design */}
-      <div className="mb-32 mt-4 px-5">
+      <div className="mb-28 mt-3 px-5">
         <div className="mb-2 flex items-center gap-2 px-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
             Frame

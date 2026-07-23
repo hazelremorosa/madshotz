@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { LogoMark } from "@/components/Logo";
+import { InstantCameraIcon, ReceiptPrinterIcon } from "@/components/BrandIcons";
 import { useSession } from "@/store/session";
 import { ensureCameraStream } from "@/lib/camera";
 
@@ -19,12 +20,26 @@ export function WelcomeScreen() {
       className="flex h-full w-full flex-col items-center justify-center px-8 text-center"
     >
       <motion.div
-        className="animate-floaty"
-        initial={{ scale: 0.8, opacity: 0 }}
+        initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 18 }}
+        className="flex items-center justify-center gap-2"
       >
-        <LogoMark size={140} />
+        <div
+          className="animate-floaty text-[rgb(var(--brand-a))] opacity-40"
+          style={{ animationDelay: "-2.2s" }}
+        >
+          <InstantCameraIcon size={48} />
+        </div>
+        <div className="animate-floaty">
+          <LogoMark size={132} />
+        </div>
+        <div
+          className="animate-floaty text-[rgb(var(--brand-c))] opacity-45"
+          style={{ animationDelay: "-4.4s" }}
+        >
+          <ReceiptPrinterIcon size={48} />
+        </div>
       </motion.div>
 
       <motion.h1

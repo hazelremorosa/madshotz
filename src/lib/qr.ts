@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 
-/** A boolean matrix of QR modules (true = dark), for animated SVG rendering. */
-export async function qrMatrix(text: string): Promise<boolean[][]> {
+/** A boolean matrix of QR modules (true = dark). */
+export function qrMatrixSync(text: string): boolean[][] {
   const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
   const size = qr.modules.size;
   const data = qr.modules.data;
@@ -12,4 +12,9 @@ export async function qrMatrix(text: string): Promise<boolean[][]> {
     grid.push(row);
   }
   return grid;
+}
+
+/** Async wrapper (used by the animated QR screen). */
+export async function qrMatrix(text: string): Promise<boolean[][]> {
+  return qrMatrixSync(text);
 }
