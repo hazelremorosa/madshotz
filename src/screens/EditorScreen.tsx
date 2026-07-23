@@ -36,6 +36,8 @@ export function EditorScreen() {
   const [draft, setDraft] = useState("");
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const fit =
+    layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
   const rnd = () => (Math.random() - 0.5) * 0.14;
 
@@ -88,10 +90,10 @@ export function EditorScreen() {
 
       {/* Canvas */}
       <div
-        className="flex flex-1 items-center justify-center px-10 pb-2"
+        className="flex min-h-0 flex-1 items-center justify-center px-10 py-1"
         onPointerDown={() => selectItem(null)}
       >
-        <div className="w-full max-w-[260px]">
+        <div className="flex h-full w-full items-center justify-center">
           <Receipt
             ref={paperRef}
             layout={layout}
@@ -102,6 +104,7 @@ export function EditorScreen() {
             theme={theme}
             code={code}
             dateLabel={formatDate()}
+            className={fit}
             overlay={
               <AnimatePresence>
                 {items.map((it) => (

@@ -6,6 +6,8 @@ import type {
   PlacedItem,
   Theme,
 } from "@/types";
+import { qrMatrixSync } from "@/lib/qr";
+import { DeliveryService } from "@/lib/delivery";
 
 interface ComposeOpts {
   photos: CapturedPhoto[];
@@ -216,7 +218,7 @@ function frameRects(
 
 /** Renders the receipt composite to a PNG data URL. */
 export async function composeReceipt(opts: ComposeOpts): Promise<string> {
-  const { photos, layout, filterCss, frameStyle, shape, items, theme, code, dateLabel } =
+  const { photos, layout, filterCss, frameStyle, shape, items, code, dateLabel } =
     opts;
   const W = 760;
   const H = Math.round(W / layout.paperAspect);
@@ -230,8 +232,8 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   ctx.fillRect(0, 0, W, H);
 
   const pad = Math.round(W * 0.06);
-  const headerH = Math.round(W * 0.2);
-  const footerH = Math.round(W * 0.26);
+  const headerH = Math.round(W * 0.16);
+  const footerH = Math.round(W * 0.28);
   const matX = pad;
   const matY = headerH;
   const matW = W - pad * 2;
@@ -244,14 +246,12 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   const gap = Math.round(W * 0.022);
 
   const ink = "#4a3a44";
-  ctx.fillStyle = ink;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.font = `800 ${Math.round(W * 0.075)}px system-ui, sans-serif`;
-  ctx.fillText("MAD SHOT'Z", W / 2, Math.round(W * 0.1));
-  ctx.font = `600 ${Math.round(W * 0.03)}px ui-monospace, monospace`;
+  // Subtle wordmark.
+  ctx.font = `600 ${Math.round(W * 0.033)}px ui-monospace, monospace`;
   ctx.fillStyle = "#9c8794";
-  ctx.fillText(theme.header.toUpperCase(), W / 2, Math.round(W * 0.15));
+  ctx.fillText("M A D   S H O T ' Z", W / 2, Math.round(W * 0.1));
   dashed(ctx, pad, headerH - 10, W - pad, headerH - 10);
 
   // Frame mat.
@@ -298,23 +298,24 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
     ctx.restore();
   }
 
-  // Footer.
+  // Footer — small QR + details.
   const fy = H - footerH + 6;
   dashed(ctx, pad, fy, W - pad, fy);
-  let bx = pad;
-  const bTop = fy + Math.round(W * 0.05);
-  const bH = Math.round(W * 0.09);
+  const matrix = qrMatrixSync(DeliveryService.linkFor(code));
+  const n = matrix.length;
+  const qrSize = Math.round(W * 0.14);
+  const qx = Math.round((W - qrSize) / 2);
+  const qy = fy + Math.round(W * 0.04);
+  const cell = qrSize / n;
   ctx.fillStyle = ink;
-  while (bx < W - pad) {
-    const bw = 2 + Math.floor(Math.random() * 5);
-    if (Math.random() > 0.35) ctx.fillRect(bx, bTop, bw, bH);
-    bx += bw + 2 + Math.floor(Math.random() * 3);
-  }
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++)
+      if (matrix[r][c]) ctx.fillRect(qx + c * cell, qy + r * cell, cell + 0.6, cell + 0.6);
   ctx.font = `600 ${Math.round(W * 0.028)}px ui-monospace, monospace`;
   ctx.fillStyle = "#9c8794";
   ctx.textAlign = "center";
-  ctx.fillText(`NO. ${code}   ·   ${dateLabel}`, W / 2, bTop + bH + Math.round(W * 0.05));
-  ctx.fillText("♡ THANK YOU FOR VISITING ♡", W / 2, bTop + bH + Math.round(W * 0.09));
+  ctx.fillText(`NO. ${code}  ·  ${dateLabel}`, W / 2, qy + qrSize + Math.round(W * 0.055));
+  ctx.fillText("SCAN FOR YOUR PHOTOS ♥", W / 2, qy + qrSize + Math.round(W * 0.095));
 
   return canvas.toDataURL("image/png");
 }

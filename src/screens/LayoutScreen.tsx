@@ -60,7 +60,7 @@ export function LayoutScreen() {
 
       <ActionBar
         onBack={() => go("welcome", -1)}
-        primaryLabel="Start shooting"
+        primaryLabel="Next"
         onPrimary={() => go("capture", 1)}
       />
     </div>

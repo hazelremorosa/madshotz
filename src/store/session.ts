@@ -84,7 +84,7 @@ export const useSession = create<SessionState>((set, get) => ({
   layout: DEFAULT_LAYOUT,
   filterId: DEFAULT_THEME.defaultFilter,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
-  photoShape: "rounded",
+  photoShape: "sharp",
 
   photos: [],
   retakeIndex: null,

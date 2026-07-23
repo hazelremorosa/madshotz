@@ -5,9 +5,10 @@ interface Props {
   draw?: boolean;
 }
 
-/** MAD SHOT'Z aperture mark. `draw` animates the stroke reveal. */
+/** MAD SHOT'Z camera mark — a line-art camera inside a ring. */
 export function LogoMark({ size = 96, draw = false }: Props) {
-  const blades = Array.from({ length: 6 });
+  const drawIn = draw ? { pathLength: 0, opacity: 0 } : false;
+  const grow = draw ? { scale: 0 } : false;
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
       <defs>
@@ -17,47 +18,76 @@ export function LogoMark({ size = 96, draw = false }: Props) {
           <stop offset="100%" stopColor="rgb(var(--brand-c))" />
         </linearGradient>
       </defs>
+
+      {/* ring */}
       <motion.circle
         cx="50"
         cy="50"
-        r="40"
+        r="44"
         stroke="url(#madGrad)"
-        strokeWidth="5"
-        initial={draw ? { pathLength: 0, opacity: 0 } : false}
+        strokeWidth="2.4"
+        initial={drawIn}
         animate={{ pathLength: 1, opacity: 1 }}
         transition={{ duration: 1, ease: "easeInOut" }}
       />
-      {blades.map((_, i) => {
-        const a = (i / 6) * Math.PI * 2;
-        const x1 = 50 + Math.cos(a) * 12;
-        const y1 = 50 + Math.sin(a) * 12;
-        const x2 = 50 + Math.cos(a) * 34;
-        const y2 = 50 + Math.sin(a) * 34;
-        return (
-          <motion.line
-            key={i}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
-            stroke="url(#madGrad)"
-            strokeWidth="4"
-            strokeLinecap="round"
-            initial={draw ? { pathLength: 0, opacity: 0 } : false}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 + i * 0.06 }}
-          />
-        );
-      })}
+
+      {/* camera body + viewfinder hump (single silhouette) */}
+      <motion.path
+        d="M28,47 Q28,42 33,42 L43,42 L45,34 L59,34 L61,42 L67,42 Q72,42 72,47 L72,61 Q72,66 67,66 L33,66 Q28,66 28,61 Z"
+        stroke="url(#madGrad)"
+        strokeWidth="2.7"
+        strokeLinejoin="round"
+        initial={drawIn}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.9, delay: 0.3, ease: "easeInOut" }}
+      />
+
+      {/* rangefinder window */}
+      <motion.rect
+        x="32"
+        y="46.5"
+        width="7"
+        height="5"
+        rx="1.2"
+        stroke="url(#madGrad)"
+        strokeWidth="2"
+        initial={draw ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.95 }}
+      />
+
+      {/* shutter dot */}
+      <motion.circle
+        cx="64"
+        cy="47.5"
+        r="1.7"
+        fill="url(#madGrad)"
+        initial={grow}
+        animate={{ scale: 1 }}
+        transition={{ delay: 1, type: "spring", stiffness: 260, damping: 14 }}
+        style={{ transformOrigin: "64px 47.5px" }}
+      />
+
+      {/* lens */}
       <motion.circle
         cx="50"
-        cy="50"
-        r="9"
+        cy="55"
+        r="8.6"
+        stroke="url(#madGrad)"
+        strokeWidth="2.7"
+        initial={drawIn}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.7, delay: 0.55, ease: "easeInOut" }}
+      />
+      <motion.circle
+        cx="50"
+        cy="55"
+        r="3.6"
         fill="url(#madGrad)"
-        initial={draw ? { scale: 0 } : false}
+        initial={grow}
         animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 260, damping: 14, delay: 0.9 }}
-        style={{ transformOrigin: "50px 50px" }}
+        transition={{ delay: 0.95, type: "spring", stiffness: 240, damping: 14 }}
+        style={{ transformOrigin: "50px 55px" }}
       />
     </svg>
   );

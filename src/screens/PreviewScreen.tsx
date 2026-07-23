@@ -18,9 +18,11 @@ export function PreviewScreen() {
   const go = useSession((s) => s.go);
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const fit =
+    layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-8 px-8">
+    <div className="flex h-full w-full flex-col items-center gap-4 px-8 py-8 pt-[max(2rem,calc(env(safe-area-inset-top)+1rem))]">
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -29,25 +31,27 @@ export function PreviewScreen() {
         Your receipt
       </motion.p>
 
-      <motion.div
-        initial={{ y: "-130%", rotate: -2, opacity: 0 }}
-        animate={{ y: 0, rotate: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 120, damping: 12, mass: 1.1 }}
-        className="w-full max-w-[280px]"
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.12}
-      >
-        <Receipt
-          layout={layout}
-          photos={photos}
-          filterCss={filterCss}
-          frameBg={frameBg}
-          shape={photoShape}
-          theme={theme}
-          code={code}
-          dateLabel={formatDate()}
-          overlay={items
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+        <motion.div
+          initial={{ y: "-130%", rotate: -2, opacity: 0 }}
+          animate={{ y: 0, rotate: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 120, damping: 12, mass: 1.1 }}
+          className="flex h-full w-full items-center justify-center"
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.12}
+        >
+          <Receipt
+            layout={layout}
+            photos={photos}
+            filterCss={filterCss}
+            frameBg={frameBg}
+            shape={photoShape}
+            theme={theme}
+            code={code}
+            dateLabel={formatDate()}
+            className={fit}
+            overlay={items
             .slice()
             .sort((a, b) => a.z - b.z)
             .map((it) => (
@@ -69,8 +73,9 @@ export function PreviewScreen() {
                 {it.content}
               </span>
             ))}
-        />
-      </motion.div>
+          />
+        </motion.div>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
