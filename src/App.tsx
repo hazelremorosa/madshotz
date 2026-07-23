@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useSession } from "@/store/session";
 import { useIdleReset } from "@/hooks/useIdleReset";
 import type { ScreenId } from "@/types";
@@ -34,27 +34,21 @@ const SCREENS: Record<ScreenId, () => JSX.Element> = {
   qr: QRScreen,
 };
 
+// Enter-only transition. The outgoing screen unmounts instantly via React
+// keying (no AnimatePresence), so there is no exit-completion to stall on and
+// screens can never pile up. The new screen slides + fades into place.
 const variants: Variants = {
   enter: (dir: number) => ({
     opacity: 0,
-    x: dir > 0 ? 64 : -64,
+    x: dir > 0 ? 56 : -56,
     scale: 0.98,
-    filter: "blur(8px)",
   }),
   center: {
     opacity: 1,
     x: 0,
     scale: 1,
-    filter: "blur(0px)",
     transition: { type: "spring", stiffness: 260, damping: 30 },
   },
-  exit: (dir: number) => ({
-    opacity: 0,
-    x: dir > 0 ? -48 : 48,
-    scale: 0.98,
-    filter: "blur(8px)",
-    transition: { duration: 0.25, ease: "easeIn" },
-  }),
 };
 
 export default function App() {
@@ -71,19 +65,16 @@ export default function App() {
       <AmbientBackground />
       <ParticleField />
 
-      <AnimatePresence mode="wait" custom={direction}>
-        <motion.div
-          key={screen}
-          custom={direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          className="absolute inset-0 z-10"
-        >
-          <Screen />
-        </motion.div>
-      </AnimatePresence>
+      <motion.div
+        key={screen}
+        custom={direction}
+        variants={variants}
+        initial="enter"
+        animate="center"
+        className="absolute inset-0 z-10"
+      >
+        <Screen />
+      </motion.div>
 
       <ProgressRail />
 
