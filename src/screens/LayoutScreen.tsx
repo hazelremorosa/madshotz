@@ -3,6 +3,7 @@ import { LAYOUTS } from "@/data/layouts";
 import { useSession } from "@/store/session";
 import { FrameStack } from "@/components/FrameStack";
 import { ActionBar } from "@/components/shell/ActionBar";
+import { CheckBadge } from "@/components/ui/CheckBadge";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/cn";
 
@@ -29,7 +30,11 @@ export function LayoutScreen() {
               key={l.id}
               type="button"
               initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={{
+                opacity: selected ? 1 : 0.7,
+                y: 0,
+                scale: selected ? 1.04 : 1,
+              }}
               transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 22 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => {
@@ -37,11 +42,19 @@ export function LayoutScreen() {
                 if (soundOn) sfx.pop();
               }}
               className={cn(
-                "relative flex flex-col items-center gap-3 rounded-xl2 p-4 transition-all",
-                selected ? "glass-strong shadow-bloom" : "glass",
+                "relative flex flex-col items-center gap-3 rounded-xl2 p-4",
+                selected
+                  ? "glass-strong shadow-bloom ring-[3px] ring-[rgb(var(--brand-a))]"
+                  : "glass",
               )}
             >
-              <span className="absolute right-3 top-3 z-10 rounded-full brand-fill px-2 py-0.5 text-[10px] font-bold text-white">
+              {selected && <CheckBadge className="-left-2 -top-2" />}
+              <span
+                className={cn(
+                  "absolute right-3 top-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold",
+                  selected ? "brand-fill text-white" : "bg-cocoa/10 text-cocoa/70",
+                )}
+              >
                 ×{l.shots}
               </span>
               <div className="flex h-28 w-full items-center justify-center">
@@ -52,7 +65,14 @@ export function LayoutScreen() {
                   <FrameStack layout={l} photos={[]} filterCss="none" />
                 </div>
               </div>
-              <span className="text-sm font-semibold text-cocoa">{l.name}</span>
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  selected ? "text-cocoa" : "text-cocoa/70",
+                )}
+              >
+                {l.name}
+              </span>
             </motion.button>
           );
         })}
