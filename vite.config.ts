@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "MAD SHOT'Z",
-        short_name: "MAD SHOT'Z",
+        name: "Mad Shots",
+        short_name: "Mad Shots",
         description: "A premium receipt photobooth experience.",
         theme_color: "#0b0b12",
         background_color: "#0b0b12",

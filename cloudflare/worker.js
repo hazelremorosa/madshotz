@@ -1,5 +1,5 @@
 /**
- * MAD SHOT'Z delivery Worker (Cloudflare R2).
+ * Mad Shots delivery Worker (Cloudflare R2).
  *
  * Routes:
  *   POST /upload/:code   — store the finished photo in R2 (called by the kiosk app)
@@ -42,7 +42,7 @@ export default {
       return viewerPage(env, m[1], url.origin);
     }
 
-    return new Response("MAD SHOT'Z delivery", { status: 200, headers: CORS });
+    return new Response("Mad Shots delivery", { status: 200, headers: CORS });
   },
 };
 
@@ -87,7 +87,7 @@ async function serveImage(env, code, download) {
   headers.set("content-type", ct);
   headers.set("cache-control", "public, max-age=1800");
   if (download) {
-    headers.set("content-disposition", `attachment; filename="madshotz-${code}.${ext}"`);
+    headers.set("content-disposition", `attachment; filename="mad-shots-${code}.${ext}"`);
   }
   return new Response(obj.body, { headers });
 }
@@ -124,7 +124,7 @@ function htmlResponse(html, status) {
 
 const PAGE_HEAD = `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MAD SHOT'Z</title>
+<title>Mad Shots</title>
 <style>
   :root{--a:#ff7aad;--b:#b294ff;--c:#7ae0c4}
   *{box-sizing:border-box}
@@ -146,8 +146,8 @@ const PAGE_HEAD = `<!doctype html><html lang="en"><head>
 
 function viewerHtml(code, origin, hoursLeft) {
   return `${PAGE_HEAD}
-    <div class="brand">MAD SHOT'Z</div>
-    <img src="${origin}/img/${code}" alt="Your MAD SHOT'Z photo"/>
+    <div class="brand">MAD SHOTS</div>
+    <img src="${origin}/img/${code}" alt="Your Mad Shots photo"/>
     <div><a class="btn" href="${origin}/img/${code}?dl=1" download>↓ Save photo</a></div>
     <div class="note">Link expires in ~${hoursLeft}h · save it now 💾</div>
   </div></body></html>`;
@@ -155,7 +155,7 @@ function viewerHtml(code, origin, hoursLeft) {
 
 function expiredHtml() {
   return `${PAGE_HEAD}
-    <div class="brand">MAD SHOT'Z</div>
+    <div class="brand">MAD SHOTS</div>
     <div class="big">This link has expired 🕊️</div>
     <div class="note">Photos are available for 24 hours after your session.</div>
   </div></body></html>`;

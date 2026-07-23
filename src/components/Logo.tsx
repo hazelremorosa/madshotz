@@ -5,7 +5,7 @@ interface Props {
   draw?: boolean;
 }
 
-/** MAD SHOT'Z camera mark — a line-art camera inside a ring. */
+/** Mad Shots camera mark — a line-art camera inside a ring. */
 export function LogoMark({ size = 96, draw = false }: Props) {
   const drawIn = draw ? { pathLength: 0, opacity: 0 } : false;
   const grow = draw ? { scale: 0 } : false;

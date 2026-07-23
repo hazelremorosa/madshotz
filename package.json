@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "MAD SHOT'Z — a premium receipt photobooth PWA",
+  "description": "Mad Shots — a premium receipt photobooth PWA",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -68,7 +68,7 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
       {/* Header — subtle wordmark */}
       <div className="px-[6cqw] pt-[5cqw] text-center">
         <div className="font-mono text-[3.2cqw] font-semibold uppercase tracking-[0.4em] text-paper-ink/60">
-          MAD SHOT'Z
+          MAD SHOTS
         </div>
         <div className="mt-[2.5cqw] border-t border-dashed border-paper-ink/30" />
       </div>

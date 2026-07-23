@@ -35,7 +35,7 @@ export const DeliveryService = {
       await new Promise((r) => setTimeout(r, 650)); // keep the QR draw-in breathing
       if (!configured) {
         console.info(
-          "[MAD SHOT'Z] Cloud delivery not configured — the QR is a placeholder. See README → Photo delivery.",
+          "[Mad Shots] Cloud delivery not configured — the QR is a placeholder. See README → Photo delivery.",
         );
       }
       return { code, url };
@@ -50,13 +50,13 @@ export const DeliveryService = {
       });
       if (!res.ok) {
         console.warn(
-          "[MAD SHOT'Z] Upload failed:",
+          "[Mad Shots] Upload failed:",
           res.status,
           await res.text().catch(() => ""),
         );
       }
     } catch (e) {
-      console.warn("[MAD SHOT'Z] Upload error:", e);
+      console.warn("[Mad Shots] Upload error:", e);
     }
 
     return { code, url };
