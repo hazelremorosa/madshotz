@@ -1,0 +1,102 @@
+import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { useSession } from "@/store/session";
+import { useIdleReset } from "@/hooks/useIdleReset";
+import type { ScreenId } from "@/types";
+
+import { AmbientBackground } from "@/components/shell/AmbientBackground";
+import { ParticleField } from "@/components/shell/ParticleField";
+import { RippleLayer } from "@/components/shell/RippleLayer";
+import { ProgressRail } from "@/components/shell/ProgressRail";
+
+import { BootScreen } from "@/screens/BootScreen";
+import { WelcomeScreen } from "@/screens/WelcomeScreen";
+import { ThemeScreen } from "@/screens/ThemeScreen";
+import { LayoutScreen } from "@/screens/LayoutScreen";
+import { CaptureScreen } from "@/screens/CaptureScreen";
+import { ReviewScreen } from "@/screens/ReviewScreen";
+import { FilterScreen } from "@/screens/FilterScreen";
+import { EditorScreen } from "@/screens/EditorScreen";
+import { PreviewScreen } from "@/screens/PreviewScreen";
+import { PrintingScreen } from "@/screens/PrintingScreen";
+import { QRScreen } from "@/screens/QRScreen";
+
+const SCREENS: Record<ScreenId, () => JSX.Element> = {
+  boot: BootScreen,
+  welcome: WelcomeScreen,
+  theme: ThemeScreen,
+  layout: LayoutScreen,
+  capture: CaptureScreen,
+  review: ReviewScreen,
+  filter: FilterScreen,
+  editor: EditorScreen,
+  preview: PreviewScreen,
+  printing: PrintingScreen,
+  qr: QRScreen,
+};
+
+const variants: Variants = {
+  enter: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? 64 : -64,
+    scale: 0.98,
+    filter: "blur(8px)",
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: { type: "spring", stiffness: 260, damping: 30 },
+  },
+  exit: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? -48 : 48,
+    scale: 0.98,
+    filter: "blur(8px)",
+    transition: { duration: 0.25, ease: "easeIn" },
+  }),
+};
+
+export default function App() {
+  const screen = useSession((s) => s.screen);
+  const direction = useSession((s) => s.direction);
+  const soundOn = useSession((s) => s.soundOn);
+  const toggleSound = useSession((s) => s.toggleSound);
+  useIdleReset();
+
+  const Screen = SCREENS[screen];
+
+  return (
+    <div className="relative h-[100dvh] w-full max-w-[540px] overflow-hidden bg-ink text-white">
+      <AmbientBackground />
+      <ParticleField />
+
+      <AnimatePresence mode="wait" custom={direction}>
+        <motion.div
+          key={screen}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="absolute inset-0 z-10"
+        >
+          <Screen />
+        </motion.div>
+      </AnimatePresence>
+
+      <ProgressRail />
+
+      <button
+        type="button"
+        onClick={toggleSound}
+        aria-label="Toggle sound"
+        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-9 w-9 items-center justify-center rounded-full glass text-sm text-white/70"
+      >
+        {soundOn ? "🔊" : "🔇"}
+      </button>
+
+      <RippleLayer />
+    </div>
+  );
+}
