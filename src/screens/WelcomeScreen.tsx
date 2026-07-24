@@ -4,6 +4,7 @@ import { InstantCameraIcon, ReceiptPrinterIcon } from "@/components/BrandIcons";
 import { useSession } from "@/store/session";
 import { ensureCameraStream } from "@/lib/camera";
 import { activeTemplate, templateLayout } from "@/store/templates";
+import { reconcileDesignMode } from "@/store/events";
 
 export function WelcomeScreen() {
   const go = useSession((s) => s.go);
@@ -11,6 +12,9 @@ export function WelcomeScreen() {
   const begin = () => {
     // Warm the camera on the first user gesture so Capture is instant.
     ensureCameraStream().catch(() => undefined);
+    // Make sure the guest sees exactly the active event (or Standard Booth),
+    // never a half-finished Admin draft.
+    reconcileDesignMode();
     // A designed event template predetermines the layout (and shot count), so
     // skip the layout picker and go straight to capturing.
     const t = activeTemplate();

@@ -60,10 +60,35 @@ export interface CustomFrame {
 export const MAX_CUSTOM_FRAMES = 6;
 
 /**
+ * How the receipt/print is designed:
+ * - "standard" — the plain Standard Booth receipt (no active event).
+ * - "template" — the active event uses an uploaded designed template.
+ * - "overlay"  — the active event uses the frame-overlay system.
+ */
+export type DesignMode = "standard" | "template" | "overlay";
+
+/** Event categories the admin can pick, mapped to an overlay design family. */
+export const EVENT_CATEGORIES: { id: string; overlay: OverlayCategory }[] = [
+  { id: "Wedding", overlay: "Wedding" },
+  { id: "Birthday", overlay: "Birthday" },
+  { id: "Christening", overlay: "Christening" },
+  { id: "Baby Shower", overlay: "Baby" },
+  { id: "Anniversary", overlay: "Wedding" },
+  { id: "School Event", overlay: "Classic" },
+  { id: "Corporate Event", overlay: "Classic" },
+  { id: "Other", overlay: "Classic" },
+];
+
+/** The overlay design family for an event category (Classic if unknown). */
+export function overlayCategoryFor(category: string): OverlayCategory {
+  return EVENT_CATEGORIES.find((c) => c.id === category)?.overlay ?? "Classic";
+}
+
+/**
  * The event/"look" slice of settings — everything that makes one event feel
- * different from another. Snapshotted into saved presets and applied by booth
- * modes. Deliberately excludes booth *hardware/security* (PIN, camera, mirror,
- * kiosk) so loading someone else's event config never breaks this kiosk's rig.
+ * different from another. Snapshotted into an event and re-applied when it's
+ * loaded. Deliberately excludes booth *hardware/security* (PIN, camera, kiosk)
+ * so loading an event never breaks this kiosk's rig.
  */
 export interface BoothConfig {
   eventName: string;
@@ -82,8 +107,10 @@ export interface BoothConfig {
   soundOn: boolean;
   idleTimeoutSec: number;
   qrResetSec: number;
-  boothType: "normal" | "event";
+  designMode: DesignMode;
   eventType: OverlayCategory;
+  eventCategory: string;
+  eventDate: string;
   eventPhoto: string | null;
   eventTitle: string;
   eventSubtitle: string;
@@ -135,9 +162,15 @@ export interface SettingsState {
   guestCanChangeOverlay: boolean;
 
   // ── Event ─────────────────────────────────────────────────────────────────
-  /** "normal" = plain receipt booth (Classic overlays only); "event" = themed. */
-  boothType: "normal" | "event";
-  /** Which event the booth is set up for (used when boothType === "event"). */
+  /** Current design: "standard" receipt, or a loaded event's "template"/"overlay". */
+  designMode: DesignMode;
+  /** The loaded event's id (in the events store), or null for the Standard Booth. */
+  activeEventId: string | null;
+  /** The loaded event's category label (Wedding, Birthday, …). */
+  eventCategory: string;
+  /** The loaded event's date (yyyy-mm-dd, free text ok). */
+  eventDate: string;
+  /** Overlay design family in force (derived from the category). */
   eventType: OverlayCategory;
   /** Feature photo (couple/celebrant) embedded by photo-template overlays. */
   eventPhoto: string | null;
@@ -203,7 +236,10 @@ const DEFAULTS = {
   defaultOverlayId: "none",
   guestCanChangeOverlay: true,
 
-  boothType: "normal" as "normal" | "event",
+  designMode: "standard" as DesignMode,
+  activeEventId: null as string | null,
+  eventCategory: "Wedding",
+  eventDate: "",
   eventType: "Wedding" as OverlayCategory,
   eventPhoto: null as string | null,
   eventTitle: "",
@@ -321,7 +357,9 @@ export const useSettings = create<SettingsState>()(
           "qrResetSec",
           "customFrames",
           "customStickers",
-          "boothType",
+          "designMode",
+          "eventCategory",
+          "eventDate",
           "eventType",
           "eventPhoto",
           "eventTitle",
@@ -443,7 +481,7 @@ export function startingOverlay(): string {
 /** The overlay category the customer's picker is scoped to. */
 export function activeOverlayCategory(): OverlayCategory {
   const s = useSettings.getState();
-  return s.boothType === "event" ? s.eventType : "Classic";
+  return s.designMode === "overlay" ? s.eventType : "Classic";
 }
 
 /** Customization fed into photo-template overlays (photo + text + accent). */
@@ -477,7 +515,9 @@ export function snapshotConfig(): BoothConfig {
     soundOn: s.soundOn,
     idleTimeoutSec: s.idleTimeoutSec,
     qrResetSec: s.qrResetSec,
-    boothType: s.boothType,
+    designMode: s.designMode,
+    eventCategory: s.eventCategory,
+    eventDate: s.eventDate,
     eventType: s.eventType,
     eventPhoto: s.eventPhoto,
     eventTitle: s.eventTitle,

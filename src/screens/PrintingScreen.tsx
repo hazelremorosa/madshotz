@@ -65,7 +65,7 @@ export function PrintingScreen() {
           code,
           dateLabel: formatDate(),
           overlaySvg: frameOverlay,
-          hideHeader: useSettings.getState().boothType === "event",
+          hideHeader: useSettings.getState().designMode !== "standard",
         });
     build.then((url) => alive && setComposite(url)).catch(() => undefined);
 

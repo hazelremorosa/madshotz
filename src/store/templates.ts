@@ -82,7 +82,7 @@ export function templateById(
  */
 export function activeTemplate(): EventTemplate | undefined {
   const s = useSettings.getState();
-  if (s.boothType !== "event") return undefined;
+  if (s.designMode !== "template") return undefined;
   const t = templateById(s.eventTemplateId);
   return t && t.slots.length > 0 ? t : undefined;
 }

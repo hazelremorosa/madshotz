@@ -62,7 +62,7 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
   const footer = receiptFooter(useSettings((s) => s.footerNote));
   // In event mode the frame overlay (photo template) is the masthead, so the
   // generic wordmark is hidden — kept invisible so the layout stays identical.
-  const eventMode = useSettings((s) => s.boothType) === "event";
+  const eventMode = useSettings((s) => s.designMode) !== "standard";
 
   return (
     <div

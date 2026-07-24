@@ -43,9 +43,9 @@ export function FramesScreen() {
   const customFrames = useSettings((s) => s.customFrames);
   const guestCanChangeOverlay = useSettings((s) => s.guestCanChangeOverlay);
 
-  // Booth type declared in Admin scopes which overlays the guest can see, and
-  // the event photo/name/date feed the "photo template" frames.
-  const boothType = useSettings((s) => s.boothType);
+  // The active design scopes which overlays the guest can see, and the event
+  // photo/name/date feed the "photo template" frames.
+  const designMode = useSettings((s) => s.designMode);
   const eventType = useSettings((s) => s.eventType);
   const eventPhoto = useSettings((s) => s.eventPhoto);
   const eventTitle = useSettings((s) => s.eventTitle);
@@ -57,7 +57,7 @@ export function FramesScreen() {
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
 
   const activeCat: OverlayCategory =
-    boothType === "event" ? eventType : "Classic";
+    designMode === "overlay" ? eventType : "Classic";
   const overlayOpts = useMemo(
     () => ({
       photo: eventPhoto,
@@ -79,7 +79,7 @@ export function FramesScreen() {
   // frames + photo templates for an event. "None" leads; uploads trail.
   const overlayOptions = useMemo(() => {
     const builtInIds =
-      boothType === "event"
+      designMode !== "standard"
         ? [
             ...overlaysInCategory(eventType).map((o) => o.id),
             ...PHOTO_TEMPLATES.map((t) => t.id),
@@ -98,7 +98,7 @@ export function FramesScreen() {
         thumb: resolveOverlaySrc(id, 1, customFrames, overlayOpts),
       })),
     ];
-  }, [boothType, eventType, customFrames, overlayOpts]);
+  }, [designMode, eventType, customFrames, overlayOpts]);
   const styles = FRAME_STYLES.filter((f) => f.kind === tab);
   // Let the receipt shrink to fit so the controls below never get pushed
   // under the fixed action bar (tall layouts like 3-strip).
@@ -145,7 +145,7 @@ export function FramesScreen() {
 
       {/* Overlay row — normal booth only. In event mode the overlay is the
           host's event frame/template, so the guest doesn't pick one. */}
-      {guestCanChangeOverlay && boothType === "normal" && (
+      {guestCanChangeOverlay && designMode === "standard" && (
         <div className="px-5">
           <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
             Overlay
