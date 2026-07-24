@@ -3,6 +3,12 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
+import {
+  ACCENT_BY_CATEGORY,
+  isKnownOverlay,
+  type OverlayCategory,
+  type OverlayOpts,
+} from "@/data/overlays";
 
 /**
  * Booth settings — everything the host can change from the Admin panel without
@@ -44,6 +50,56 @@ export interface CustomSticker {
 /** How many custom stickers the host can keep (localStorage-friendly cap). */
 export const MAX_CUSTOM_STICKERS = 16;
 
+/** A host-uploaded frame overlay — a transparent PNG laid over the whole receipt. */
+export interface CustomFrame {
+  id: string;
+  url: string;
+}
+
+/** Frame overlays are large, so keep the tray small for localStorage's sake. */
+export const MAX_CUSTOM_FRAMES = 6;
+
+/**
+ * The event/"look" slice of settings — everything that makes one event feel
+ * different from another. Snapshotted into saved presets and applied by booth
+ * modes. Deliberately excludes booth *hardware/security* (PIN, camera, mirror,
+ * kiosk) so loading someone else's event config never breaks this kiosk's rig.
+ */
+export interface BoothConfig {
+  eventName: string;
+  footerNote: string;
+  brandPresetId: string;
+  countdownLength: number;
+  guestCanSetCountdown: boolean;
+  flashFill: boolean;
+  enabledLayoutIds: string[];
+  defaultLayoutId: string;
+  enabledFilterIds: string[];
+  defaultOverlayId: string;
+  guestCanChangeOverlay: boolean;
+  customFrames: CustomFrame[];
+  customStickers: CustomSticker[];
+  soundOn: boolean;
+  idleTimeoutSec: number;
+  qrResetSec: number;
+  boothType: "normal" | "event";
+  eventType: OverlayCategory;
+  eventPhoto: string | null;
+  eventTitle: string;
+  eventSubtitle: string;
+  eventTemplateId: string | null;
+}
+
+/** A host-saved, named event configuration ("Wedding of A&B"). */
+export interface EventPreset {
+  id: string;
+  name: string;
+  config: BoothConfig;
+}
+
+/** Cap on saved presets (they can carry uploaded assets, so keep it sane). */
+export const MAX_PRESETS = 8;
+
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -69,6 +125,28 @@ export interface SettingsState {
   enabledLayoutIds: string[];
   enabledFilterIds: string[];
   defaultLayoutId: string;
+
+  // ── Frame overlay ─────────────────────────────────────────────────────────
+  /** Host-uploaded PNG frame overlays, offered alongside the built-in ones. */
+  customFrames: CustomFrame[];
+  /** Overlay every session starts on — a built-in id, a custom frame id, or "none". */
+  defaultOverlayId: string;
+  /** Show the overlay picker to guests on the Frames screen. */
+  guestCanChangeOverlay: boolean;
+
+  // ── Event ─────────────────────────────────────────────────────────────────
+  /** "normal" = plain receipt booth (Classic overlays only); "event" = themed. */
+  boothType: "normal" | "event";
+  /** Which event the booth is set up for (used when boothType === "event"). */
+  eventType: OverlayCategory;
+  /** Feature photo (couple/celebrant) embedded by photo-template overlays. */
+  eventPhoto: string | null;
+  /** Title line on photo templates (e.g. "John & Jane"). Falls back to eventName. */
+  eventTitle: string;
+  /** Subtitle line on photo templates (e.g. a date or short message). */
+  eventSubtitle: string;
+  /** Active designed template (id in the templates store), or null for none. */
+  eventTemplateId: string | null;
 
   // ── Branding ──────────────────────────────────────────────────────────────
   /** Receipt header wordmark. Empty → "MAD SHOTS". */
@@ -98,6 +176,11 @@ export interface SettingsState {
   /** Appends uploaded stickers (newest first), clamped to MAX_CUSTOM_STICKERS. */
   addCustomStickers: (urls: string[]) => void;
   removeCustomSticker: (id: string) => void;
+  /** Appends uploaded frame overlays (newest first), clamped to MAX_CUSTOM_FRAMES. */
+  addCustomFrames: (urls: string[]) => void;
+  removeCustomFrame: (id: string) => void;
+  /** Applies an event config or booth-mode slice (sanitised against real ids). */
+  applyConfig: (config: Partial<BoothConfig>) => void;
   setAdminOpen: (open: boolean) => void;
   resetAll: () => void;
 }
@@ -116,6 +199,17 @@ const DEFAULTS = {
   enabledFilterIds: FILTERS.map((f) => f.id),
   defaultLayoutId: DEFAULT_LAYOUT.id,
 
+  customFrames: [] as CustomFrame[],
+  defaultOverlayId: "none",
+  guestCanChangeOverlay: true,
+
+  boothType: "normal" as "normal" | "event",
+  eventType: "Wedding" as OverlayCategory,
+  eventPhoto: null as string | null,
+  eventTitle: "",
+  eventSubtitle: "",
+  eventTemplateId: null as string | null,
+
   eventName: "",
   footerNote: "",
   brandPresetId: "default",
@@ -129,10 +223,10 @@ const DEFAULTS = {
   keepAwake: true,
 };
 
-let stickerSeq = 0;
-function stickerId(): string {
-  stickerSeq += 1;
-  return `cs_${Date.now().toString(36)}_${stickerSeq}`;
+let uploadSeq = 0;
+function uploadId(prefix: string): string {
+  uploadSeq += 1;
+  return `${prefix}_${Date.now().toString(36)}_${uploadSeq}`;
 }
 
 /** Flips a member of a "must keep at least one" list. */
@@ -173,7 +267,7 @@ export const useSettings = create<SettingsState>()(
 
       addCustomStickers: (urls) =>
         set((state) => {
-          const added = urls.map((url) => ({ id: stickerId(), url }));
+          const added = urls.map((url) => ({ id: uploadId("cs"), url }));
           // Newest first, and never past the cap (drops the oldest overflow).
           return {
             customStickers: [...added, ...state.customStickers].slice(
@@ -187,6 +281,93 @@ export const useSettings = create<SettingsState>()(
         set((state) => ({
           customStickers: state.customStickers.filter((s) => s.id !== id),
         })),
+
+      addCustomFrames: (urls) =>
+        set((state) => {
+          const added = urls.map((url) => ({ id: uploadId("cf"), url }));
+          return {
+            customFrames: [...added, ...state.customFrames].slice(
+              0,
+              MAX_CUSTOM_FRAMES,
+            ),
+          };
+        }),
+
+      removeCustomFrame: (id) =>
+        set((state) => ({
+          customFrames: state.customFrames.filter((f) => f.id !== id),
+          // Don't leave the "applied to every guest" default pointing at a
+          // frame that no longer exists.
+          defaultOverlayId:
+            state.defaultOverlayId === id ? "none" : state.defaultOverlayId,
+        })),
+
+      applyConfig: (config) => {
+        const state = get();
+        const c = config;
+        const patch: Record<string, unknown> = {};
+
+        // Straightforward fields — copy only what the config actually specifies.
+        const direct: (keyof BoothConfig)[] = [
+          "eventName",
+          "footerNote",
+          "brandPresetId",
+          "countdownLength",
+          "guestCanSetCountdown",
+          "flashFill",
+          "guestCanChangeOverlay",
+          "soundOn",
+          "idleTimeoutSec",
+          "qrResetSec",
+          "customFrames",
+          "customStickers",
+          "boothType",
+          "eventType",
+          "eventPhoto",
+          "eventTitle",
+          "eventSubtitle",
+          "eventTemplateId",
+        ];
+        for (const k of direct) if (c[k] !== undefined) patch[k] = c[k];
+
+        // Enabled layouts — drop unknown ids, never leave the list empty.
+        let layouts = state.enabledLayoutIds;
+        if (c.enabledLayoutIds !== undefined) {
+          const valid = c.enabledLayoutIds.filter((id) =>
+            LAYOUTS.some((l) => l.id === id),
+          );
+          layouts = valid.length
+            ? LAYOUTS.filter((l) => valid.includes(l.id)).map((l) => l.id)
+            : state.enabledLayoutIds;
+          patch.enabledLayoutIds = layouts;
+        }
+        if (c.defaultLayoutId !== undefined) {
+          patch.defaultLayoutId = layouts.includes(c.defaultLayoutId)
+            ? c.defaultLayoutId
+            : layouts[0];
+        }
+
+        // Enabled filters — same treatment.
+        if (c.enabledFilterIds !== undefined) {
+          const valid = c.enabledFilterIds.filter((id) =>
+            FILTERS.some((f) => f.id === id),
+          );
+          patch.enabledFilterIds = valid.length
+            ? FILTERS.filter((f) => valid.includes(f.id)).map((f) => f.id)
+            : state.enabledFilterIds;
+        }
+
+        // Forced overlay — must resolve to a built-in or an uploaded frame that
+        // this same config carries; otherwise fall back to "none".
+        if (c.defaultOverlayId !== undefined) {
+          const frames = c.customFrames ?? state.customFrames;
+          patch.defaultOverlayId = isKnownOverlay(c.defaultOverlayId, frames)
+            ? c.defaultOverlayId
+            : "none";
+        }
+
+        set(patch as Partial<SettingsState>);
+      },
 
       setAdminOpen: (adminOpen) => set({ adminOpen }),
 
@@ -206,11 +387,18 @@ export const useSettings = create<SettingsState>()(
         const filters = (saved.enabledFilterIds ?? DEFAULTS.enabledFilterIds).filter(
           (id) => FILTERS.some((f) => f.id === id),
         );
+        // The forced overlay must still resolve to a real built-in or upload.
+        const frames = saved.customFrames ?? DEFAULTS.customFrames;
+        const savedDefaultOverlay = saved.defaultOverlayId ?? DEFAULTS.defaultOverlayId;
+        const defaultOverlayId = isKnownOverlay(savedDefaultOverlay, frames)
+          ? savedDefaultOverlay
+          : "none";
         return {
           ...current,
           ...saved,
           enabledLayoutIds: layouts.length ? layouts : DEFAULTS.enabledLayoutIds,
           enabledFilterIds: filters.length ? filters : DEFAULTS.enabledFilterIds,
+          defaultOverlayId,
           adminOpen: false,
         };
       },
@@ -240,6 +428,62 @@ export function startingLayout() {
   return (
     list.find((l) => l.id === useSettings.getState().defaultLayoutId) ?? list[0]
   );
+}
+
+/**
+ * The frame overlay a new session starts on — the host's "applied to every
+ * guest" default. Falls back to "none" if it points at a deleted upload.
+ */
+export function startingOverlay(): string {
+  const st = useSettings.getState();
+  const id = st.defaultOverlayId;
+  return isKnownOverlay(id, st.customFrames) ? id : "none";
+}
+
+/** The overlay category the customer's picker is scoped to. */
+export function activeOverlayCategory(): OverlayCategory {
+  const s = useSettings.getState();
+  return s.boothType === "event" ? s.eventType : "Classic";
+}
+
+/** Customization fed into photo-template overlays (photo + text + accent). */
+export function overlayOpts(): OverlayOpts {
+  const s = useSettings.getState();
+  return {
+    photo: s.eventPhoto,
+    title: s.eventTitle.trim() || s.eventName.trim(),
+    subtitle: s.eventSubtitle.trim(),
+    accent: ACCENT_BY_CATEGORY[activeOverlayCategory()],
+  };
+}
+
+/** Captures the current event/"look" config for saving as a preset. */
+export function snapshotConfig(): BoothConfig {
+  const s = useSettings.getState();
+  return {
+    eventName: s.eventName,
+    footerNote: s.footerNote,
+    brandPresetId: s.brandPresetId,
+    countdownLength: s.countdownLength,
+    guestCanSetCountdown: s.guestCanSetCountdown,
+    flashFill: s.flashFill,
+    enabledLayoutIds: [...s.enabledLayoutIds],
+    defaultLayoutId: s.defaultLayoutId,
+    enabledFilterIds: [...s.enabledFilterIds],
+    defaultOverlayId: s.defaultOverlayId,
+    guestCanChangeOverlay: s.guestCanChangeOverlay,
+    customFrames: s.customFrames.map((f) => ({ ...f })),
+    customStickers: s.customStickers.map((f) => ({ ...f })),
+    soundOn: s.soundOn,
+    idleTimeoutSec: s.idleTimeoutSec,
+    qrResetSec: s.qrResetSec,
+    boothType: s.boothType,
+    eventType: s.eventType,
+    eventPhoto: s.eventPhoto,
+    eventTitle: s.eventTitle,
+    eventSubtitle: s.eventSubtitle,
+    eventTemplateId: s.eventTemplateId,
+  };
 }
 
 /** The brand triplet in force: host palette override, else the theme's own. */

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useCamera } from "@/lib/camera";
 import { useSession } from "@/store/session";
+import { isTemplateMode } from "@/store/templates";
 import { COUNTDOWN_OPTIONS, useSettings } from "@/store/settings";
 import { activeFilterCss } from "@/data/filters";
 import { sfx } from "@/lib/sound";
@@ -285,7 +286,8 @@ export function CaptureScreen() {
         type="button"
         onClick={() => {
           cancelled.current = true;
-          go(isRetake ? "review" : "layout", -1);
+          // Template events skip the layout picker, so Back returns to Welcome.
+          go(isRetake ? "review" : isTemplateMode() ? "welcome" : "layout", -1);
         }}
         className="text-xs font-medium uppercase tracking-[0.2em] text-cocoa/40"
       >

@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { overlayOpts, useSettings } from "@/store/settings";
+import { activeTemplate } from "@/store/templates";
 import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
-import { overlaySrc } from "@/data/overlays";
+import { resolveOverlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
+import { TemplateComposite } from "@/components/TemplateComposite";
 import { staticItems } from "@/components/StaticItems";
 import { composeReceipt } from "@/lib/compose";
+import { composeTemplate } from "@/lib/composeTemplate";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
 
@@ -30,13 +34,15 @@ export function PrintingScreen() {
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
   const overlayId = useSession((s) => s.overlayId);
+  const customFrames = useSettings((s) => s.customFrames);
   const items = useSession((s) => s.items);
   const setComposite = useSession((s) => s.setComposite);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameStyle = FRAME_STYLE_BY_ID(frameStyleId);
-  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
+  const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
+  const template = activeTemplate();
 
   const [caption, setCaption] = useState(0);
 
@@ -44,20 +50,24 @@ export function PrintingScreen() {
     let alive = true;
     if (soundOn) sfx.print();
 
-    composeReceipt({
-      photos,
-      layout,
-      filterCss,
-      frameStyle,
-      shape: photoShape,
-      items,
-      theme,
-      code,
-      dateLabel: formatDate(),
-      overlaySvg: frameOverlay,
-    })
-      .then((url) => alive && setComposite(url))
-      .catch(() => undefined);
+    // A designed template composites differently (photos into the design); a
+    // normal booth renders the receipt.
+    const build = template
+      ? composeTemplate({ template, photos, filterCss })
+      : composeReceipt({
+          photos,
+          layout,
+          filterCss,
+          frameStyle,
+          shape: photoShape,
+          items,
+          theme,
+          code,
+          dateLabel: formatDate(),
+          overlaySvg: frameOverlay,
+          hideHeader: useSettings.getState().boothType === "event",
+        });
+    build.then((url) => alive && setComposite(url)).catch(() => undefined);
 
     const capIv = window.setInterval(
       () => setCaption((c) => (c + 1) % CAPTIONS.length),
@@ -86,18 +96,27 @@ export function PrintingScreen() {
             animate={{ clipPath: "inset(0% 0 0 0)" }}
             transition={{ duration: DURATION / 1000, ease: "easeInOut" }}
           >
-            <Receipt
-              layout={layout}
-              photos={photos}
-              filterCss={filterCss}
-              frameBg={frameStyle.bg}
-              shape={photoShape}
-              frameOverlay={frameOverlay}
-              theme={theme}
-              code={code}
-              dateLabel={formatDate()}
-              overlay={staticItems(items)}
-            />
+            {template ? (
+              <TemplateComposite
+                template={template}
+                photos={photos}
+                filterCss={filterCss}
+                className="w-full"
+              />
+            ) : (
+              <Receipt
+                layout={layout}
+                photos={photos}
+                filterCss={filterCss}
+                frameBg={frameStyle.bg}
+                shape={photoShape}
+                frameOverlay={frameOverlay}
+                theme={theme}
+                code={code}
+                dateLabel={formatDate()}
+                overlay={staticItems(items)}
+              />
+            )}
           </motion.div>
           {/* print-head glow sweeping down */}
           <motion.div

@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
 import { FILTER_BY_ID } from "@/data/filters";
 import {
   FRAME_STYLES,
   FRAME_STYLE_BY_ID,
   PHOTO_SHAPES,
 } from "@/data/frames";
-import { OVERLAYS, overlaySrc } from "@/data/overlays";
+import {
+  ACCENT_BY_CATEGORY,
+  OVERLAY_BY_ID,
+  PHOTO_TEMPLATES,
+  TEMPLATE_BY_ID,
+  overlaysInCategory,
+  resolveOverlaySrc,
+  type OverlayCategory,
+} from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { CheckBadge } from "@/components/ui/CheckBadge";
@@ -30,10 +39,66 @@ export function FramesScreen() {
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
 
+  // Host-uploaded frames + whether guests may change the overlay at all.
+  const customFrames = useSettings((s) => s.customFrames);
+  const guestCanChangeOverlay = useSettings((s) => s.guestCanChangeOverlay);
+
+  // Booth type declared in Admin scopes which overlays the guest can see, and
+  // the event photo/name/date feed the "photo template" frames.
+  const boothType = useSettings((s) => s.boothType);
+  const eventType = useSettings((s) => s.eventType);
+  const eventPhoto = useSettings((s) => s.eventPhoto);
+  const eventTitle = useSettings((s) => s.eventTitle);
+  const eventSubtitle = useSettings((s) => s.eventSubtitle);
+  const eventName = useSettings((s) => s.eventName);
+
   const [tab, setTab] = useState<"color" | "pattern">("color");
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
-  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
+
+  const activeCat: OverlayCategory =
+    boothType === "event" ? eventType : "Classic";
+  const overlayOpts = useMemo(
+    () => ({
+      photo: eventPhoto,
+      title: eventTitle.trim() || eventName.trim(),
+      subtitle: eventSubtitle.trim(),
+      accent: ACCENT_BY_CATEGORY[activeCat],
+    }),
+    [eventPhoto, eventTitle, eventSubtitle, eventName, activeCat],
+  );
+
+  const frameOverlay = resolveOverlaySrc(
+    overlayId,
+    layout.paperAspect,
+    customFrames,
+    overlayOpts,
+  );
+
+  // Scoped to the declared booth: Classic for a normal booth, the event's own
+  // frames + photo templates for an event. "None" leads; uploads trail.
+  const overlayOptions = useMemo(() => {
+    const builtInIds =
+      boothType === "event"
+        ? [
+            ...overlaysInCategory(eventType).map((o) => o.id),
+            ...PHOTO_TEMPLATES.map((t) => t.id),
+          ]
+        : overlaysInCategory("Classic").map((o) => o.id);
+    const label = (id: string) => {
+      const customIdx = customFrames.findIndex((f) => f.id === id);
+      if (customIdx >= 0) return `Custom ${customIdx + 1}`;
+      return TEMPLATE_BY_ID(id)?.name ?? OVERLAY_BY_ID(id).name;
+    };
+    return [
+      { id: "none", name: "None", thumb: null as string | null },
+      ...[...builtInIds, ...customFrames.map((f) => f.id)].map((id) => ({
+        id,
+        name: label(id),
+        thumb: resolveOverlaySrc(id, 1, customFrames, overlayOpts),
+      })),
+    ];
+  }, [boothType, eventType, customFrames, overlayOpts]);
   const styles = FRAME_STYLES.filter((f) => f.kind === tab);
   // Let the receipt shrink to fit so the controls below never get pushed
   // under the fixed action bar (tall layouts like 3-strip).
@@ -78,48 +143,54 @@ export function FramesScreen() {
         </motion.div>
       </div>
 
-      {/* Overlay row */}
-      <div className="px-5">
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
-          Overlay
-        </p>
-        <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
-          {OVERLAYS.map((o) => {
-            const active = overlayId === o.id;
-            const thumb = o.svg ? o.svg(1) : null;
-            return (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => pick(() => setOverlay(o.id))}
-                className={cn(
-                  "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-3 py-2 transition-all",
-                  active
-                    ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
-                    : "glass opacity-65",
-                )}
-              >
-                {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
-                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-paper-shade">
-                  {thumb ? (
-                    <img src={thumb} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-lg leading-none text-cocoa/40">∅</span>
-                  )}
-                </span>
-                <span
+      {/* Overlay row — normal booth only. In event mode the overlay is the
+          host's event frame/template, so the guest doesn't pick one. */}
+      {guestCanChangeOverlay && boothType === "normal" && (
+        <div className="px-5">
+          <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+            Overlay
+          </p>
+          <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
+            {overlayOptions.map((o) => {
+              const active = overlayId === o.id;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => pick(() => setOverlay(o.id))}
                   className={cn(
-                    "text-[11px] font-medium",
-                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                    "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-3 py-2 transition-all",
+                    active
+                      ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
+                      : "glass opacity-65",
                   )}
                 >
-                  {o.name}
-                </span>
-              </button>
-            );
-          })}
+                  {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-paper-shade">
+                    {o.thumb ? (
+                      <img
+                        src={o.thumb}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-lg leading-none text-cocoa/40">∅</span>
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium",
+                      active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                    )}
+                  >
+                    {o.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Shape row */}
       <div className="mt-3 px-5">

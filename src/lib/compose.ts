@@ -22,6 +22,8 @@ interface ComposeOpts {
   dateLabel: string;
   /** Decorative frame overlay SVG data URI, sized to the paper (null = none). */
   overlaySvg?: string | null;
+  /** Hide the header wordmark (event mode — the overlay is the masthead). */
+  hideHeader?: boolean;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -231,6 +233,7 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
     code,
     dateLabel,
     overlaySvg,
+    hideHeader,
   } = opts;
   const W = 760;
   const H = Math.round(W / layout.paperAspect);
@@ -260,16 +263,19 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   const ink = "#4a3a44";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  // Subtle wordmark — the host's event name, or the house brand.
-  ctx.fillStyle = "#9c8794";
-  fitText(
-    ctx,
-    letterspaced(receiptHeader()),
-    W / 2,
-    Math.round(W * 0.1),
-    W - pad * 2,
-    Math.round(W * 0.033),
-  );
+  // Subtle wordmark — the host's event name, or the house brand. Hidden in event
+  // mode, where the frame overlay (photo template) is the masthead instead.
+  if (!hideHeader) {
+    ctx.fillStyle = "#9c8794";
+    fitText(
+      ctx,
+      letterspaced(receiptHeader()),
+      W / 2,
+      Math.round(W * 0.1),
+      W - pad * 2,
+      Math.round(W * 0.033),
+    );
+  }
   dashed(ctx, pad, headerH - 10, W - pad, headerH - 10);
 
   // Frame mat.

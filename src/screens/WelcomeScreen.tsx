@@ -3,6 +3,7 @@ import { LogoMark } from "@/components/Logo";
 import { InstantCameraIcon, ReceiptPrinterIcon } from "@/components/BrandIcons";
 import { useSession } from "@/store/session";
 import { ensureCameraStream } from "@/lib/camera";
+import { activeTemplate, templateLayout } from "@/store/templates";
 
 export function WelcomeScreen() {
   const go = useSession((s) => s.go);
@@ -10,7 +11,15 @@ export function WelcomeScreen() {
   const begin = () => {
     // Warm the camera on the first user gesture so Capture is instant.
     ensureCameraStream().catch(() => undefined);
-    go("layout", 1);
+    // A designed event template predetermines the layout (and shot count), so
+    // skip the layout picker and go straight to capturing.
+    const t = activeTemplate();
+    if (t) {
+      useSession.getState().setLayout(templateLayout(t));
+      go("capture", 1);
+    } else {
+      go("layout", 1);
+    }
   };
 
   return (

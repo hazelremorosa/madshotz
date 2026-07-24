@@ -101,3 +101,27 @@ export interface CapturedPhoto {
   /** JPEG data URL, already un-mirrored for the composite. */
   dataUrl: string;
 }
+
+/** A photo hole on a designed template — fractions (0..1) of the template canvas. */
+export interface TemplateSlot {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A host-uploaded, fully-designed event print (landscape, e.g. a wedding card).
+ * The design image already has the couple's names/date/art baked in; the app
+ * only fills the photo slots. The number of slots is the number of shots.
+ */
+export interface EventTemplate {
+  id: string;
+  name: string;
+  /** The finished design as a data URL (downscaled on upload). */
+  image: string;
+  /** Aspect ratio (w/h) of the design image. */
+  aspect: number;
+  /** Photo holes, in capture order. */
+  slots: TemplateSlot[];
+}

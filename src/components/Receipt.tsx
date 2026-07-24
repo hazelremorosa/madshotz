@@ -60,6 +60,9 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
   // Event branding (Admin → Event branding); falls back to the house wordmark.
   const header = receiptHeader(useSettings((s) => s.eventName));
   const footer = receiptFooter(useSettings((s) => s.footerNote));
+  // In event mode the frame overlay (photo template) is the masthead, so the
+  // generic wordmark is hidden — kept invisible so the layout stays identical.
+  const eventMode = useSettings((s) => s.boothType) === "event";
 
   return (
     <div
@@ -73,9 +76,14 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
       <TearStrip side="top" />
       <TearStrip side="bottom" />
 
-      {/* Header — subtle wordmark */}
+      {/* Header — subtle wordmark (hidden in event mode) */}
       <div className="px-[6cqw] pt-[5cqw] text-center">
-        <div className="font-mono text-[3.2cqw] font-semibold uppercase tracking-[0.4em] text-paper-ink/60">
+        <div
+          className={cn(
+            "font-mono text-[3.2cqw] font-semibold uppercase tracking-[0.4em] text-paper-ink/60",
+            eventMode && "invisible",
+          )}
+        >
           {header}
         </div>
         <div className="mt-[2.5cqw] border-t border-dashed border-paper-ink/30" />

@@ -150,12 +150,14 @@ export function TextField({
   placeholder,
   maxLength = 28,
   mono,
+  disabled,
 }: {
   value: string;
   onChange: (next: string) => void;
   placeholder?: string;
   maxLength?: number;
   mono?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <input
@@ -164,9 +166,11 @@ export function TextField({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       maxLength={maxLength}
+      disabled={disabled}
       className={cn(
         "w-full rounded-xl border border-cocoa/15 bg-white/80 px-3 py-2 text-sm text-cocoa outline-none placeholder:text-cocoa/30 focus:border-[rgb(var(--brand-a))]",
         mono && "font-mono tracking-widest",
+        disabled && "cursor-not-allowed opacity-45",
       )}
     />
   );

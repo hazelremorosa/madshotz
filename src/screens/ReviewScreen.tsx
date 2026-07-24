@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { isTemplateMode } from "@/store/templates";
 import { activeFilterCss } from "@/data/filters";
 import { ActionBar } from "@/components/shell/ActionBar";
 
@@ -62,7 +63,7 @@ export function ReviewScreen() {
       <ActionBar
         onBack={() => go("capture", -1)}
         primaryLabel="Looks great"
-        onPrimary={() => go("frames", 1)}
+        onPrimary={() => go(isTemplateMode() ? "filter" : "frames", 1)}
       />
     </div>
   );

@@ -2,11 +2,13 @@ import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FILTERS, activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
-import { overlaySrc } from "@/data/overlays";
+import { resolveOverlaySrc } from "@/data/overlays";
 import { useSession } from "@/store/session";
-import { useSettings } from "@/store/settings";
+import { overlayOpts, useSettings } from "@/store/settings";
+import { activeTemplate } from "@/store/templates";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { Receipt } from "@/components/Receipt";
+import { TemplateComposite } from "@/components/TemplateComposite";
 import { CheckBadge } from "@/components/ui/CheckBadge";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
@@ -29,6 +31,7 @@ export function FilterScreen() {
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
   const enabledIds = useSettings((s) => s.enabledFilterIds);
+  const customFrames = useSettings((s) => s.customFrames);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const isNatural = filterId === "natural";
 
@@ -43,7 +46,8 @@ export function FilterScreen() {
   }, [shown, filterId, setFilter]);
 
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
-  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
+  const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
+  const template = activeTemplate();
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
@@ -64,18 +68,27 @@ export function FilterScreen() {
           transition={{ duration: 0.35 }}
           className="flex h-full w-full items-center justify-center"
         >
-          <Receipt
-            layout={layout}
-            photos={photos}
-            filterCss={filterCss}
-            frameBg={frameBg}
-            shape={photoShape}
-            frameOverlay={frameOverlay}
-            theme={theme}
-            code={code}
-            dateLabel={formatDate()}
-            className={fit}
-          />
+          {template ? (
+            <TemplateComposite
+              template={template}
+              photos={photos}
+              filterCss={filterCss}
+              className="max-h-full w-full"
+            />
+          ) : (
+            <Receipt
+              layout={layout}
+              photos={photos}
+              filterCss={filterCss}
+              frameBg={frameBg}
+              shape={photoShape}
+              frameOverlay={frameOverlay}
+              theme={theme}
+              code={code}
+              dateLabel={formatDate()}
+              className={fit}
+            />
+          )}
         </motion.div>
       </div>
 
@@ -186,9 +199,9 @@ export function FilterScreen() {
       </div>
 
       <ActionBar
-        onBack={() => go("frames", -1)}
-        primaryLabel="Add stickers"
-        onPrimary={() => go("editor", 1)}
+        onBack={() => go(template ? "review" : "frames", -1)}
+        primaryLabel={template ? "Preview" : "Add stickers"}
+        onPrimary={() => go(template ? "preview" : "editor", 1)}
       />
     </div>
   );

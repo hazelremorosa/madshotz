@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { useSettings } from "@/store/settings";
+import { overlayOpts, useSettings } from "@/store/settings";
 import { activeFilterCss } from "@/data/filters";
 import { STICKER_PACKS } from "@/data/stickers";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
-import { overlaySrc } from "@/data/overlays";
+import { resolveOverlaySrc } from "@/data/overlays";
 import type { StickerPack } from "@/types";
 import { Receipt } from "@/components/Receipt";
 import { EditorItem } from "@/components/EditorItem";
@@ -28,6 +28,7 @@ export function EditorScreen() {
   const photoShape = useSession((s) => s.photoShape);
   const overlayId = useSession((s) => s.overlayId);
   const customStickers = useSettings((s) => s.customStickers);
+  const customFrames = useSettings((s) => s.customFrames);
   const items = useSession((s) => s.items);
   const selectedId = useSession((s) => s.selectedItemId);
   const addItem = useSession((s) => s.addItem);
@@ -59,7 +60,7 @@ export function EditorScreen() {
 
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
-  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
+  const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 

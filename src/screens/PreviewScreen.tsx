@@ -1,9 +1,12 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { overlayOpts, useSettings } from "@/store/settings";
+import { activeTemplate } from "@/store/templates";
 import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
-import { overlaySrc } from "@/data/overlays";
+import { resolveOverlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
+import { TemplateComposite } from "@/components/TemplateComposite";
 import { staticItems } from "@/components/StaticItems";
 import { Button } from "@/components/ui/Button";
 import { formatDate } from "@/lib/date";
@@ -19,11 +22,13 @@ export function PreviewScreen() {
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
   const overlayId = useSession((s) => s.overlayId);
+  const customFrames = useSettings((s) => s.customFrames);
   const items = useSession((s) => s.items);
   const go = useSession((s) => s.go);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
-  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
+  const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
+  const template = activeTemplate();
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
@@ -34,7 +39,7 @@ export function PreviewScreen() {
         animate={{ opacity: 1 }}
         className="font-mono text-xs uppercase tracking-[0.4em] text-cocoa/50"
       >
-        Your receipt
+        {template ? "Your photo" : "Your receipt"}
       </motion.p>
 
       <div className="flex min-h-0 w-full flex-1 items-center justify-center">
@@ -47,19 +52,28 @@ export function PreviewScreen() {
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0.12}
         >
-          <Receipt
-            layout={layout}
-            photos={photos}
-            filterCss={filterCss}
-            frameBg={frameBg}
-            shape={photoShape}
-            frameOverlay={frameOverlay}
-            theme={theme}
-            code={code}
-            dateLabel={formatDate()}
-            className={fit}
-            overlay={staticItems(items)}
-          />
+          {template ? (
+            <TemplateComposite
+              template={template}
+              photos={photos}
+              filterCss={filterCss}
+              className="max-h-full w-full shadow-float"
+            />
+          ) : (
+            <Receipt
+              layout={layout}
+              photos={photos}
+              filterCss={filterCss}
+              frameBg={frameBg}
+              shape={photoShape}
+              frameOverlay={frameOverlay}
+              theme={theme}
+              code={code}
+              dateLabel={formatDate()}
+              className={fit}
+              overlay={staticItems(items)}
+            />
+          )}
         </motion.div>
       </div>
 
@@ -69,8 +83,8 @@ export function PreviewScreen() {
         transition={{ delay: 0.6 }}
         className="flex items-center gap-3"
       >
-        <Button variant="ghost" onClick={() => go("editor", -1)}>
-          ← Edit
+        <Button variant="ghost" onClick={() => go(template ? "filter" : "editor", -1)}>
+          ← {template ? "Filter" : "Edit"}
         </Button>
         <Button variant="primary" onClick={() => go("printing", 1)} className="px-10">
           Print it →

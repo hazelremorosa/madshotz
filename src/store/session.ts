@@ -9,11 +9,11 @@ import type {
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_FRAME_STYLE } from "@/data/frames";
-import { DEFAULT_OVERLAY } from "@/data/overlays";
 import {
   applyBrandVars,
   effectiveBrand,
   startingLayout,
+  startingOverlay,
   useSettings,
 } from "@/store/settings";
 
@@ -100,7 +100,7 @@ export const useSession = create<SessionState>((set, get) => ({
   beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: "sharp",
-  overlayId: DEFAULT_OVERLAY.id,
+  overlayId: startingOverlay(),
 
   photos: [],
   retakeIndex: null,
@@ -185,7 +185,7 @@ export const useSession = create<SessionState>((set, get) => ({
       beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: "rounded",
-      overlayId: DEFAULT_OVERLAY.id,
+      overlayId: startingOverlay(),
       // Host settings (countdown, sound default, timings) live in the settings
       // store and are untouched by a session reset.
       soundOn: useSettings.getState().soundOn,
