@@ -42,3 +42,61 @@ export const FILTERS: FilterDef[] = [
 
 export const FILTER_BY_ID = (id: string): FilterDef =>
   FILTERS.find((f) => f.id === id) ?? FILTERS[0];
+
+/**
+ * Subtle skin-smoothing look, layered on top of the chosen filter when the
+ * Beauty toggle is on. A soft micro-blur plus a gentle brightness/contrast lift
+ * reads as smoother skin without a heavyweight per-pixel bilateral pass — and it
+ * bakes into the composite for free since the whole pipeline uses CSS filters.
+ */
+export const BEAUTY_CSS = "blur(0.7px) brightness(1.04) saturate(1.05) contrast(0.98)";
+
+/** Identity value each CSS filter function collapses to at intensity 0. */
+const FILTER_IDENTITY: Record<string, number> = {
+  saturate: 1,
+  contrast: 1,
+  brightness: 1,
+  opacity: 1,
+  sepia: 0,
+  grayscale: 0,
+  invert: 0,
+  blur: 0,
+  "hue-rotate": 0,
+};
+
+/**
+ * Dials a filter up or down by lerping every function value toward its identity.
+ * intensity 1 → the filter as authored, 0 → no visible effect. Unknown functions
+ * are passed through untouched.
+ */
+export function scaleFilterCss(css: string, intensity: number): string {
+  if (!css || css === "none") return "none";
+  const t = Math.max(0, Math.min(1, intensity));
+  if (t >= 1) return css;
+  return css.replace(
+    /([a-z-]+)\(\s*(-?[\d.]+)([a-z%]*)\s*\)/gi,
+    (whole, fn: string, num: string, unit: string) => {
+      const identity = FILTER_IDENTITY[fn.toLowerCase()];
+      if (identity === undefined) return whole;
+      const scaled = identity + (parseFloat(num) - identity) * t;
+      return `${fn}(${Math.round(scaled * 1000) / 1000}${unit})`;
+    },
+  );
+}
+
+/**
+ * The single source of truth for the CSS filter applied to the live camera,
+ * every preview, and the exported composite. Combines the chosen filter (scaled
+ * by intensity) with the optional beauty layer.
+ */
+export function activeFilterCss(
+  id: string,
+  intensity = 1,
+  beauty = false,
+): string {
+  const base = scaleFilterCss(FILTER_BY_ID(id).css, intensity);
+  const parts: string[] = [];
+  if (base && base !== "none") parts.push(base);
+  if (beauty) parts.push(BEAUTY_CSS);
+  return parts.length ? parts.join(" ") : "none";
+}

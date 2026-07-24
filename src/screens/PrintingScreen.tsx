@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
+import { overlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
 import { staticItems } from "@/components/StaticItems";
 import { composeReceipt } from "@/lib/compose";
@@ -24,14 +25,18 @@ export function PrintingScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
+  const overlayId = useSession((s) => s.overlayId);
   const items = useSession((s) => s.items);
   const setComposite = useSession((s) => s.setComposite);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameStyle = FRAME_STYLE_BY_ID(frameStyleId);
+  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
 
   const [caption, setCaption] = useState(0);
 
@@ -49,6 +54,7 @@ export function PrintingScreen() {
       theme,
       code,
       dateLabel: formatDate(),
+      overlaySvg: frameOverlay,
     })
       .then((url) => alive && setComposite(url))
       .catch(() => undefined);
@@ -86,6 +92,7 @@ export function PrintingScreen() {
               filterCss={filterCss}
               frameBg={frameStyle.bg}
               shape={photoShape}
+              frameOverlay={frameOverlay}
               theme={theme}
               code={code}
               dateLabel={formatDate()}

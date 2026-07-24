@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
 import { AnimatedQR } from "@/components/AnimatedQR";
 import { Confetti } from "@/components/Confetti";
 import { Button } from "@/components/ui/Button";
@@ -8,17 +9,17 @@ import { DeliveryService } from "@/lib/delivery";
 import { qrMatrix } from "@/lib/qr";
 import { sfx } from "@/lib/sound";
 
-const RESET_SECONDS = 25;
-
 export function QRScreen() {
   const code = useSession((s) => s.sessionCode);
   const composite = useSession((s) => s.composite);
   const soundOn = useSession((s) => s.soundOn);
   const reset = useSession((s) => s.reset);
+  /** Host setting (Admin → Sound & timing). Read once so it can't shift mid-countdown. */
+  const [resetSeconds] = useState(() => useSettings.getState().qrResetSec);
 
   const [matrix, setMatrix] = useState<boolean[][] | null>(null);
   const [url, setUrl] = useState("");
-  const [seconds, setSeconds] = useState(RESET_SECONDS);
+  const [seconds, setSeconds] = useState(resetSeconds);
   const [toast, setToast] = useState<string | null>(null);
   const celebrated = useRef(false);
 
@@ -154,7 +155,7 @@ export function QRScreen() {
               stroke="rgb(var(--brand-a))"
               strokeWidth="3"
               strokeDasharray={100}
-              strokeDashoffset={100 - (seconds / RESET_SECONDS) * 100}
+              strokeDashoffset={100 - (seconds / resetSeconds) * 100}
               pathLength={100}
               style={{ transition: "stroke-dashoffset 1s linear" }}
             />

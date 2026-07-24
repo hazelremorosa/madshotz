@@ -1,6 +1,8 @@
+import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { LAYOUTS } from "@/data/layouts";
 import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
 import { FrameStack } from "@/components/FrameStack";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { CheckBadge } from "@/components/ui/CheckBadge";
@@ -12,6 +14,18 @@ export function LayoutScreen() {
   const setLayout = useSession((s) => s.setLayout);
   const go = useSession((s) => s.go);
   const soundOn = useSession((s) => s.soundOn);
+  const enabledIds = useSettings((s) => s.enabledLayoutIds);
+
+  // Only what the host enabled in Admin → Layouts (never an empty list).
+  const shown = useMemo(() => {
+    const options = LAYOUTS.filter((l) => enabledIds.includes(l.id));
+    return options.length ? options : LAYOUTS;
+  }, [enabledIds]);
+
+  // If the host just disabled the layout the session was sitting on, move off it.
+  useEffect(() => {
+    if (!shown.some((l) => l.id === layout.id)) setLayout(shown[0]);
+  }, [shown, layout.id, setLayout]);
 
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
@@ -23,7 +37,7 @@ export function LayoutScreen() {
       </div>
 
       <div className="no-bar mt-4 grid flex-1 grid-cols-2 content-start gap-4 overflow-y-auto px-6 pb-40 pt-2">
-        {LAYOUTS.map((l, i) => {
+        {shown.map((l, i) => {
           const selected = layout.id === l.id;
           return (
             <motion.button

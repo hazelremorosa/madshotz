@@ -3,6 +3,7 @@ import type { CapturedPhoto, LayoutDef, PhotoShape, Theme } from "@/types";
 import { FrameStack } from "@/components/FrameStack";
 import { MiniQR } from "@/components/MiniQR";
 import { DeliveryService } from "@/lib/delivery";
+import { receiptFooter, receiptHeader, useSettings } from "@/store/settings";
 import { cn } from "@/lib/cn";
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   /** CSS background for the mat/frame behind the photos. */
   frameBg?: string;
   shape?: PhotoShape;
+  /** Decorative frame overlay SVG data URI, sized to the paper (null = none). */
+  frameOverlay?: string | null;
   /** Interactive overlay (editor) or static items (preview). */
   overlay?: ReactNode;
   className?: string;
@@ -48,11 +51,16 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
     activeIndex,
     frameBg,
     shape = "rounded",
+    frameOverlay,
     overlay,
     className,
   },
   ref,
 ) {
+  // Event branding (Admin → Event branding); falls back to the house wordmark.
+  const header = receiptHeader(useSettings((s) => s.eventName));
+  const footer = receiptFooter(useSettings((s) => s.footerNote));
+
   return (
     <div
       ref={ref}
@@ -68,7 +76,7 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
       {/* Header — subtle wordmark */}
       <div className="px-[6cqw] pt-[5cqw] text-center">
         <div className="font-mono text-[3.2cqw] font-semibold uppercase tracking-[0.4em] text-paper-ink/60">
-          MAD SHOTS
+          {header}
         </div>
         <div className="mt-[2.5cqw] border-t border-dashed border-paper-ink/30" />
       </div>
@@ -100,9 +108,20 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
           NO. {code} · {dateLabel}
         </div>
         <div className="mt-[1cqw] font-mono text-[3cqw] tracking-widest text-paper-ink/40">
-          SCAN FOR YOUR PHOTOS ♥
+          {footer}
         </div>
       </div>
+
+      {/* Decorative frame overlay — full paper, above photos, below stickers. */}
+      {frameOverlay && (
+        <img
+          src={frameOverlay}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full rounded-[6px]"
+        />
+      )}
 
       {/* Decoration overlay — normalized to full paper (matches compose). */}
       <div className="absolute inset-0 overflow-hidden rounded-[6px]">

@@ -8,14 +8,18 @@ import type {
   Theme,
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
-import { DEFAULT_LAYOUT } from "@/data/layouts";
 import { DEFAULT_FRAME_STYLE } from "@/data/frames";
+import { DEFAULT_OVERLAY } from "@/data/overlays";
+import {
+  applyBrandVars,
+  effectiveBrand,
+  startingLayout,
+  useSettings,
+} from "@/store/settings";
 
+/** Paints the brand hues — the host's Admin palette wins over the theme's. */
 function applyBrand(theme: Theme) {
-  const root = document.documentElement;
-  root.style.setProperty("--brand-a", theme.brand[0]);
-  root.style.setProperty("--brand-b", theme.brand[1]);
-  root.style.setProperty("--brand-c", theme.brand[2]);
+  applyBrandVars(effectiveBrand(theme));
 }
 
 function makeCode(): string {
@@ -38,8 +42,14 @@ export interface SessionState {
   theme: Theme;
   layout: LayoutDef;
   filterId: string;
+  /** Filter strength, 0..1 (1 = filter as authored). */
+  filterIntensity: number;
+  /** Subtle skin-smoothing layered on top of the chosen filter. */
+  beautyOn: boolean;
   frameStyleId: string;
   photoShape: PhotoShape;
+  /** Decorative frame overlay laid over the whole receipt ("none" = off). */
+  overlayId: string;
 
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
@@ -58,8 +68,11 @@ export interface SessionState {
   setTheme: (theme: Theme) => void;
   setLayout: (layout: LayoutDef) => void;
   setFilter: (id: string) => void;
+  setFilterIntensity: (intensity: number) => void;
+  toggleBeauty: () => void;
   setFrameStyle: (id: string) => void;
   setPhotoShape: (shape: PhotoShape) => void;
+  setOverlay: (id: string) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -81,10 +94,13 @@ export const useSession = create<SessionState>((set, get) => ({
   direction: 1,
 
   theme: DEFAULT_THEME,
-  layout: DEFAULT_LAYOUT,
+  layout: startingLayout(),
   filterId: DEFAULT_THEME.defaultFilter,
+  filterIntensity: 1,
+  beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: "sharp",
+  overlayId: DEFAULT_OVERLAY.id,
 
   photos: [],
   retakeIndex: null,
@@ -94,7 +110,8 @@ export const useSession = create<SessionState>((set, get) => ({
 
   composite: null,
 
-  soundOn: false,
+  // Sound starts wherever the host set it in Admin; guests can still toggle it.
+  soundOn: useSettings.getState().soundOn,
   sessionCode: makeCode(),
 
   go: (screen, direction = 1) => set({ screen, direction }),
@@ -110,8 +127,12 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   setFilter: (id) => set({ filterId: id }),
+  setFilterIntensity: (intensity) =>
+    set({ filterIntensity: Math.max(0, Math.min(1, intensity)) }),
+  toggleBeauty: () => set((s) => ({ beautyOn: !s.beautyOn })),
   setFrameStyle: (id) => set({ frameStyleId: id }),
   setPhotoShape: (shape) => set({ photoShape: shape }),
+  setOverlay: (id) => set({ overlayId: id }),
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -158,10 +179,16 @@ export const useSession = create<SessionState>((set, get) => ({
       screen: "welcome",
       direction: -1,
       theme: DEFAULT_THEME,
-      layout: DEFAULT_LAYOUT,
+      layout: startingLayout(),
       filterId: DEFAULT_THEME.defaultFilter,
+      filterIntensity: 1,
+      beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: "rounded",
+      overlayId: DEFAULT_OVERLAY.id,
+      // Host settings (countdown, sound default, timings) live in the settings
+      // store and are untouched by a session reset.
+      soundOn: useSettings.getState().soundOn,
       photos: [],
       retakeIndex: null,
       items: [],

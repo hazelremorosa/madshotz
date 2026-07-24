@@ -8,6 +8,7 @@ import type {
 } from "@/types";
 import { qrMatrixSync } from "@/lib/qr";
 import { DeliveryService } from "@/lib/delivery";
+import { receiptFooter, receiptHeader } from "@/store/settings";
 
 interface ComposeOpts {
   photos: CapturedPhoto[];
@@ -19,6 +20,8 @@ interface ComposeOpts {
   theme: Theme;
   code: string;
   dateLabel: string;
+  /** Decorative frame overlay SVG data URI, sized to the paper (null = none). */
+  overlaySvg?: string | null;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -218,8 +221,17 @@ function frameRects(
 
 /** Renders the receipt composite to a PNG data URL. */
 export async function composeReceipt(opts: ComposeOpts): Promise<string> {
-  const { photos, layout, filterCss, frameStyle, shape, items, code, dateLabel } =
-    opts;
+  const {
+    photos,
+    layout,
+    filterCss,
+    frameStyle,
+    shape,
+    items,
+    code,
+    dateLabel,
+    overlaySvg,
+  } = opts;
   const W = 760;
   const H = Math.round(W / layout.paperAspect);
   const canvas = document.createElement("canvas");
@@ -248,10 +260,16 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   const ink = "#4a3a44";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  // Subtle wordmark.
-  ctx.font = `600 ${Math.round(W * 0.033)}px ui-monospace, monospace`;
+  // Subtle wordmark — the host's event name, or the house brand.
   ctx.fillStyle = "#9c8794";
-  ctx.fillText("M A D   S H O T S", W / 2, Math.round(W * 0.1));
+  fitText(
+    ctx,
+    letterspaced(receiptHeader()),
+    W / 2,
+    Math.round(W * 0.1),
+    W - pad * 2,
+    Math.round(W * 0.033),
+  );
   dashed(ctx, pad, headerH - 10, W - pad, headerH - 10);
 
   // Frame mat.
@@ -276,6 +294,23 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
     ctx.restore();
   }
 
+  // Decorative frame overlay — full paper, above photos, below decorations.
+  if (overlaySvg) {
+    const ov = await loadImage(overlaySvg).catch(() => null);
+    if (ov) ctx.drawImage(ov, 0, 0, W, H);
+  }
+
+  // Preload host-uploaded image stickers so the decoration loop stays synchronous.
+  const itemImages = new Map<string, HTMLImageElement>();
+  await Promise.all(
+    items
+      .filter((it) => it.kind === "image")
+      .map(async (it) => {
+        const img = await loadImage(it.content).catch(() => null);
+        if (img) itemImages.set(it.id, img);
+      }),
+  );
+
   // Decorations.
   for (const it of [...items].sort((a, b) => a.z - b.z)) {
     ctx.save();
@@ -287,6 +322,14 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(it.content, 0, 0);
+    } else if (it.kind === "image") {
+      const img = itemImages.get(it.id);
+      if (img) {
+        // Matches the DOM sizing (16cqw width), aspect preserved.
+        const dw = W * 0.16 * it.scale;
+        const dh = dw * (img.height / (img.width || 1));
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+      }
     } else {
       const size = W * 0.05 * it.scale;
       ctx.font = `800 ${size}px system-ui, sans-serif`;
@@ -305,23 +348,61 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
   const n = matrix.length;
   const qrSize = Math.round(W * 0.14);
   const qx = Math.round((W - qrSize) / 2);
-  const qy = fy + Math.round(W * 0.04);
+  const qy = fy + Math.round(W * 0.025);
   const cell = qrSize / n;
   ctx.fillStyle = ink;
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++)
       if (matrix[r][c]) ctx.fillRect(qx + c * cell, qy + r * cell, cell + 0.6, cell + 0.6);
-  ctx.font = `600 ${Math.round(W * 0.028)}px ui-monospace, monospace`;
   ctx.fillStyle = "#9c8794";
   ctx.textAlign = "center";
-  ctx.fillText(`NO. ${code}  ·  ${dateLabel}`, W / 2, qy + qrSize + Math.round(W * 0.055));
-  ctx.fillText("SCAN FOR YOUR PHOTOS ♥", W / 2, qy + qrSize + Math.round(W * 0.095));
+  const small = Math.round(W * 0.028);
+  ctx.font = `600 ${small}px ui-monospace, monospace`;
+  // Both lines sit inside the footer band — the last one used to land a couple
+  // of pixels below the canvas and get clipped.
+  ctx.fillText(`NO. ${code}  ·  ${dateLabel}`, W / 2, qy + qrSize + Math.round(W * 0.042));
+  fitText(
+    ctx,
+    receiptFooter(),
+    W / 2,
+    qy + qrSize + Math.round(W * 0.075),
+    W - pad * 2,
+    small,
+  );
 
   // JPEG keeps the stored/uploaded file small (~5-10x smaller than PNG). The
   // paper background is opaque so no transparency is lost. Lower QUALITY for even
   // smaller files (0.7 ≈ tiny, 0.9 ≈ crisp). WebP is smaller still if you prefer.
   const QUALITY = 0.82;
   return canvas.toDataURL("image/jpeg", QUALITY);
+}
+
+/** "MAD SHOTS" → "M A D   S H O T S" (the receipt's tracked-out wordmark). */
+function letterspaced(text: string): string {
+  return text.split("").join(" ");
+}
+
+/**
+ * Draws monospaced receipt text centered at (x, y), shrinking the font until it
+ * fits `maxWidth` — a long event name never runs off the paper.
+ */
+function fitText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  size: number,
+) {
+  let px = size;
+  const font = (p: number) => `600 ${p}px ui-monospace, monospace`;
+  ctx.font = font(px);
+  while (ctx.measureText(text).width > maxWidth && px > size * 0.5) {
+    px -= 1;
+    ctx.font = font(px);
+  }
+  ctx.fillText(text, x, y);
+  ctx.font = font(size);
 }
 
 function dashed(

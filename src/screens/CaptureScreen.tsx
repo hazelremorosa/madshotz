@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useCamera } from "@/lib/camera";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { COUNTDOWN_OPTIONS, useSettings } from "@/store/settings";
+import { activeFilterCss } from "@/data/filters";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/cn";
+
+/** How long the white fill-light stays up before the shutter fires. */
+const FILL_LEAD_MS = 260;
 
 export function CaptureScreen() {
   const { videoRef, status, capture } = useCamera();
@@ -12,17 +17,27 @@ export function CaptureScreen() {
   const photos = useSession((s) => s.photos);
   const retakeIndex = useSession((s) => s.retakeIndex);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const soundOn = useSession((s) => s.soundOn);
   const addPhoto = useSession((s) => s.addPhoto);
   const go = useSession((s) => s.go);
 
+  // Host settings (Admin → Camera / Capture).
+  const countdownLength = useSettings((s) => s.countdownLength);
+  const setCountdownLength = (n: number) =>
+    useSettings.getState().set("countdownLength", n);
+  const guestCanSetCountdown = useSettings((s) => s.guestCanSetCountdown);
+  const mirrorPreview = useSettings((s) => s.mirrorPreview);
+
   const [count, setCount] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
+  const [fill, setFill] = useState(false);
   const [burst, setBurst] = useState(0);
   const [phase, setPhase] = useState("Get ready…");
   const [hasStarted, setHasStarted] = useState(false);
   const shake = useAnimationControls();
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
 
   const isRetake = retakeIndex !== null;
   const cancelled = useRef(false);
@@ -55,8 +70,19 @@ export function CaptureScreen() {
     started.current = true;
     setHasStarted(true);
 
-    const fire = () => {
+    const fire = async () => {
+      // Fill light: blast the whole screen white and give the panel a moment to
+      // actually brighten before the shutter fires.
+      if (useSettings.getState().flashFill) {
+        setFill(true);
+        await wait(FILL_LEAD_MS);
+        if (cancelled.current) {
+          setFill(false);
+          return;
+        }
+      }
       const url = capture();
+      setFill(false);
       setFlash(true);
       window.setTimeout(() => setFlash(false), 130);
       shake.start({ x: [0, -6, 5, -3, 0], transition: { duration: 0.4 } });
@@ -70,6 +96,7 @@ export function CaptureScreen() {
       const total = st0.layout.shots;
       const retake = st0.retakeIndex !== null;
       const todo = retake ? 1 : total - st0.photos.length;
+      const seconds = useSettings.getState().countdownLength;
 
       setPhase(retake ? "Let's redo that one!" : "Get ready…");
       await wait(1000);
@@ -80,15 +107,16 @@ export function CaptureScreen() {
           ? (st0.retakeIndex ?? 0) + 1
           : useSession.getState().photos.length + 1;
         setPhase(`Frame ${frameNo} of ${total}`);
-        for (let n = 3; n > 0; n--) {
+        for (let n = seconds; n > 0; n--) {
           if (cancelled.current) return;
           setCount(n);
           if (soundOn) sfx.tick();
-          await wait(800);
+          await wait(1000);
         }
         if (cancelled.current) return;
         setCount(null);
-        fire();
+        await fire();
+        if (cancelled.current) return;
         setPhase(["Cute! ✨", "Adorable!", "Love it! 💖", "Perfect!"][s % 4]);
         await wait(900);
       }
@@ -125,7 +153,10 @@ export function CaptureScreen() {
             autoPlay
             playsInline
             muted
-            className="h-full w-full scale-x-[-1] object-cover"
+            className={cn(
+              "h-full w-full object-cover",
+              mirrorPreview && "scale-x-[-1]",
+            )}
             style={{ filter: filterCss === "none" ? undefined : filterCss }}
           />
         )}
@@ -201,6 +232,30 @@ export function CaptureScreen() {
 
       {!hasStarted ? (
         <div className="flex flex-col items-center gap-3">
+          {/* Countdown length — a host setting the host may also expose here. */}
+          {guestCanSetCountdown && (
+            <div className="glass flex items-center gap-1 rounded-full p-1 shadow-glass">
+              <span className="px-2 text-sm" aria-hidden>
+                ⏱️
+              </span>
+              {COUNTDOWN_OPTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setCountdownLength(s)}
+                  aria-pressed={countdownLength === s}
+                  className={cn(
+                    "min-w-[3rem] rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                    countdownLength === s
+                      ? "brand-fill text-white shadow-bloom"
+                      : "text-cocoa/60",
+                  )}
+                >
+                  {s}s
+                </button>
+              ))}
+            </div>
+          )}
           <motion.button
             type="button"
             onClick={startCapture}
@@ -236,6 +291,14 @@ export function CaptureScreen() {
       >
         {isRetake ? "Cancel" : "Back"}
       </button>
+
+      {/* Fill light — portalled to <body> so it covers the entire display,
+          not just the booth card. */}
+      {fill &&
+        createPortal(
+          <div className="pointer-events-none fixed inset-0 z-[95] bg-white" />,
+          document.body,
+        )}
     </div>
   );
 }

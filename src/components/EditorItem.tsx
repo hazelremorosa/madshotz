@@ -78,8 +78,13 @@ export function EditorItem({ item, paperRef, selected }: Props) {
     action.current = null;
   };
 
+  const isImage = item.kind === "image";
   const fontSize =
     item.kind === "sticker" ? `${12 * item.scale}cqw` : `${5 * item.scale}cqw`;
+  // Image stickers are sized by width; emoji/text by font size.
+  const bodyStyle = isImage
+    ? { width: `${16 * item.scale}cqw` }
+    : { fontSize };
 
   return (
     <motion.div
@@ -104,10 +109,17 @@ export function EditorItem({ item, paperRef, selected }: Props) {
           "relative cursor-grab whitespace-nowrap px-1 leading-none active:cursor-grabbing",
           selected && "rounded-md outline-dashed outline-2 outline-offset-4 outline-[rgb(var(--brand-a))]",
         )}
-        style={{ fontSize }}
+        style={bodyStyle}
       >
         {item.kind === "text" ? (
           <span className="font-extrabold text-paper-ink">{item.content}</span>
+        ) : isImage ? (
+          <img
+            src={item.content}
+            alt=""
+            draggable={false}
+            className="block w-full select-none"
+          />
         ) : (
           <span>{item.content}</span>
         )}

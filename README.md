@@ -58,26 +58,36 @@ animates `transform`/`opacity`/`filter` only, and `prefers-reduced-motion` is ho
 ```
 src/
   store/session.ts     Zustand state machine — the single source of truth for the flow
+  store/settings.ts    Host settings (Admin panel), persisted to localStorage
   types.ts             Domain model
   data/                themes · layouts · filters catalogs (add entries here)
   lib/
-    camera.ts          shared getUserMedia stream + capture()
+    camera.ts          shared getUserMedia stream + device picker + capture()
     compose.ts         renders the final receipt PNG (matches on-screen editor)
-    delivery.ts        DeliveryService.publish() — STUB, swap for a real uploader
+    delivery.ts        DeliveryService.publish() — Cloudflare R2 + Worker
+    kiosk.ts           fullscreen + screen wake lock primitives
     qr.ts · sound.ts · date.ts · cn.ts
+  hooks/
+    useIdleReset.ts    privacy timeout back to Welcome
+    useKioskLockdown.ts fullscreen guard + input/navigation guards
   components/
     shell/             AmbientBackground · ParticleField · RippleLayer · ProgressRail · ActionBar
+    admin/             AdminRoot (hidden entry) · AdminPinPad · shared controls
     Receipt.tsx        the hero object (paper + header + FrameStack + footer + overlay)
     FrameStack.tsx     arranges captured frames per layout
     EditorItem.tsx     draggable / resizable / rotatable sticker & text
     AnimatedQR · Confetti · Logo · ui/Button
-  screens/             one component per beat (Boot → … → QR)
-  App.tsx              shell + AnimatePresence screen transitions + idle reset
+  screens/             one component per beat (Boot → … → QR) + AdminPanel
+  App.tsx              shell + screen transitions + idle reset + kiosk lockdown
 ```
 
 **State flow:** every screen reads/writes `useSession`. `go(screen, direction)`
 drives directional transitions; `reset()` wipes all guest data and returns to
-Welcome (also fired by a 90s idle timeout for privacy).
+Welcome (also fired by the idle timeout for privacy).
+
+**Two stores, on purpose:** `useSession` is per-guest and is wiped by `reset()`;
+`useSettings` is the host's booth config and survives resets, reloads and power
+cycles (localStorage key `madshots.settings.v1`).
 
 ### Extending
 
@@ -87,6 +97,46 @@ Welcome (also fired by a 90s idle timeout for privacy).
   `src/lib/delivery.ts` uploads the composite to a Cloudflare Worker (R2) and the QR points to it.
 - **Real printer** → the `PrintingScreen` animation is cosmetic; send
   `useSession.getState().composite` (a PNG data URL) to your print pipeline there.
+
+---
+
+## Admin panel & kiosk lockdown
+
+**Getting in:** tap the **top-left corner 5 times** (within 3 seconds), then enter the
+PIN — **`1234` by default, change it in Admin → Security**. Five wrong tries locks the pad
+for 30 seconds. The hotspot is invisible to guests; a faint row of dots confirms taps are
+registering from the 2nd tap on.
+
+Two shortcuts for setup on a laptop, where a fullscreen kiosk gives you no address bar:
+
+- **`Ctrl+Alt+A`** — opens the same PIN prompt.
+- **`?admin`** — e.g. `http://localhost:5173/?admin` opens the PIN prompt on load. The
+  param is stripped from the URL once used, so a reload won't land back here. The PIN still
+  guards the panel, but prefer the corner tap at a live event — a URL is easy to shoulder-surf.
+
+Everything saves the moment you change it, and survives reloads:
+
+| Section | What the host controls |
+|---|---|
+| **Camera** | Which video input to shoot with (live preview), mirror on/off |
+| **Capture** | Countdown 3/5/10s, whether guests may change it, screen flash fill light |
+| **Layouts** | Which layouts are offered, and which one a session starts on |
+| **Filters** | Which looks appear in the filter reel |
+| **Event branding** | Receipt header + footer line + brand palette — baked into the exported photo too |
+| **Sound & timing** | Default sound state, idle reset (45s–5m), QR auto-restart (15–90s) |
+| **Kiosk lockdown** | Kiosk mode, keep-screen-awake, enter fullscreen now |
+| **Security** | Change the PIN |
+| **Status / Danger** | Delivery + wake-lock support, restart session, factory reset |
+
+**Kiosk mode** locks the booth to the app: it re-enters fullscreen on the next tap
+whenever the browser drops out, and blocks the context menu, pinch-zoom, text
+selection, drag, browser shortcuts (F5, F11, F12, Ctrl+R/W/T/N/P/S…), back-navigation
+and accidental page closes. Those input guards **stand down while the Admin panel is
+open** so the host can type normally. **Keep the screen awake** holds a Wake Lock
+(Chrome/Edge/Android; iOS Safari has none — use the OS display settings there).
+
+> iPhone Safari has no Fullscreen API. Install the PWA to the home screen instead —
+> it launches chrome-less, and the rest of the lockdown still applies.
 
 ---
 

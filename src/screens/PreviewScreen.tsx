@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
+import { overlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
+import { staticItems } from "@/components/StaticItems";
 import { Button } from "@/components/ui/Button";
 import { formatDate } from "@/lib/date";
 
@@ -12,12 +14,16 @@ export function PreviewScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
+  const overlayId = useSession((s) => s.overlayId);
   const items = useSession((s) => s.items);
   const go = useSession((s) => s.go);
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
@@ -47,32 +53,12 @@ export function PreviewScreen() {
             filterCss={filterCss}
             frameBg={frameBg}
             shape={photoShape}
+            frameOverlay={frameOverlay}
             theme={theme}
             code={code}
             dateLabel={formatDate()}
             className={fit}
-            overlay={items
-            .slice()
-            .sort((a, b) => a.z - b.z)
-            .map((it) => (
-              <span
-                key={it.id}
-                className="absolute whitespace-nowrap leading-none"
-                style={{
-                  left: `${it.x * 100}%`,
-                  top: `${it.y * 100}%`,
-                  transform: `translate(-50%, -50%) rotate(${it.rotation}deg)`,
-                  fontSize:
-                    it.kind === "sticker"
-                      ? `${12 * it.scale}cqw`
-                      : `${5 * it.scale}cqw`,
-                  fontWeight: it.kind === "text" ? 800 : undefined,
-                  color: it.kind === "text" ? "#211d17" : undefined,
-                }}
-              >
-                {it.content}
-              </span>
-            ))}
+            overlay={staticItems(items)}
           />
         </motion.div>
       </div>

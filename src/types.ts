@@ -70,12 +70,23 @@ export interface Sticker {
   label: string;
 }
 
-export type PlacedKind = "sticker" | "text";
+/** A named, tabbed set of stickers in the editor (themed or seasonal). */
+export interface StickerPack {
+  id: string;
+  name: string;
+  /** Emoji shown on the pack's tab. */
+  tab: string;
+  /** Seasonal packs are surfaced with a subtle badge. */
+  seasonal?: boolean;
+  glyphs: string[];
+}
+
+export type PlacedKind = "sticker" | "text" | "image";
 
 export interface PlacedItem {
   id: string;
   kind: PlacedKind;
-  /** Sticker glyph or the text content. */
+  /** Emoji glyph (sticker), text content (text), or a PNG data URL (image). */
   content: string;
   /** Normalized center position on the paper (0..1). */
   x: number;
