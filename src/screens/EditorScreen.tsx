@@ -1,8 +1,10 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
+import { STICKER_PACKS } from "@/data/stickers";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
+import type { StickerPack } from "@/types";
 import { Receipt } from "@/components/Receipt";
 import { EditorItem } from "@/components/EditorItem";
 import { ActionBar } from "@/components/shell/ActionBar";
@@ -18,6 +20,8 @@ export function EditorScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
   const items = useSession((s) => s.items);
@@ -34,7 +38,19 @@ export function EditorScreen() {
   const [tab, setTab] = useState<Tab>("stickers");
   const [sheet, setSheet] = useState(false);
   const [draft, setDraft] = useState("");
-  const filterCss = FILTER_BY_ID(filterId).css;
+
+  // A "Featured" pack from the active theme, followed by the shared library.
+  const packs = useMemo<StickerPack[]>(
+    () => [
+      { id: "featured", name: "Featured", tab: theme.emoji, glyphs: theme.stickers },
+      ...STICKER_PACKS,
+    ],
+    [theme],
+  );
+  const [packId, setPackId] = useState("featured");
+  const activePack = packs.find((p) => p.id === packId) ?? packs[0];
+
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
@@ -148,18 +164,55 @@ export function EditorScreen() {
           </div>
 
           {tab === "stickers" ? (
-            <div className="no-bar flex gap-2 overflow-x-auto pb-1">
-              {theme.stickers.map((g, i) => (
-                <motion.button
-                  key={i}
-                  type="button"
-                  whileTap={{ scale: 0.85 }}
-                  onClick={() => addSticker(g)}
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-cocoa/5 text-3xl"
-                >
-                  {g}
-                </motion.button>
-              ))}
+            <div className="flex flex-col gap-2">
+              {/* Pack selector */}
+              <div className="no-bar flex gap-1.5 overflow-x-auto pb-0.5">
+                {packs.map((p) => {
+                  const on = p.id === packId;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPackId(p.id)}
+                      aria-pressed={on}
+                      title={p.name}
+                      className={cn(
+                        "relative flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-lg transition-colors",
+                        on ? "brand-fill" : "bg-cocoa/5",
+                      )}
+                    >
+                      <span>{p.tab}</span>
+                      <span
+                        className={cn(
+                          "text-[11px] font-semibold",
+                          on ? "text-white" : "text-cocoa/60",
+                        )}
+                      >
+                        {p.name}
+                      </span>
+                      {p.seasonal && (
+                        <span className="absolute -right-0.5 -top-0.5 text-[9px]">
+                          ✦
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Glyphs for the active pack */}
+              <div className="no-bar flex gap-2 overflow-x-auto pb-1">
+                {activePack.glyphs.map((g, i) => (
+                  <motion.button
+                    key={`${activePack.id}-${i}`}
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => addSticker(g)}
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-cocoa/5 text-3xl"
+                  >
+                    {g}
+                  </motion.button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

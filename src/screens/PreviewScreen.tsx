@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { Receipt } from "@/components/Receipt";
 import { Button } from "@/components/ui/Button";
@@ -12,11 +12,13 @@ export function PreviewScreen() {
   const theme = useSession((s) => s.theme);
   const code = useSession((s) => s.sessionCode);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
   const items = useSession((s) => s.items);
   const go = useSession((s) => s.go);
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";

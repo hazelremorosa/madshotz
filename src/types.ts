@@ -70,6 +70,17 @@ export interface Sticker {
   label: string;
 }
 
+/** A named, tabbed set of stickers in the editor (themed or seasonal). */
+export interface StickerPack {
+  id: string;
+  name: string;
+  /** Emoji shown on the pack's tab. */
+  tab: string;
+  /** Seasonal packs are surfaced with a subtle badge. */
+  seasonal?: boolean;
+  glyphs: string[];
+}
+
 export type PlacedKind = "sticker" | "text";
 
 export interface PlacedItem {

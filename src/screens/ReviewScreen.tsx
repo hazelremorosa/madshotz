@@ -1,14 +1,16 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
 import { ActionBar } from "@/components/shell/ActionBar";
 
 export function ReviewScreen() {
   const photos = useSession((s) => s.photos);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
   const beginRetake = useSession((s) => s.beginRetake);
   const go = useSession((s) => s.go);
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
 
   const retake = (i: number) => {
     beginRetake(i);

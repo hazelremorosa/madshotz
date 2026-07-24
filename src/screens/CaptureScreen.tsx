@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useCamera } from "@/lib/camera";
 import { useSession } from "@/store/session";
-import { FILTER_BY_ID } from "@/data/filters";
+import { activeFilterCss } from "@/data/filters";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/cn";
+
+const COUNTDOWN_OPTIONS = [3, 5, 10];
 
 export function CaptureScreen() {
   const { videoRef, status, capture } = useCamera();
@@ -12,6 +14,10 @@ export function CaptureScreen() {
   const photos = useSession((s) => s.photos);
   const retakeIndex = useSession((s) => s.retakeIndex);
   const filterId = useSession((s) => s.filterId);
+  const filterIntensity = useSession((s) => s.filterIntensity);
+  const beautyOn = useSession((s) => s.beautyOn);
+  const countdownLength = useSession((s) => s.countdownLength);
+  const setCountdownLength = useSession((s) => s.setCountdownLength);
   const soundOn = useSession((s) => s.soundOn);
   const addPhoto = useSession((s) => s.addPhoto);
   const go = useSession((s) => s.go);
@@ -22,7 +28,7 @@ export function CaptureScreen() {
   const [phase, setPhase] = useState("Get ready…");
   const [hasStarted, setHasStarted] = useState(false);
   const shake = useAnimationControls();
-  const filterCss = FILTER_BY_ID(filterId).css;
+  const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
 
   const isRetake = retakeIndex !== null;
   const cancelled = useRef(false);
@@ -70,6 +76,7 @@ export function CaptureScreen() {
       const total = st0.layout.shots;
       const retake = st0.retakeIndex !== null;
       const todo = retake ? 1 : total - st0.photos.length;
+      const seconds = st0.countdownLength;
 
       setPhase(retake ? "Let's redo that one!" : "Get ready…");
       await wait(1000);
@@ -80,11 +87,11 @@ export function CaptureScreen() {
           ? (st0.retakeIndex ?? 0) + 1
           : useSession.getState().photos.length + 1;
         setPhase(`Frame ${frameNo} of ${total}`);
-        for (let n = 3; n > 0; n--) {
+        for (let n = seconds; n > 0; n--) {
           if (cancelled.current) return;
           setCount(n);
           if (soundOn) sfx.tick();
-          await wait(800);
+          await wait(1000);
         }
         if (cancelled.current) return;
         setCount(null);
@@ -201,6 +208,28 @@ export function CaptureScreen() {
 
       {!hasStarted ? (
         <div className="flex flex-col items-center gap-3">
+          {/* Countdown length — host setting, persists across sessions. */}
+          <div className="glass flex items-center gap-1 rounded-full p-1 shadow-glass">
+            <span className="px-2 text-sm" aria-hidden>
+              ⏱️
+            </span>
+            {COUNTDOWN_OPTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setCountdownLength(s)}
+                aria-pressed={countdownLength === s}
+                className={cn(
+                  "min-w-[3rem] rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                  countdownLength === s
+                    ? "brand-fill text-white shadow-bloom"
+                    : "text-cocoa/60",
+                )}
+              >
+                {s}s
+              </button>
+            ))}
+          </div>
           <motion.button
             type="button"
             onClick={startCapture}

@@ -38,8 +38,15 @@ export interface SessionState {
   theme: Theme;
   layout: LayoutDef;
   filterId: string;
+  /** Filter strength, 0..1 (1 = filter as authored). */
+  filterIntensity: number;
+  /** Subtle skin-smoothing layered on top of the chosen filter. */
+  beautyOn: boolean;
   frameStyleId: string;
   photoShape: PhotoShape;
+
+  /** Host setting: seconds counted down before each shot (3 / 5 / 10). */
+  countdownLength: number;
 
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
@@ -58,8 +65,11 @@ export interface SessionState {
   setTheme: (theme: Theme) => void;
   setLayout: (layout: LayoutDef) => void;
   setFilter: (id: string) => void;
+  setFilterIntensity: (intensity: number) => void;
+  toggleBeauty: () => void;
   setFrameStyle: (id: string) => void;
   setPhotoShape: (shape: PhotoShape) => void;
+  setCountdownLength: (seconds: number) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -83,8 +93,12 @@ export const useSession = create<SessionState>((set, get) => ({
   theme: DEFAULT_THEME,
   layout: DEFAULT_LAYOUT,
   filterId: DEFAULT_THEME.defaultFilter,
+  filterIntensity: 1,
+  beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: "sharp",
+
+  countdownLength: 3,
 
   photos: [],
   retakeIndex: null,
@@ -110,8 +124,12 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   setFilter: (id) => set({ filterId: id }),
+  setFilterIntensity: (intensity) =>
+    set({ filterIntensity: Math.max(0, Math.min(1, intensity)) }),
+  toggleBeauty: () => set((s) => ({ beautyOn: !s.beautyOn })),
   setFrameStyle: (id) => set({ frameStyleId: id }),
   setPhotoShape: (shape) => set({ photoShape: shape }),
+  setCountdownLength: (seconds) => set({ countdownLength: seconds }),
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -160,8 +178,11 @@ export const useSession = create<SessionState>((set, get) => ({
       theme: DEFAULT_THEME,
       layout: DEFAULT_LAYOUT,
       filterId: DEFAULT_THEME.defaultFilter,
+      filterIntensity: 1,
+      beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: "rounded",
+      // countdownLength intentionally persists across sessions — it's a host op setting.
       photos: [],
       retakeIndex: null,
       items: [],
