@@ -8,14 +8,17 @@ import type {
   Theme,
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
-import { DEFAULT_LAYOUT } from "@/data/layouts";
 import { DEFAULT_FRAME_STYLE } from "@/data/frames";
+import {
+  applyBrandVars,
+  effectiveBrand,
+  startingLayout,
+  useSettings,
+} from "@/store/settings";
 
+/** Paints the brand hues — the host's Admin palette wins over the theme's. */
 function applyBrand(theme: Theme) {
-  const root = document.documentElement;
-  root.style.setProperty("--brand-a", theme.brand[0]);
-  root.style.setProperty("--brand-b", theme.brand[1]);
-  root.style.setProperty("--brand-c", theme.brand[2]);
+  applyBrandVars(effectiveBrand(theme));
 }
 
 function makeCode(): string {
@@ -45,9 +48,6 @@ export interface SessionState {
   frameStyleId: string;
   photoShape: PhotoShape;
 
-  /** Host setting: seconds counted down before each shot (3 / 5 / 10). */
-  countdownLength: number;
-
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
   retakeIndex: number | null;
@@ -69,7 +69,6 @@ export interface SessionState {
   toggleBeauty: () => void;
   setFrameStyle: (id: string) => void;
   setPhotoShape: (shape: PhotoShape) => void;
-  setCountdownLength: (seconds: number) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -91,14 +90,12 @@ export const useSession = create<SessionState>((set, get) => ({
   direction: 1,
 
   theme: DEFAULT_THEME,
-  layout: DEFAULT_LAYOUT,
+  layout: startingLayout(),
   filterId: DEFAULT_THEME.defaultFilter,
   filterIntensity: 1,
   beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: "sharp",
-
-  countdownLength: 3,
 
   photos: [],
   retakeIndex: null,
@@ -108,7 +105,8 @@ export const useSession = create<SessionState>((set, get) => ({
 
   composite: null,
 
-  soundOn: false,
+  // Sound starts wherever the host set it in Admin; guests can still toggle it.
+  soundOn: useSettings.getState().soundOn,
   sessionCode: makeCode(),
 
   go: (screen, direction = 1) => set({ screen, direction }),
@@ -129,7 +127,6 @@ export const useSession = create<SessionState>((set, get) => ({
   toggleBeauty: () => set((s) => ({ beautyOn: !s.beautyOn })),
   setFrameStyle: (id) => set({ frameStyleId: id }),
   setPhotoShape: (shape) => set({ photoShape: shape }),
-  setCountdownLength: (seconds) => set({ countdownLength: seconds }),
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -176,13 +173,15 @@ export const useSession = create<SessionState>((set, get) => ({
       screen: "welcome",
       direction: -1,
       theme: DEFAULT_THEME,
-      layout: DEFAULT_LAYOUT,
+      layout: startingLayout(),
       filterId: DEFAULT_THEME.defaultFilter,
       filterIntensity: 1,
       beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: "rounded",
-      // countdownLength intentionally persists across sessions — it's a host op setting.
+      // Host settings (countdown, sound default, timings) live in the settings
+      // store and are untouched by a session reset.
+      soundOn: useSettings.getState().soundOn,
       photos: [],
       retakeIndex: null,
       items: [],

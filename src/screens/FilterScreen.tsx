@@ -1,7 +1,9 @@
+import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FILTERS, activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { Receipt } from "@/components/Receipt";
 import { CheckBadge } from "@/components/ui/CheckBadge";
@@ -24,8 +26,20 @@ export function FilterScreen() {
   const toggleBeauty = useSession((s) => s.toggleBeauty);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
+  const enabledIds = useSettings((s) => s.enabledFilterIds);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const isNatural = filterId === "natural";
+
+  // Only the looks the host enabled in Admin → Filters (never an empty reel).
+  const shown = useMemo(() => {
+    const options = FILTERS.filter((f) => enabledIds.includes(f.id));
+    return options.length ? options : FILTERS;
+  }, [enabledIds]);
+
+  useEffect(() => {
+    if (!shown.some((f) => f.id === filterId)) setFilter(shown[0].id);
+  }, [shown, filterId, setFilter]);
+
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
@@ -63,7 +77,7 @@ export function FilterScreen() {
 
       {/* Filter reel */}
       <div className="no-bar flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 py-3">
-        {FILTERS.map((f) => {
+        {shown.map((f) => {
           const active = f.id === filterId;
           const thumb = photos[0]?.dataUrl;
           return (

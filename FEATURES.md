@@ -15,7 +15,8 @@ Welcome → Layout (Single / 2·3·4 Strip / 4 Grid / Magazine) → **auto-captu
 countdown → Review & single-frame retake → **Frames** (6 colors + 5 patterns, 5 photo
 shapes) → Filters (8) → **Sticker/Text editor** (drag/resize/rotate) → Receipt preview
 → Printing animation → **QR + Download + Share** → auto-reset. Plus: PWA/offline shell,
-idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG compression.
+idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG compression,
+and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operations).
 
 ---
 
@@ -25,13 +26,13 @@ idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG co
 |---|---|---|---|
 | **Email the photo** | Guest types their email → gets the photo in their inbox (great for capturing leads at events). | ⭐⭐⭐ | M 🔌 |
 | **Haptic feedback** | Small vibration on capture/selection (Vibration API) — feels premium on tablets. | ⭐ | S |
-| **Countdown length setting** | Let the host pick 3 / 5 / 10s before each shot. | ⭐⭐ | S |
-| **Screen "flash" fill light** | Flash the whole screen white just before capture to light faces in dark venues. | ⭐⭐ | S |
+| **Countdown length setting** ✅ **Done** | Let the host pick 3 / 5 / 10s before each shot. | ⭐⭐ | S |
+| **Screen "flash" fill light** ✅ **Done** | Flash the whole screen white just before capture to light faces in dark venues. | ⭐⭐ | S |
 | **Retake-all button on Review** | One tap to redo the whole set, not just one frame. | ⭐ | S |
 | **"Saving… / Saved ✓" status** | Confirm the cloud upload actually succeeded on the final screen. | ⭐⭐ | S |
-| **Filter intensity slider** | Dial a filter up/down instead of on/off. | ⭐⭐ | S |
-| **More stickers + seasonal packs** | Bigger emoji/graphic library, holiday sets. | ⭐⭐ | S |
-| **Camera picker** | Choose which camera (front/back/external webcam) — important for kiosks. | ⭐⭐ | S |
+| **Filter intensity slider** ✅ **Done** | Dial a filter up/down instead of on/off. | ⭐⭐ | S |
+| **More stickers + seasonal packs** ✅ **Done** | Bigger emoji/graphic library, holiday sets. | ⭐⭐ | S |
+| **Camera picker** ✅ **Done** | Choose which camera (front/back/external webcam) — important for kiosks. | ⭐⭐ | S |
 | **Boomerang / GIF mode** | Capture a short looping GIF instead of stills — very shareable. | ⭐⭐⭐ | M |
 
 ---
@@ -44,10 +45,10 @@ idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG co
 | Burst + best-shot pick | Take several, let the guest choose the best. | ⭐⭐ | M |
 | Smile / face-detection auto-capture | Fires the shutter when it sees a smile (MediaPipe/face-api). | ⭐⭐ | M |
 | Pose guides / silhouettes | Faint pose outlines to help guests frame up. | ⭐ | S |
-| Beauty / skin-smoothing | Subtle smoothing filter (toggle). | ⭐⭐ | M |
+| Beauty / skin-smoothing ✅ **Done** | Subtle smoothing filter (toggle). | ⭐⭐ | M |
 | Background removal / virtual backgrounds | Green-screen effect with fun backdrops (MediaPipe Selfie Segmentation). | ⭐⭐⭐ | L |
 | Grid / rule-of-thirds toggle | Composition helper. | ⭐ | S |
-| Mirror toggle | Flip the selfie mirror on/off. | ⭐ | S |
+| Mirror toggle ✅ **Done** | Flip the selfie mirror on/off (Admin → Camera). | ⭐ | S |
 
 ## 🎨 Editing & Personalization
 
@@ -66,7 +67,7 @@ idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG co
 
 | Feature | What it does | Impact | Effort |
 |---|---|---|---|
-| **Event mode** | Per-event name, date, hashtag, logo, and color theme baked into every receipt. | ⭐⭐⭐ | M |
+| **Event mode** 🟡 **Partly done** | Event name, footer line and color palette are in Admin and bake into every receipt. Still to add: **logo, date, hashtag**. | ⭐⭐⭐ | M |
 | **Custom watermark / logo** | Client logo on every photo. | ⭐⭐⭐ | S |
 | Saved event presets | Store a "Wedding of A&B" config and reuse it. | ⭐⭐ | M 🔌 |
 | Booth modes | One-tap switch between Wedding / Birthday / Corporate looks. | ⭐⭐ | M |
@@ -98,8 +99,8 @@ idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG co
 
 | Feature | What it does | Impact | Effort |
 |---|---|---|---|
-| **Admin panel (PIN-locked)** | Camera pick, enabled layouts, branding, pricing, sound, idle timings — no code edits. | ⭐⭐⭐ | M |
-| Kiosk lockdown | Fullscreen guard, block accidental exits/gestures. | ⭐⭐ | S |
+| **Admin panel (PIN-locked)** ✅ **Done** | 5 taps on the top-left corner + PIN. Camera pick & mirror, countdown & fill light, enabled layouts/filters, event branding & palette, sound, idle + QR timings, kiosk, PIN change, status, factory reset. (Pricing waits on payments.) | ⭐⭐⭐ | M |
+| Kiosk lockdown ✅ **Done** | Fullscreen guard, wake lock, no context menu / pinch-zoom / browser shortcuts / back button / accidental close. | ⭐⭐ | S |
 | **Upload retry queue** | If wifi drops, queue photos and upload when it's back (don't lose any). | ⭐⭐⭐ | M |
 | Offline mode | Full session offline, sync later. | ⭐⭐ | L |
 | Session analytics | Count, popular layouts/filters, busy times. | ⭐⭐ | M 🔌 |
@@ -134,7 +135,7 @@ idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG co
 
 1. **Make money & capture leads:** Event mode + watermark → Email delivery → Payments.
 2. **Delight & go viral:** Boomerang/GIF → One-tap social share → AR face filters.
-3. **Run it reliably:** Admin panel → Upload retry queue → Kiosk lockdown → Analytics.
+3. **Run it reliably:** ~~Admin panel~~ ✅ → ~~Kiosk lockdown~~ ✅ → Upload retry queue → Analytics.
 4. **Physical product:** Real printer integration → Event gallery page.
 
 > Tell me which line items you want and I'll build them in priority order. The

@@ -1,6 +1,10 @@
+import { useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import { useSession } from "@/store/session";
+import { applyBrandVars, effectiveBrand } from "@/store/settings";
 import { useIdleReset } from "@/hooks/useIdleReset";
+import { useKioskLockdown } from "@/hooks/useKioskLockdown";
+import { AdminRoot } from "@/components/admin/AdminRoot";
 import type { ScreenId } from "@/types";
 
 import { AmbientBackground } from "@/components/shell/AmbientBackground";
@@ -57,7 +61,14 @@ export default function App() {
   const direction = useSession((s) => s.direction);
   const soundOn = useSession((s) => s.soundOn);
   const toggleSound = useSession((s) => s.toggleSound);
+  const theme = useSession((s) => s.theme);
   useIdleReset();
+  useKioskLockdown();
+
+  // Paint the host's Admin palette (if any) on first paint, not just on reset.
+  useEffect(() => {
+    applyBrandVars(effectiveBrand(theme));
+  }, [theme]);
 
   const Screen = SCREENS[screen];
 
@@ -90,6 +101,9 @@ export default function App() {
       </button>
 
       <RippleLayer />
+
+      {/* Hidden admin entry + the panel itself (renders above everything). */}
+      <AdminRoot />
     </div>
   );
 }
