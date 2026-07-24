@@ -67,10 +67,11 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 
 | Feature | What it does | Impact | Effort |
 |---|---|---|---|
-| **Event mode** 🟡 **Partly done** | Event name, footer line and color palette are in Admin and bake into every receipt. Still to add: **logo, date, hashtag**. | ⭐⭐⭐ | M |
+| **Events system (create / load / manage)** ✅ **Done** | Admin → Events tab. Create an event with **category + name + date**, pick a **design** (uploaded landscape **template** OR frame overlays), then **load** it to make it the active booth. Only one active at a time; the customer flow adapts (shot count from the template, filters kept, QR + MAD SHOTS baked into the print). Replaces "saved presets" + "booth modes". | ⭐⭐⭐ | L |
+| **Cloud-synced events** ✅ **Done** 🔌 | Events + their templates are saved in **Cloudflare KV** (permanent, unlike the 24h photo links), so the **same events list is available on any kiosk** pointed at the Worker. Write-through on every change; hydrates on boot; works offline via local cache. | ⭐⭐⭐ | M 🔌 |
+| **Designed event templates** ✅ **Done** | Upload a finished landscape design (wedding card, etc.), drag boxes onto the photo slots (box count = shots), plus positionable **MAD SHOTS** + **QR** slots. Guest photos composite into the design. Templates are **event-specific**. | ⭐⭐⭐ | L |
+| **Event mode** 🟡 **Partly done** | Event name, footer line and color palette are in Admin and bake into every receipt. Still to add: **logo, hashtag**. | ⭐⭐⭐ | M |
 | **Custom watermark / logo** | Client logo on every photo. | ⭐⭐⭐ | S |
-| Saved event presets | Store a "Wedding of A&B" config and reuse it. | ⭐⭐ | M 🔌 |
-| Booth modes | One-tap switch between Wedding / Birthday / Corporate looks. | ⭐⭐ | M |
 | Custom QR landing branding | The scanned page shows the client's branding, not just Mad Shots. | ⭐⭐ | S |
 
 ## 📤 Delivery & Sharing
