@@ -1,26 +1,34 @@
 /**
- * Mad Shots delivery Worker (Cloudflare R2).
+ * Mad Shots delivery Worker (Cloudflare R2 + KV).
  *
- * Routes:
- *   POST /upload/:code   — store the finished photo in R2 (called by the kiosk app)
+ * Photo routes (R2, expire after 24h):
+ *   POST /upload/:code   — store the finished photo (called by the kiosk app)
  *   GET  /s/:code        — branded viewer page (what the QR opens)
- *   GET  /img/:code      — raw PNG (?dl=1 forces download)
+ *   GET  /img/:code      — raw image (?dl=1 forces download)
  *
- * Photos are refused / deleted 24h after upload, so every link expires after a day.
- * Bind an R2 bucket as `PHOTOS` (see wrangler.toml).
+ * Admin data routes (KV, PERMANENT — the shared events list & templates):
+ *   GET    /kv/:collection       — list every item in the collection
+ *   PUT    /kv/:collection/:id   — upsert one item (JSON body)
+ *   DELETE /kv/:collection/:id   — delete one item
+ *   collection ∈ { events, templates }
+ *
+ * Bind an R2 bucket as `PHOTOS` and a KV namespace as `KV` (see wrangler.toml).
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB safety cap
+const MAX_KV_BYTES = 20 * 1024 * 1024; // KV value ceiling is 25 MB
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "content-type",
 };
 
 const keyFor = (code) => `sessions/${code}.png`;
 const CODE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const COLLECTIONS = new Set(["events", "templates"]);
 
 export default {
   async fetch(request, env) {
@@ -41,10 +49,57 @@ export default {
     if ((m = pathname.match(/^\/s\/([^/.]+)$/)) && request.method === "GET") {
       return viewerPage(env, m[1], url.origin);
     }
+    if ((m = pathname.match(/^\/kv\/([a-z]+)\/(.+)$/))) {
+      return handleKvItem(request, env, m[1], decodeURIComponent(m[2]));
+    }
+    if ((m = pathname.match(/^\/kv\/([a-z]+)\/?$/)) && request.method === "GET") {
+      return handleKvList(env, m[1]);
+    }
 
     return new Response("Mad Shots delivery", { status: 200, headers: CORS });
   },
 };
+
+// ── Admin data (KV, permanent) ───────────────────────────────────────────────
+
+async function handleKvList(env, collection) {
+  if (!COLLECTIONS.has(collection)) return notFound();
+  if (!env.KV) return json({ error: "kv not configured" }, 501);
+  const items = [];
+  let cursor;
+  do {
+    const page = await env.KV.list({ prefix: `${collection}:`, cursor });
+    for (const k of page.keys) {
+      const v = await env.KV.get(k.name);
+      if (v) {
+        try {
+          items.push(JSON.parse(v));
+        } catch {
+          /* skip a corrupt value */
+        }
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return json(items, 200);
+}
+
+async function handleKvItem(request, env, collection, id) {
+  if (!COLLECTIONS.has(collection) || !ID_RE.test(id)) return notFound();
+  if (!env.KV) return json({ error: "kv not configured" }, 501);
+  const key = `${collection}:${id}`;
+  if (request.method === "PUT") {
+    const body = await request.text();
+    if (body.length > MAX_KV_BYTES) return json({ error: "too large" }, 413);
+    await env.KV.put(key, body);
+    return json({ ok: true }, 200);
+  }
+  if (request.method === "DELETE") {
+    await env.KV.delete(key);
+    return json({ ok: true }, 200);
+  }
+  return json({ error: "method" }, 405);
+}
 
 async function handleUpload(request, env, code, origin) {
   if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);

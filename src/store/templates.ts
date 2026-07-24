@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { EventTemplate, LayoutDef, TemplateSlot } from "@/types";
 import { useSettings } from "@/store/settings";
+import { cloudList, cloudPut, cloudRemove } from "@/lib/cloudStore";
 
 /**
  * Host-uploaded designed event templates (wedding cards, etc.). They carry large
@@ -21,6 +22,21 @@ let seq = 0;
 function templateId(): string {
   seq += 1;
   return `tpl_${Date.now().toString(36)}_${seq}`;
+}
+
+// Templates change on every slot drag, so debounce the (large) cloud writes.
+const syncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function scheduleCloudSync(id: string) {
+  const prev = syncTimers.get(id);
+  if (prev) clearTimeout(prev);
+  syncTimers.set(
+    id,
+    setTimeout(() => {
+      syncTimers.delete(id);
+      const t = useTemplates.getState().templates.find((x) => x.id === id);
+      if (t) void cloudPut("templates", id, t);
+    }, 800),
+  );
 }
 
 // Swallows QuotaExceededError so a too-big tray degrades gracefully.
@@ -53,29 +69,43 @@ export const useTemplates = create<TemplatesState>()(
       templates: [],
       addTemplate: (t) => {
         const id = templateId();
-        set((s) => ({
-          templates: [{ ...t, id }, ...s.templates].slice(0, MAX_TEMPLATES),
-        }));
+        const rec = { ...t, id };
+        set((s) => ({ templates: [rec, ...s.templates].slice(0, MAX_TEMPLATES) }));
+        void cloudPut("templates", id, rec);
         return id;
       },
-      updateTemplate: (id, patch) =>
+      updateTemplate: (id, patch) => {
         set((s) => ({
           templates: s.templates.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-        })),
-      setSlots: (id, slots) =>
+        }));
+        scheduleCloudSync(id);
+      },
+      setSlots: (id, slots) => {
         set((s) => ({
           templates: s.templates.map((x) => (x.id === id ? { ...x, slots } : x)),
-        })),
-      removeTemplate: (id) =>
-        set((s) => ({ templates: s.templates.filter((x) => x.id !== id) })),
+        }));
+        scheduleCloudSync(id);
+      },
+      removeTemplate: (id) => {
+        set((s) => ({ templates: s.templates.filter((x) => x.id !== id) }));
+        void cloudRemove("templates", id);
+      },
       removeTemplatesForEvent: (eventId) =>
-        set((s) => ({
-          templates: s.templates.filter((x) => x.eventId !== eventId),
-        })),
+        set((s) => {
+          const doomed = s.templates.filter((x) => x.eventId === eventId);
+          doomed.forEach((t) => void cloudRemove("templates", t.id));
+          return { templates: s.templates.filter((x) => x.eventId !== eventId) };
+        }),
     }),
     { name: TEMPLATES_KEY, storage: createJSONStorage(() => guardedStorage) },
   ),
 );
+
+/** Pulls all templates from the cloud into the store (cloud wins). */
+export async function hydrateTemplates(): Promise<void> {
+  const cloud = await cloudList<EventTemplate>("templates");
+  if (cloud) useTemplates.setState({ templates: cloud });
+}
 
 /** Look up a template by id (safe outside React). */
 export function templateById(

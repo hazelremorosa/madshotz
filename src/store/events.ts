@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { BoothConfig } from "@/store/settings";
 import { useSettings } from "@/store/settings";
+import { cloudList, cloudPut, cloudRemove } from "@/lib/cloudStore";
 
 /**
  * Events are the unit administrators create, manage and launch. Each one bundles
@@ -59,18 +60,29 @@ export const useEvents = create<EventsState>()(
   persist(
     (set) => ({
       events: [],
-      upsertEvent: (rec) =>
+      upsertEvent: (rec) => {
         set((s) =>
           s.events.some((e) => e.id === rec.id)
             ? { events: s.events.map((e) => (e.id === rec.id ? rec : e)) }
             : { events: [rec, ...s.events].slice(0, MAX_EVENTS) },
-        ),
-      removeEvent: (id) =>
-        set((s) => ({ events: s.events.filter((e) => e.id !== id) })),
+        );
+        // Durable cloud copy so the list is available on every kiosk.
+        void cloudPut("events", rec.id, rec);
+      },
+      removeEvent: (id) => {
+        set((s) => ({ events: s.events.filter((e) => e.id !== id) }));
+        void cloudRemove("events", id);
+      },
     }),
     { name: EVENTS_KEY, storage: createJSONStorage(() => guardedStorage) },
   ),
 );
+
+/** Pulls the events list from the cloud into the store (cloud wins). */
+export async function hydrateEvents(): Promise<void> {
+  const cloud = await cloudList<EventRecord>("events");
+  if (cloud) useEvents.setState({ events: cloud.slice(0, MAX_EVENTS) });
+}
 
 /** The currently loaded event, or undefined for the Standard Booth. */
 export function activeEvent(): EventRecord | undefined {

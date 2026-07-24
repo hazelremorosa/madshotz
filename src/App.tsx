@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import { useSession } from "@/store/session";
 import { applyBrandVars, effectiveBrand } from "@/store/settings";
+import { hydrateEvents } from "@/store/events";
+import { hydrateTemplates } from "@/store/templates";
 import { useIdleReset } from "@/hooks/useIdleReset";
 import { useKioskLockdown } from "@/hooks/useKioskLockdown";
 import { AdminRoot } from "@/components/admin/AdminRoot";
@@ -69,6 +71,13 @@ export default function App() {
   useEffect(() => {
     applyBrandVars(effectiveBrand(theme));
   }, [theme]);
+
+  // Pull the shared events + templates from the cloud so this kiosk sees the
+  // same list as every other one (local cache shows instantly meanwhile).
+  useEffect(() => {
+    void hydrateEvents();
+    void hydrateTemplates();
+  }, []);
 
   const Screen = SCREENS[screen];
 

@@ -1,7 +1,9 @@
 # MAD SHOT'Z — Cloudflare delivery Worker
 
-A tiny Worker + R2 bucket that stores each finished photo and serves it when the QR
-is scanned. Photos **expire 24h** after upload.
+A tiny Worker that (1) stores each finished photo in **R2** and serves it when the
+QR is scanned (photos **expire 24h**), and (2) stores the **events list + their
+templates** in **KV** — permanently — so the same events are available on every
+kiosk that points at this Worker.
 
 ## Deploy (one time, ~5 min)
 
@@ -15,9 +17,18 @@ wrangler login
 # 2. Create the R2 bucket (enable R2 in the dashboard first if prompted — free tier)
 wrangler r2 bucket create madshotz-photos
 
-# 3. Deploy the Worker
+# 3. Create the KV namespace for events + templates, then paste the printed id
+#    into wrangler.toml ([[kv_namespaces]] → id = "...").
+wrangler kv namespace create madshots-data
+
+# 4. Deploy the Worker
 wrangler deploy
 ```
+
+> Already deployed before? You just need steps 3 + 4 to add the events store:
+> create the KV namespace, paste its id into `wrangler.toml`, and re-run
+> `wrangler deploy`. No frontend env change is needed — events reuse the same
+> `VITE_DELIVERY_BASE`. Redeploy the frontend once so the new sync code ships.
 
 `wrangler deploy` prints your Worker URL, e.g.
 `https://madshotz-delivery.YOURNAME.workers.dev`.
@@ -42,12 +53,18 @@ after **1 day**.
 
 ## Routes
 
-| Method | Path            | Purpose                                   |
-|--------|-----------------|-------------------------------------------|
-| POST   | `/upload/:code` | kiosk uploads the composite PNG           |
-| GET    | `/s/:code`      | branded viewer page (the QR target)       |
-| GET    | `/img/:code`    | raw PNG (`?dl=1` to download)             |
+| Method | Path                    | Purpose                                        |
+|--------|-------------------------|------------------------------------------------|
+| POST   | `/upload/:code`         | kiosk uploads the composite PNG (R2, 24h)      |
+| GET    | `/s/:code`              | branded viewer page (the QR target)            |
+| GET    | `/img/:code`            | raw PNG (`?dl=1` to download)                   |
+| GET    | `/kv/:collection`       | list all items (`events` or `templates`) — KV  |
+| PUT    | `/kv/:collection/:id`   | upsert one item (JSON body)                     |
+| DELETE | `/kv/:collection/:id`   | delete one item                                 |
 
-Upload is open (no auth) so the browser kiosk can post directly; the 8 MB cap and
-24h expiry keep abuse cheap. Add a shared-secret header or Cloudflare Access later
-if you want to lock it down.
+The KV data (events + templates) is **permanent** — no expiry. The app writes
+through on every create/edit/delete and pulls the shared list on boot.
+
+Everything is open (no auth) so the browser kiosk can talk to it directly; the size
+caps keep abuse cheap. Add a shared-secret header or Cloudflare Access later if you
+want to lock writes down.
