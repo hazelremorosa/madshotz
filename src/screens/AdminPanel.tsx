@@ -60,6 +60,15 @@ import { cn } from "@/lib/cn";
 
 const APP_VERSION = "1.0.0";
 
+/** Admin is grouped into tabs so a long list of settings stays navigable. */
+type AdminTab = "event" | "capture" | "ops" | "system";
+const ADMIN_TABS: { id: AdminTab; label: string; emoji: string }[] = [
+  { id: "event", label: "Event", emoji: "🎭" },
+  { id: "capture", label: "Capture", emoji: "📸" },
+  { id: "ops", label: "Ops", emoji: "🔔" },
+  { id: "system", label: "System", emoji: "⚙️" },
+];
+
 /**
  * Admin panel — the host's control room. Everything here writes straight to
  * the persisted settings store, so changes survive reloads and take effect on
@@ -71,6 +80,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const resetSession = useSession((st) => st.reset);
   const theme = useSession((st) => st.theme);
   const [note, setNote] = useState<string | null>(null);
+  const [tab, setTab] = useState<AdminTab>("event");
 
   const toast = (msg: string) => {
     setNote(msg);
@@ -100,15 +110,41 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           </SmallButton>
         </header>
 
+        {/* Tabs */}
+        <div className="no-bar flex shrink-0 gap-1.5 overflow-x-auto px-4 pb-2">
+          {ADMIN_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              aria-pressed={tab === t.id}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors",
+                tab === t.id
+                  ? "brand-fill text-white shadow-bloom"
+                  : "glass text-cocoa/60",
+              )}
+            >
+              <span aria-hidden>{t.emoji}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {/* Body */}
-        <div className="no-bar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-10">
-          <CustomerPreviewSection />
+        <div
+          key={tab}
+          className="no-bar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-10"
+        >
+          {tab === "event" && <CustomerPreviewSection />}
 
-          <CameraSection />
+          {tab === "capture" && <CameraSection />}
 
-          <EventPresetsSection onToast={toast} />
+          {tab === "ops" && <EventPresetsSection onToast={toast} />}
 
-          <Section
+          {tab === "capture" && (
+            <>
+              <Section
             emoji="⏱️"
             title="Capture"
             note="How each shot is taken. Countdown applies to every frame."
@@ -187,13 +223,17 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </div>
           </Section>
 
-          <CustomStickersSection onToast={toast} />
+              <CustomStickersSection onToast={toast} />
+            </>
+          )}
 
-          <BoothTypeSection onToast={toast} />
+          {tab === "event" && (
+            <>
+              <BoothTypeSection onToast={toast} />
 
-          <EventTemplateSection onToast={toast} />
+              <EventTemplateSection onToast={toast} />
 
-          <FrameOverlaySection onToast={toast} />
+              <FrameOverlaySection onToast={toast} />
 
           <Section
             emoji="🏷️"
@@ -279,9 +319,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </Row>
-          </Section>
+              </Section>
+            </>
+          )}
 
-          <Section
+          {tab === "ops" && (
+            <Section
             emoji="🔔"
             title="Sound & timing"
             note="Idle reset protects guest privacy between sessions."
@@ -310,9 +353,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 options={QR_RESET_OPTIONS.map((n) => ({ value: n, label: `${n}s` }))}
               />
             </Row>
-          </Section>
+            </Section>
+          )}
 
-          <KioskSection onToast={toast} />
+          {tab === "system" && (
+            <>
+              <KioskSection onToast={toast} />
 
           <Section
             emoji="🔐"
@@ -361,7 +407,9 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 Reset
               </SmallButton>
             </Row>
-          </Section>
+              </Section>
+            </>
+          )}
 
           <p className="pb-2 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-cocoa/30">
             Mad Shots · Booth Admin
@@ -1078,6 +1126,10 @@ function EventTemplateSection({ onToast }: { onToast: (msg: string) => void }) {
 
 // ── Frame overlay ───────────────────────────────────────────────────────────
 
+// Custom frame uploads are retired from the UI — designed templates cover
+// events and the built-in overlays cover normal booths. Flip to re-enable.
+const ALLOW_FRAME_UPLOAD = false;
+
 function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
   const customFrames = useSettings((st) => st.customFrames);
   const defaultOverlayId = useSettings((st) => st.defaultOverlayId);
@@ -1156,7 +1208,7 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
     <Section
       emoji="🖼️"
       title="Frame overlay"
-      note="Upload your own PNG frame (design it for a tall receipt — it's stretched to fit). Pick one to apply to every guest, and hide the picker so they can't change it."
+      note="Pick an overlay to apply to every guest, and hide the picker so guests can't change it."
     >
       <input
         ref={inputRef}
@@ -1167,44 +1219,49 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
         onChange={(e) => onFiles(e.target.files)}
       />
 
-      {customFrames.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {customFrames.map((cf) => (
-            <div
-              key={cf.id}
-              className="relative h-16 w-12 overflow-hidden rounded-lg border border-cocoa/10 bg-[repeating-conic-gradient(#00000008_0_25%,transparent_0_50%)] bg-[length:12px_12px]"
-            >
-              <img src={cf.url} alt="" className="h-full w-full object-contain" />
-              <button
-                type="button"
-                aria-label="Remove frame"
-                onClick={() => removeCustomFrame(cf.id)}
-                className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white shadow"
-              >
-                ×
-              </button>
+      {/* Custom frame uploads are hidden (see ALLOW_FRAME_UPLOAD). */}
+      {ALLOW_FRAME_UPLOAD && (
+        <>
+          {customFrames.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {customFrames.map((cf) => (
+                <div
+                  key={cf.id}
+                  className="relative h-16 w-12 overflow-hidden rounded-lg border border-cocoa/10 bg-[repeating-conic-gradient(#00000008_0_25%,transparent_0_50%)] bg-[length:12px_12px]"
+                >
+                  <img src={cf.url} alt="" className="h-full w-full object-contain" />
+                  <button
+                    type="button"
+                    aria-label="Remove frame"
+                    onClick={() => removeCustomFrame(cf.id)}
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white shadow"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      <Row
-        label={`${customFrames.length} / ${MAX_CUSTOM_FRAMES} uploaded`}
-        hint={full ? "Remove one to add more." : "PNG, WebP or JPG. Transparent PNG works best."}
-      >
-        <SmallButton
-          tone={full ? "ghost" : "brand"}
-          onClick={() => {
-            if (full) {
-              onToast("Frame tray is full");
-              return;
-            }
-            inputRef.current?.click();
-          }}
-        >
-          {busy ? "Adding…" : "Upload"}
-        </SmallButton>
-      </Row>
+          <Row
+            label={`${customFrames.length} / ${MAX_CUSTOM_FRAMES} uploaded`}
+            hint={full ? "Remove one to add more." : "PNG, WebP or JPG. Transparent PNG works best."}
+          >
+            <SmallButton
+              tone={full ? "ghost" : "brand"}
+              onClick={() => {
+                if (full) {
+                  onToast("Frame tray is full");
+                  return;
+                }
+                inputRef.current?.click();
+              }}
+            >
+              {busy ? "Adding…" : "Upload"}
+            </SmallButton>
+          </Row>
+        </>
+      )}
 
       <Row label="Applied to every guest" hint="The overlay each session starts on." stacked>
         <div className="no-bar flex gap-2 overflow-x-auto pb-1">
