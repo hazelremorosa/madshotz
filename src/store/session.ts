@@ -9,6 +9,7 @@ import type {
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_FRAME_STYLE } from "@/data/frames";
+import { DEFAULT_OVERLAY } from "@/data/overlays";
 import {
   applyBrandVars,
   effectiveBrand,
@@ -47,6 +48,8 @@ export interface SessionState {
   beautyOn: boolean;
   frameStyleId: string;
   photoShape: PhotoShape;
+  /** Decorative frame overlay laid over the whole receipt ("none" = off). */
+  overlayId: string;
 
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
@@ -69,6 +72,7 @@ export interface SessionState {
   toggleBeauty: () => void;
   setFrameStyle: (id: string) => void;
   setPhotoShape: (shape: PhotoShape) => void;
+  setOverlay: (id: string) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -96,6 +100,7 @@ export const useSession = create<SessionState>((set, get) => ({
   beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: "sharp",
+  overlayId: DEFAULT_OVERLAY.id,
 
   photos: [],
   retakeIndex: null,
@@ -127,6 +132,7 @@ export const useSession = create<SessionState>((set, get) => ({
   toggleBeauty: () => set((s) => ({ beautyOn: !s.beautyOn })),
   setFrameStyle: (id) => set({ frameStyleId: id }),
   setPhotoShape: (shape) => set({ photoShape: shape }),
+  setOverlay: (id) => set({ overlayId: id }),
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -179,6 +185,7 @@ export const useSession = create<SessionState>((set, get) => ({
       beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: "rounded",
+      overlayId: DEFAULT_OVERLAY.id,
       // Host settings (countdown, sound default, timings) live in the settings
       // store and are untouched by a session reset.
       soundOn: useSettings.getState().soundOn,

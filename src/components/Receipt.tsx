@@ -17,6 +17,8 @@ interface Props {
   /** CSS background for the mat/frame behind the photos. */
   frameBg?: string;
   shape?: PhotoShape;
+  /** Decorative frame overlay SVG data URI, sized to the paper (null = none). */
+  frameOverlay?: string | null;
   /** Interactive overlay (editor) or static items (preview). */
   overlay?: ReactNode;
   className?: string;
@@ -49,6 +51,7 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
     activeIndex,
     frameBg,
     shape = "rounded",
+    frameOverlay,
     overlay,
     className,
   },
@@ -108,6 +111,17 @@ export const Receipt = forwardRef<HTMLDivElement, Props>(function Receipt(
           {footer}
         </div>
       </div>
+
+      {/* Decorative frame overlay — full paper, above photos, below stickers. */}
+      {frameOverlay && (
+        <img
+          src={frameOverlay}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full rounded-[6px]"
+        />
+      )}
 
       {/* Decoration overlay — normalized to full paper (matches compose). */}
       <div className="absolute inset-0 overflow-hidden rounded-[6px]">

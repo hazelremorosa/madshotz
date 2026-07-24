@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BRAND_PRESETS,
   COUNTDOWN_OPTIONS,
   IDLE_OPTIONS,
+  MAX_CUSTOM_STICKERS,
   QR_RESET_OPTIONS,
   applyBrandVars,
   effectiveBrand,
@@ -11,6 +12,7 @@ import {
   receiptHeader,
   useSettings,
 } from "@/store/settings";
+import { fileToStickerUrl } from "@/lib/image";
 import { useSession } from "@/store/session";
 import { LAYOUTS } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
@@ -152,6 +154,8 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </Section>
+
+          <CustomStickersSection onToast={toast} />
 
           <Section
             emoji="🏷️"
@@ -400,6 +404,105 @@ function CameraSection() {
           checked={mirrorPreview}
           onChange={(v) => set("mirrorPreview", v)}
         />
+      </Row>
+    </Section>
+  );
+}
+
+// ── Custom stickers ─────────────────────────────────────────────────────────
+
+function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) {
+  const stickers = useSettings((st) => st.customStickers);
+  const addCustomStickers = useSettings((st) => st.addCustomStickers);
+  const removeCustomSticker = useSettings((st) => st.removeCustomSticker);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const full = stickers.length >= MAX_CUSTOM_STICKERS;
+
+  const onFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const room = MAX_CUSTOM_STICKERS - stickers.length;
+    const picked = Array.from(files).slice(0, Math.max(0, room));
+    setBusy(true);
+    try {
+      const urls: string[] = [];
+      for (const file of picked) {
+        try {
+          urls.push(await fileToStickerUrl(file));
+        } catch {
+          // Skip anything the browser can't decode (e.g. an unsupported format).
+        }
+      }
+      if (urls.length) {
+        addCustomStickers(urls);
+        onToast(`Added ${urls.length} sticker${urls.length > 1 ? "s" : ""}`);
+      } else {
+        onToast("Couldn't read those images");
+      }
+      if (files.length > picked.length) onToast(`Only ${MAX_CUSTOM_STICKERS} fit`);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <Section
+      emoji="🖼️"
+      title="Custom stickers"
+      note="Upload your own PNG props (logos, cut-outs). They appear as a “Yours” pack in the editor. Transparent PNGs look best."
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/webp,image/*"
+        multiple
+        hidden
+        onChange={(e) => onFiles(e.target.files)}
+      />
+
+      {stickers.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {stickers.map((cs) => (
+            <div
+              key={cs.id}
+              className="relative h-14 w-14 overflow-hidden rounded-xl border border-cocoa/10 bg-[repeating-conic-gradient(#00000008_0_25%,transparent_0_50%)] bg-[length:12px_12px]"
+            >
+              <img
+                src={cs.url}
+                alt=""
+                className="h-full w-full object-contain p-1"
+              />
+              <button
+                type="button"
+                aria-label="Remove sticker"
+                onClick={() => removeCustomSticker(cs.id)}
+                className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white shadow"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Row
+        label={`${stickers.length} / ${MAX_CUSTOM_STICKERS} uploaded`}
+        hint={full ? "Remove one to add more." : "PNG, WebP or JPG. Scaled down automatically."}
+      >
+        <SmallButton
+          tone={full ? "ghost" : "brand"}
+          onClick={() => {
+            if (full) {
+              onToast("Sticker tray is full");
+              return;
+            }
+            inputRef.current?.click();
+          }}
+        >
+          {busy ? "Adding…" : "Upload"}
+        </SmallButton>
       </Row>
     </Section>
   );

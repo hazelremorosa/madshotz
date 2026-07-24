@@ -35,6 +35,15 @@ export const BRAND_PRESETS: BrandPreset[] = [
 export const BRAND_PRESET_BY_ID = (id: string): BrandPreset =>
   BRAND_PRESETS.find((p) => p.id === id) ?? BRAND_PRESETS[0];
 
+/** A host-uploaded sticker/prop — a small transparent PNG data URL. */
+export interface CustomSticker {
+  id: string;
+  url: string;
+}
+
+/** How many custom stickers the host can keep (localStorage-friendly cap). */
+export const MAX_CUSTOM_STICKERS = 16;
+
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -67,6 +76,8 @@ export interface SettingsState {
   /** Receipt footer line. Empty → "SCAN FOR YOUR PHOTOS ♥". */
   footerNote: string;
   brandPresetId: string;
+  /** Host-uploaded PNG stickers/props, offered as a "Yours" pack in the editor. */
+  customStickers: CustomSticker[];
 
   // ── Ops ───────────────────────────────────────────────────────────────────
   /** Sound state each new session starts with. */
@@ -84,6 +95,9 @@ export interface SettingsState {
   set: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
   toggleLayout: (id: string) => void;
   toggleFilter: (id: string) => void;
+  /** Appends uploaded stickers (newest first), clamped to MAX_CUSTOM_STICKERS. */
+  addCustomStickers: (urls: string[]) => void;
+  removeCustomSticker: (id: string) => void;
   setAdminOpen: (open: boolean) => void;
   resetAll: () => void;
 }
@@ -105,6 +119,7 @@ const DEFAULTS = {
   eventName: "",
   footerNote: "",
   brandPresetId: "default",
+  customStickers: [] as CustomSticker[],
 
   soundOn: false,
   idleTimeoutSec: 90,
@@ -113,6 +128,12 @@ const DEFAULTS = {
   kioskMode: false,
   keepAwake: true,
 };
+
+let stickerSeq = 0;
+function stickerId(): string {
+  stickerSeq += 1;
+  return `cs_${Date.now().toString(36)}_${stickerSeq}`;
+}
 
 /** Flips a member of a "must keep at least one" list. */
 function toggleIn(list: string[], id: string, all: string[]): string[] {
@@ -149,6 +170,23 @@ export const useSettings = create<SettingsState>()(
             FILTERS.map((f) => f.id),
           ),
         }),
+
+      addCustomStickers: (urls) =>
+        set((state) => {
+          const added = urls.map((url) => ({ id: stickerId(), url }));
+          // Newest first, and never past the cap (drops the oldest overflow).
+          return {
+            customStickers: [...added, ...state.customStickers].slice(
+              0,
+              MAX_CUSTOM_STICKERS,
+            ),
+          };
+        }),
+
+      removeCustomSticker: (id) =>
+        set((state) => ({
+          customStickers: state.customStickers.filter((s) => s.id !== id),
+        })),
 
       setAdminOpen: (adminOpen) => set({ adminOpen }),
 

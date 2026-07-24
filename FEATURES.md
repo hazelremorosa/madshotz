@@ -58,8 +58,8 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 | Doodle / freehand pen | Draw on the photo with color + brush size. | ⭐⭐ | M |
 | Text upgrades | Font picker, colors, outline/shadow, curved text. | ⭐⭐ | M |
 | Animated / GIF stickers | Moving stickers (needs GIF/video export). | ⭐ | M |
-| Uploadable custom stickers | Host uploads their own PNG stickers/props. | ⭐⭐ | M 🔌 |
-| PNG frame overlays | Transparent decorative frames layered on top. | ⭐⭐ | S |
+| Uploadable custom stickers ✅ **Done** | Host uploads their own PNG stickers/props (Admin → Custom stickers; appear as a "Yours" pack in the editor). | ⭐⭐ | M 🔌 |
+| PNG frame overlays ✅ **Done** | Transparent decorative frames layered on top (Frames step → Overlay: Gold/Hearts/Stars/Film/Lace/Confetti). | ⭐⭐ | S |
 | Layer ordering UI | Explicit bring-forward/back panel. | ⭐ | S |
 | AI style filters | Cartoon / anime / oil-paint style transfer. | ⭐⭐⭐ | L 🔌 |
 

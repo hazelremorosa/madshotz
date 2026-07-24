@@ -81,12 +81,12 @@ export interface StickerPack {
   glyphs: string[];
 }
 
-export type PlacedKind = "sticker" | "text";
+export type PlacedKind = "sticker" | "text" | "image";
 
 export interface PlacedItem {
   id: string;
   kind: PlacedKind;
-  /** Sticker glyph or the text content. */
+  /** Emoji glyph (sticker), text content (text), or a PNG data URL (image). */
   content: string;
   /** Normalized center position on the paper (0..1). */
   x: number;

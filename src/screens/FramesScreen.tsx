@@ -7,6 +7,7 @@ import {
   FRAME_STYLE_BY_ID,
   PHOTO_SHAPES,
 } from "@/data/frames";
+import { OVERLAYS, overlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { CheckBadge } from "@/components/ui/CheckBadge";
@@ -22,14 +23,17 @@ export function FramesScreen() {
   const filterId = useSession((s) => s.filterId);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
+  const overlayId = useSession((s) => s.overlayId);
   const setFrameStyle = useSession((s) => s.setFrameStyle);
   const setPhotoShape = useSession((s) => s.setPhotoShape);
+  const setOverlay = useSession((s) => s.setOverlay);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
 
   const [tab, setTab] = useState<"color" | "pattern">("color");
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
   const styles = FRAME_STYLES.filter((f) => f.kind === tab);
   // Let the receipt shrink to fit so the controls below never get pushed
   // under the fixed action bar (tall layouts like 3-strip).
@@ -53,7 +57,7 @@ export function FramesScreen() {
       {/* Live preview */}
       <div className="flex min-h-0 flex-1 items-center justify-center px-10 py-1">
         <motion.div
-          key={`${frameStyleId}-${photoShape}`}
+          key={`${frameStyleId}-${photoShape}-${overlayId}`}
           initial={{ scale: 0.96, opacity: 0.7 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 22 }}
@@ -65,6 +69,7 @@ export function FramesScreen() {
             filterCss={filterCss}
             frameBg={frameBg}
             shape={photoShape}
+            frameOverlay={frameOverlay}
             theme={theme}
             code={code}
             dateLabel={formatDate()}
@@ -73,8 +78,51 @@ export function FramesScreen() {
         </motion.div>
       </div>
 
-      {/* Shape row */}
+      {/* Overlay row */}
       <div className="px-5">
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+          Overlay
+        </p>
+        <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
+          {OVERLAYS.map((o) => {
+            const active = overlayId === o.id;
+            const thumb = o.svg ? o.svg(1) : null;
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => pick(() => setOverlay(o.id))}
+                className={cn(
+                  "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-3 py-2 transition-all",
+                  active
+                    ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
+                    : "glass opacity-65",
+                )}
+              >
+                {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-paper-shade">
+                  {thumb ? (
+                    <img src={thumb} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-lg leading-none text-cocoa/40">∅</span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                  )}
+                >
+                  {o.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Shape row */}
+      <div className="mt-3 px-5">
         <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
           Photo shape
         </p>

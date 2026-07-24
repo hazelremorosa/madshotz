@@ -20,6 +20,8 @@ interface ComposeOpts {
   theme: Theme;
   code: string;
   dateLabel: string;
+  /** Decorative frame overlay SVG data URI, sized to the paper (null = none). */
+  overlaySvg?: string | null;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -219,8 +221,17 @@ function frameRects(
 
 /** Renders the receipt composite to a PNG data URL. */
 export async function composeReceipt(opts: ComposeOpts): Promise<string> {
-  const { photos, layout, filterCss, frameStyle, shape, items, code, dateLabel } =
-    opts;
+  const {
+    photos,
+    layout,
+    filterCss,
+    frameStyle,
+    shape,
+    items,
+    code,
+    dateLabel,
+    overlaySvg,
+  } = opts;
   const W = 760;
   const H = Math.round(W / layout.paperAspect);
   const canvas = document.createElement("canvas");
@@ -283,6 +294,23 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
     ctx.restore();
   }
 
+  // Decorative frame overlay — full paper, above photos, below decorations.
+  if (overlaySvg) {
+    const ov = await loadImage(overlaySvg).catch(() => null);
+    if (ov) ctx.drawImage(ov, 0, 0, W, H);
+  }
+
+  // Preload host-uploaded image stickers so the decoration loop stays synchronous.
+  const itemImages = new Map<string, HTMLImageElement>();
+  await Promise.all(
+    items
+      .filter((it) => it.kind === "image")
+      .map(async (it) => {
+        const img = await loadImage(it.content).catch(() => null);
+        if (img) itemImages.set(it.id, img);
+      }),
+  );
+
   // Decorations.
   for (const it of [...items].sort((a, b) => a.z - b.z)) {
     ctx.save();
@@ -294,6 +322,14 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(it.content, 0, 0);
+    } else if (it.kind === "image") {
+      const img = itemImages.get(it.id);
+      if (img) {
+        // Matches the DOM sizing (16cqw width), aspect preserved.
+        const dw = W * 0.16 * it.scale;
+        const dh = dw * (img.height / (img.width || 1));
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+      }
     } else {
       const size = W * 0.05 * it.scale;
       ctx.font = `800 ${size}px system-ui, sans-serif`;

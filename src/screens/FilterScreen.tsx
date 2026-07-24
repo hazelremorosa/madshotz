@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FILTERS, activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
+import { overlaySrc } from "@/data/overlays";
 import { useSession } from "@/store/session";
 import { useSettings } from "@/store/settings";
 import { ActionBar } from "@/components/shell/ActionBar";
@@ -21,6 +22,7 @@ export function FilterScreen() {
   const beautyOn = useSession((s) => s.beautyOn);
   const frameStyleId = useSession((s) => s.frameStyleId);
   const photoShape = useSession((s) => s.photoShape);
+  const overlayId = useSession((s) => s.overlayId);
   const setFilter = useSession((s) => s.setFilter);
   const setFilterIntensity = useSession((s) => s.setFilterIntensity);
   const toggleBeauty = useSession((s) => s.toggleBeauty);
@@ -41,6 +43,7 @@ export function FilterScreen() {
   }, [shown, filterId, setFilter]);
 
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
+  const frameOverlay = overlaySrc(overlayId, layout.paperAspect);
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
@@ -67,6 +70,7 @@ export function FilterScreen() {
             filterCss={filterCss}
             frameBg={frameBg}
             shape={photoShape}
+            frameOverlay={frameOverlay}
             theme={theme}
             code={code}
             dateLabel={formatDate()}
