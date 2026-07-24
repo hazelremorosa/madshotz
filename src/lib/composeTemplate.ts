@@ -1,4 +1,6 @@
-import type { CapturedPhoto, EventTemplate } from "@/types";
+import type { CapturedPhoto, EventTemplate, TemplateSlot } from "@/types";
+import { qrMatrixSync } from "@/lib/qr";
+import { DeliveryService } from "@/lib/delivery";
 
 /**
  * Composites guest photos into a designed template: the finished design is drawn
@@ -46,13 +48,60 @@ interface TemplateComposeOpts {
   photos: CapturedPhoto[];
   /** CSS filter baked into the photos (not the design). */
   filterCss?: string;
+  /** Session code the QR links to (a placeholder is used if omitted). */
+  code?: string;
+}
+
+function slotRect(s: TemplateSlot, W: number, H: number) {
+  return { x: s.x * W, y: s.y * H, w: s.w * W, h: s.h * H };
+}
+
+/** Draws the "MAD SHOTS" wordmark fit inside the brand slot. */
+function drawBrand(ctx: CanvasRenderingContext2D, s: TemplateSlot, W: number, H: number) {
+  const r = slotRect(s, W, H);
+  const tracked = "MAD SHOTS".split("").join(" ");
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#4a3a44";
+  let px = r.h * 0.62;
+  const font = (p: number) => `800 ${p}px ui-monospace, "SF Mono", monospace`;
+  ctx.font = font(px);
+  while (ctx.measureText(tracked).width > r.w * 0.94 && px > 6) {
+    px -= 1;
+    ctx.font = font(px);
+  }
+  ctx.fillText(tracked, r.x + r.w / 2, r.y + r.h / 2);
+  ctx.restore();
+}
+
+/** Draws the QR (square, centred) inside the QR slot with a white quiet zone. */
+function drawQr(ctx: CanvasRenderingContext2D, s: TemplateSlot, W: number, H: number, code: string) {
+  const r = slotRect(s, W, H);
+  const side = Math.min(r.w, r.h);
+  const bx = r.x + (r.w - side) / 2;
+  const by = r.y + (r.h - side) / 2;
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(bx, by, side, side);
+  const pad = side * 0.08;
+  const inner = side - pad * 2;
+  const matrix = qrMatrixSync(DeliveryService.linkFor(code));
+  const n = matrix.length;
+  const cell = inner / n;
+  ctx.fillStyle = "#111111";
+  for (let row = 0; row < n; row++)
+    for (let col = 0; col < n; col++)
+      if (matrix[row][col])
+        ctx.fillRect(bx + pad + col * cell, by + pad + row * cell, cell + 0.6, cell + 0.6);
+  ctx.restore();
 }
 
 /** Renders the designed template with the guest photos dropped into its slots. */
 export async function composeTemplate(
   opts: TemplateComposeOpts,
 ): Promise<string> {
-  const { template, photos, filterCss } = opts;
+  const { template, photos, filterCss, code } = opts;
   const bg = await loadImage(template.image);
   const W = bg.naturalWidth || 1280;
   const H = bg.naturalHeight || Math.round(W / (template.aspect || 1.5));
@@ -89,6 +138,10 @@ export async function composeTemplate(
     ctx.filter = "none";
     ctx.restore();
   }
+
+  // Branding + QR — reserved in every template, positionable per template.
+  if (template.brandSlot) drawBrand(ctx, template.brandSlot, W, H);
+  if (template.qrSlot) drawQr(ctx, template.qrSlot, W, H, code ?? "PREVIEW");
 
   return canvas.toDataURL("image/jpeg", 0.9);
 }

@@ -30,7 +30,8 @@ export interface EventRecord {
 }
 
 let seq = 0;
-function eventId(): string {
+/** A fresh event id — generated up front so a draft's templates can reference it. */
+export function newEventId(): string {
   seq += 1;
   return `ev_${Date.now().toString(36)}_${seq}`;
 }
@@ -49,9 +50,8 @@ const guardedStorage = {
 
 interface EventsState {
   events: EventRecord[];
-  /** Adds an event (newest first, capped) and returns its new id. */
-  addEvent: (rec: Omit<EventRecord, "id">) => string;
-  updateEvent: (id: string, patch: Partial<Omit<EventRecord, "id">>) => void;
+  /** Inserts (newest first, capped) or replaces the event with this id. */
+  upsertEvent: (rec: EventRecord) => void;
   removeEvent: (id: string) => void;
 }
 
@@ -59,15 +59,12 @@ export const useEvents = create<EventsState>()(
   persist(
     (set) => ({
       events: [],
-      addEvent: (rec) => {
-        const id = eventId();
-        set((s) => ({ events: [{ ...rec, id }, ...s.events].slice(0, MAX_EVENTS) }));
-        return id;
-      },
-      updateEvent: (id, patch) =>
-        set((s) => ({
-          events: s.events.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        })),
+      upsertEvent: (rec) =>
+        set((s) =>
+          s.events.some((e) => e.id === rec.id)
+            ? { events: s.events.map((e) => (e.id === rec.id ? rec : e)) }
+            : { events: [rec, ...s.events].slice(0, MAX_EVENTS) },
+        ),
       removeEvent: (id) =>
         set((s) => ({ events: s.events.filter((e) => e.id !== id) })),
     }),

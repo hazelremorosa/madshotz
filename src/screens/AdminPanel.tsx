@@ -21,24 +21,28 @@ import {
 } from "@/store/settings";
 import {
   FRAME_MAX_DIM,
-  PHOTO_MAX_DIM,
-  fileToJpegDataUrl,
   fileToPngDataUrl,
   fileToTemplate,
 } from "@/lib/image";
-import { MAX_TEMPLATES, useTemplates } from "@/store/templates";
+import {
+  DEFAULT_BRAND_SLOT,
+  DEFAULT_QR_SLOT,
+  MAX_TEMPLATES,
+  useTemplates,
+} from "@/store/templates";
 import {
   clearActiveEvent,
   loadEvent,
+  newEventId,
   useEvents,
   type EventRecord,
 } from "@/store/events";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
+import { DateField } from "@/components/admin/DateField";
 import type { EventTemplate } from "@/types";
 import {
   ACCENT_BY_CATEGORY,
-  PHOTO_TEMPLATES,
   overlaysInCategory,
   resolveOverlaySrc,
   type OverlayCategory,
@@ -86,6 +90,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const theme = useSession((st) => st.theme);
   const [note, setNote] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("events");
+  const [confirmClose, setConfirmClose] = useState(false);
 
   const toast = (msg: string) => {
     setNote(msg);
@@ -110,7 +115,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               Saved automatically
             </p>
           </div>
-          <SmallButton tone="brand" onClick={onClose}>
+          <SmallButton tone="brand" onClick={() => setConfirmClose(true)}>
             Done ✓
           </SmallButton>
         </header>
@@ -346,6 +351,48 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </span>
           </motion.div>
         )}
+
+        {/* Return-to-customer confirmation */}
+        {confirmClose && (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-cocoa/40 p-6 backdrop-blur-sm"
+            onClick={() => setConfirmClose(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-strong w-full max-w-[20rem] rounded-xl3 p-6 text-center shadow-float"
+            >
+              <div className="text-3xl">👋</div>
+              <h3 className="mt-2 text-lg font-extrabold text-cocoa">
+                Return to Customer View?
+              </h3>
+              <p className="mt-1 text-sm text-cocoa/55">
+                Guests will see the booth again.
+              </p>
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmClose(false)}
+                  className="flex-1 rounded-full border border-cocoa/15 bg-white/70 py-3 text-sm font-bold text-cocoa"
+                >
+                  No, stay
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmClose(false);
+                    onClose();
+                  }}
+                  className="flex-1 rounded-full brand-fill py-3 text-sm font-bold text-white shadow-bloom"
+                >
+                  Yes, return
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -533,15 +580,15 @@ function PaletteSection() {
 
 function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
   const events = useEvents((st) => st.events);
-  const addEvent = useEvents((st) => st.addEvent);
-  const updateEvent = useEvents((st) => st.updateEvent);
+  const upsertEvent = useEvents((st) => st.upsertEvent);
   const removeEvent = useEvents((st) => st.removeEvent);
+  const removeTemplatesForEvent = useTemplates((st) => st.removeTemplatesForEvent);
   const activeEventId = useSettings((st) => st.activeEventId);
   const designMode = useSettings((st) => st.designMode);
   const set = useSettings((st) => st.set);
   const theme = useSession((st) => st.theme);
 
-  const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; isNew: boolean } | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Wedding");
   const [date, setDate] = useState("");
@@ -562,8 +609,10 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
     setName("");
     setDate("");
     set("designMode", "template");
+    // A brand-new event starts with NO template selected — its own set only.
+    set("eventTemplateId", null);
     applyCategory("Wedding");
-    setEditing({ id: null });
+    setEditing({ id: newEventId(), isNew: true });
   };
 
   const startEdit = (e: EventRecord) => {
@@ -573,10 +622,12 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
     setName(e.name);
     setCategory(e.category);
     setDate(e.date);
-    setEditing({ id: e.id });
+    setEditing({ id: e.id, isNew: false });
   };
 
   const cancel = () => {
+    // Discard a brand-new event's uploaded templates.
+    if (editing?.isNew) removeTemplatesForEvent(editing.id);
     const b = backup.current;
     if (b) {
       useSettings.getState().applyConfig(b.config);
@@ -588,6 +639,7 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
   };
 
   const save = () => {
+    if (!editing) return;
     const mode = useSettings.getState().designMode === "overlay" ? "overlay" : "template";
     const config = snapshotConfig();
     config.eventCategory = category;
@@ -596,15 +648,13 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
     if (!config.eventTitle.trim()) config.eventTitle = name.trim();
     if (!config.eventSubtitle.trim()) config.eventSubtitle = date;
     const nm = name.trim() || `${category} event`;
-    const rec = { name: nm, category, date, designMode: mode as "template" | "overlay", config };
-    const id = editing?.id
-      ? (updateEvent(editing.id, rec), editing.id)
-      : addEvent(rec);
-    set("activeEventId", id);
+    upsertEvent({ id: editing.id, name: nm, category, date, designMode: mode, config });
+    set("activeEventId", editing.id);
     set("designMode", mode);
     backup.current = null;
+    const wasNew = editing.isNew;
     setEditing(null);
-    onToast(editing?.id ? "Event updated" : "Event created & loaded");
+    onToast(wasNew ? "Event created & loaded" : "Event updated");
   };
 
   const load = (e: EventRecord) => {
@@ -614,6 +664,7 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
   };
   const del = (e: EventRecord) => {
     removeEvent(e.id);
+    removeTemplatesForEvent(e.id);
     if (activeEventId === e.id) clearActiveEvent();
   };
   const unload = () => {
@@ -627,7 +678,7 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
     return (
       <Section
         emoji="🎬"
-        title={editing.id ? "Edit event" : "Create event"}
+        title={editing.isNew ? "Create event" : "Edit event"}
         note="Set the basics, then design the print. Saving makes it the active event."
       >
         <Row label="Category" stacked>
@@ -652,12 +703,7 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
           />
         </Row>
         <Row label="Event date" stacked>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl border border-cocoa/15 bg-white/80 px-3 py-2 text-sm text-cocoa outline-none focus:border-[rgb(var(--brand-a))]"
-          />
+          <DateField value={date} onChange={setDate} />
         </Row>
         <Row label="Design" hint="Pick one — a template or frame overlays." stacked>
           <Segmented
@@ -671,18 +717,15 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
         </Row>
 
         {mode === "template" ? (
-          <EventTemplateSection onToast={onToast} />
+          <EventTemplateSection eventId={editing.id} onToast={onToast} />
         ) : (
-          <>
-            <FrameOverlaySection onToast={onToast} />
-            <EventPhotoSection onToast={onToast} />
-          </>
+          <FrameOverlaySection onToast={onToast} />
         )}
 
         <div className="flex items-center justify-end gap-2 pt-1">
           <SmallButton onClick={cancel}>Cancel</SmallButton>
           <SmallButton tone="brand" onClick={save}>
-            {editing.id ? "Save event" : "Create event"}
+            {editing.isNew ? "Create event" : "Save event"}
           </SmallButton>
         </div>
       </Section>
@@ -968,114 +1011,6 @@ function CustomerPreviewSection() {
   );
 }
 
-// ── Event photo details (for the frame-overlay / photo-template design) ──────
-
-function EventPhotoSection({ onToast }: { onToast: (msg: string) => void }) {
-  const eventType = useSettings((st) => st.eventType);
-  const eventPhoto = useSettings((st) => st.eventPhoto);
-  const eventTitle = useSettings((st) => st.eventTitle);
-  const eventSubtitle = useSettings((st) => st.eventSubtitle);
-  const eventName = useSettings((st) => st.eventName);
-  const set = useSettings((st) => st.set);
-  const photoRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-
-  const onPhoto = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    setBusy(true);
-    try {
-      set("eventPhoto", await fileToJpegDataUrl(file, PHOTO_MAX_DIM));
-      onToast("Photo added");
-    } catch {
-      onToast("Couldn't read that image");
-    } finally {
-      setBusy(false);
-      if (photoRef.current) photoRef.current.value = "";
-    }
-  };
-
-  return (
-    <Section
-      emoji="🖼️"
-      title="Photo details"
-      note="Used by the photo-template frames — a couple/celebrant photo plus title & subtitle."
-    >
-      <input
-        ref={photoRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => onPhoto(e.target.files)}
-      />
-      <Row
-        label="Feature photo"
-        hint="Couple / celebrant photo, shown by the photo-template frames."
-      >
-        <div className="flex items-center gap-2">
-          {eventPhoto && (
-            <span className="relative h-12 w-12 overflow-hidden rounded-full border border-cocoa/15">
-              <img src={eventPhoto} alt="" className="h-full w-full object-cover" />
-              <button
-                type="button"
-                aria-label="Remove photo"
-                onClick={() => set("eventPhoto", null)}
-                className="absolute inset-0 flex items-center justify-center bg-black/45 text-xs font-bold text-white opacity-0 transition-opacity active:opacity-100"
-              >
-                ✕
-              </button>
-            </span>
-          )}
-          <SmallButton tone="brand" onClick={() => photoRef.current?.click()}>
-            {busy ? "Adding…" : eventPhoto ? "Replace" : "Upload"}
-          </SmallButton>
-        </div>
-      </Row>
-
-      <Row label="Title" hint="e.g. the couple's or celebrant's name." stacked>
-        <TextField
-          value={eventTitle}
-          onChange={(v) => set("eventTitle", v)}
-          placeholder="John & Jane"
-          maxLength={28}
-        />
-      </Row>
-      <Row label="Subtitle" hint="A date or short message." stacked>
-        <TextField
-          value={eventSubtitle}
-          onChange={(v) => set("eventSubtitle", v)}
-          placeholder="December 25, 2026"
-          maxLength={32}
-        />
-      </Row>
-
-      {/* Live preview of the photo templates with the entered details. */}
-      <Row label="Photo templates" hint="Guests can pick any of these." stacked>
-        <div className="no-bar flex gap-2 overflow-x-auto pb-1">
-          {PHOTO_TEMPLATES.map((t) => {
-            const src = t.svg(150 / 242, {
-              photo: eventPhoto,
-              title: eventTitle.trim() || eventName.trim(),
-              subtitle: eventSubtitle.trim(),
-              accent: ACCENT_BY_CATEGORY[eventType],
-            });
-            return (
-              <figure key={t.id} className="shrink-0">
-                <span className="block h-[121px] w-[75px] overflow-hidden rounded-md bg-paper shadow">
-                  <img src={src} alt="" className="h-full w-full object-cover" />
-                </span>
-                <figcaption className="mt-0.5 text-center text-[10px] font-semibold text-cocoa/60">
-                  {t.name}
-                </figcaption>
-              </figure>
-            );
-          })}
-        </div>
-      </Row>
-    </Section>
-  );
-}
-
 // ── Event template (designed, uploaded) ─────────────────────────────────────
 
 /** Composites a template with placeholder photos so the host sees the result. */
@@ -1123,17 +1058,25 @@ function TemplatePreview({ template }: { template: EventTemplate }) {
   );
 }
 
-function EventTemplateSection({ onToast }: { onToast: (msg: string) => void }) {
+function EventTemplateSection({
+  eventId,
+  onToast,
+}: {
+  eventId: string;
+  onToast: (msg: string) => void;
+}) {
   const eventTemplateId = useSettings((st) => st.eventTemplateId);
   const set = useSettings((st) => st.set);
-  const templates = useTemplates((st) => st.templates);
+  const allTemplates = useTemplates((st) => st.templates);
   const addTemplate = useTemplates((st) => st.addTemplate);
-  const setSlots = useTemplates((st) => st.setSlots);
+  const updateTemplate = useTemplates((st) => st.updateTemplate);
   const removeTemplate = useTemplates((st) => st.removeTemplate);
   const inputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Templates are event-specific — only this event's are shown or selectable.
+  const templates = allTemplates.filter((t) => t.eventId === eventId);
   const full = templates.length >= MAX_TEMPLATES;
 
   const onFile = async (files: FileList | null) => {
@@ -1145,7 +1088,15 @@ function EventTemplateSection({ onToast }: { onToast: (msg: string) => void }) {
       const name =
         file.name.replace(/\.[^.]+$/, "").slice(0, 24) ||
         `Template ${templates.length + 1}`;
-      const id = addTemplate({ name, image: url, aspect, slots: [] });
+      const id = addTemplate({
+        eventId,
+        name,
+        image: url,
+        aspect,
+        slots: [],
+        brandSlot: { ...DEFAULT_BRAND_SLOT },
+        qrSlot: { ...DEFAULT_QR_SLOT },
+      });
       set("eventTemplateId", id);
       setEditingId(id);
       onToast("Template added — now mark the photo boxes");
@@ -1161,7 +1112,7 @@ function EventTemplateSection({ onToast }: { onToast: (msg: string) => void }) {
     <Section
       emoji="🖼️"
       title="Event template"
-      note="Upload your finished landscape design, then drag boxes onto the photo slots. The number of boxes is how many shots guests take. Overrides the receipt for this event."
+      note="Upload your finished landscape design, then drag boxes onto the photo slots. The MAD SHOTS + QR boxes are always included; drag them anywhere. Box count = number of shots."
     >
       <input
         ref={inputRef}
@@ -1225,7 +1176,9 @@ function EventTemplateSection({ onToast }: { onToast: (msg: string) => void }) {
                     <TemplateSlotEditor
                       image={t.image}
                       slots={t.slots}
-                      onChange={(slots) => setSlots(t.id, slots)}
+                      brandSlot={t.brandSlot}
+                      qrSlot={t.qrSlot}
+                      onChange={(patch) => updateTemplate(t.id, patch)}
                     />
                     <TemplatePreview template={t} />
                   </div>
@@ -1269,10 +1222,6 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
   const guestCanChangeOverlay = useSettings((st) => st.guestCanChangeOverlay);
   const designMode = useSettings((st) => st.designMode);
   const eventType = useSettings((st) => st.eventType);
-  const eventPhoto = useSettings((st) => st.eventPhoto);
-  const eventTitle = useSettings((st) => st.eventTitle);
-  const eventSubtitle = useSettings((st) => st.eventSubtitle);
-  const eventName = useSettings((st) => st.eventName);
   const addCustomFrames = useSettings((st) => st.addCustomFrames);
   const removeCustomFrame = useSettings((st) => st.removeCustomFrame);
   const set = useSettings((st) => st.set);
@@ -1307,14 +1256,9 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
     }
   };
 
-  // Scoped to the event's overlay family + photo templates, plus host uploads.
+  // Scoped to the event's overlay family, plus host uploads.
   const cat: OverlayCategory = designMode === "overlay" ? eventType : "Classic";
-  const opts = {
-    photo: eventPhoto,
-    title: eventTitle.trim() || eventName.trim(),
-    subtitle: eventSubtitle.trim(),
-    accent: ACCENT_BY_CATEGORY[cat],
-  };
+  const opts = { accent: ACCENT_BY_CATEGORY[cat] };
   const options: { id: string; name: string; thumb: string | null }[] = [
     { id: "none", name: "None", thumb: null },
     ...overlaysInCategory(cat).map((o) => ({
@@ -1322,13 +1266,6 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
       name: o.name,
       thumb: o.svg!(1, opts),
     })),
-    ...(designMode === "overlay"
-      ? PHOTO_TEMPLATES.map((t) => ({
-          id: t.id,
-          name: t.name,
-          thumb: t.svg(1, opts),
-        }))
-      : []),
     ...customFrames.map((cf, i) => ({
       id: cf.id,
       name: `Custom ${i + 1}`,

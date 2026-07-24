@@ -117,6 +117,8 @@ export interface TemplateSlot {
  */
 export interface EventTemplate {
   id: string;
+  /** The event this template belongs to (templates are event-specific). */
+  eventId: string;
   name: string;
   /** The finished design as a data URL (downscaled on upload). */
   image: string;
@@ -124,4 +126,8 @@ export interface EventTemplate {
   aspect: number;
   /** Photo holes, in capture order. */
   slots: TemplateSlot[];
+  /** Where the "MAD SHOTS" branding is drawn (positionable). */
+  brandSlot: TemplateSlot;
+  /** Where the QR code is drawn (positionable). */
+  qrSlot: TemplateSlot;
 }

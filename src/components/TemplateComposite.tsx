@@ -7,6 +7,8 @@ interface Props {
   template: EventTemplate;
   photos: CapturedPhoto[];
   filterCss?: string;
+  /** Session code the embedded QR links to. */
+  code?: string;
   className?: string;
 }
 
@@ -19,6 +21,7 @@ export function TemplateComposite({
   template,
   photos,
   filterCss,
+  code,
   className,
 }: Props) {
   const [url, setUrl] = useState<string | null>(null);
@@ -26,7 +29,7 @@ export function TemplateComposite({
   useEffect(() => {
     let alive = true;
     const t = window.setTimeout(() => {
-      composeTemplate({ template, photos, filterCss })
+      composeTemplate({ template, photos, filterCss, code })
         .then((u) => alive && setUrl(u))
         .catch(() => undefined);
     }, 120);
@@ -34,7 +37,7 @@ export function TemplateComposite({
       alive = false;
       window.clearTimeout(t);
     };
-  }, [template, photos, filterCss]);
+  }, [template, photos, filterCss, code]);
 
   return (
     <div

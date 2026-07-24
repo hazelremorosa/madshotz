@@ -53,7 +53,7 @@ export function PrintingScreen() {
     // A designed template composites differently (photos into the design); a
     // normal booth renders the receipt.
     const build = template
-      ? composeTemplate({ template, photos, filterCss })
+      ? composeTemplate({ template, photos, filterCss, code })
       : composeReceipt({
           photos,
           layout,
@@ -101,6 +101,7 @@ export function PrintingScreen() {
                 template={template}
                 photos={photos}
                 filterCss={filterCss}
+                code={code}
                 className="w-full"
               />
             ) : (

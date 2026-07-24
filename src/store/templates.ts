@@ -13,6 +13,10 @@ import { useSettings } from "@/store/settings";
 export const TEMPLATES_KEY = "madshots.templates.v1";
 export const MAX_TEMPLATES = 8;
 
+/** Default positions for the branding + QR (fractions of the design). */
+export const DEFAULT_BRAND_SLOT: TemplateSlot = { x: 0.03, y: 0.03, w: 0.24, h: 0.09 };
+export const DEFAULT_QR_SLOT: TemplateSlot = { x: 0.85, y: 0.82, w: 0.12, h: 0.16 };
+
 let seq = 0;
 function templateId(): string {
   seq += 1;
@@ -36,9 +40,11 @@ interface TemplatesState {
   templates: EventTemplate[];
   /** Adds a template (newest first, capped) and returns its new id. */
   addTemplate: (t: Omit<EventTemplate, "id">) => string;
-  renameTemplate: (id: string, name: string) => void;
+  updateTemplate: (id: string, patch: Partial<Omit<EventTemplate, "id">>) => void;
   setSlots: (id: string, slots: TemplateSlot[]) => void;
   removeTemplate: (id: string) => void;
+  /** Drops every template belonging to an event (used when the event is deleted). */
+  removeTemplatesForEvent: (eventId: string) => void;
 }
 
 export const useTemplates = create<TemplatesState>()(
@@ -52,9 +58,9 @@ export const useTemplates = create<TemplatesState>()(
         }));
         return id;
       },
-      renameTemplate: (id, name) =>
+      updateTemplate: (id, patch) =>
         set((s) => ({
-          templates: s.templates.map((x) => (x.id === id ? { ...x, name } : x)),
+          templates: s.templates.map((x) => (x.id === id ? { ...x, ...patch } : x)),
         })),
       setSlots: (id, slots) =>
         set((s) => ({
@@ -62,6 +68,10 @@ export const useTemplates = create<TemplatesState>()(
         })),
       removeTemplate: (id) =>
         set((s) => ({ templates: s.templates.filter((x) => x.id !== id) })),
+      removeTemplatesForEvent: (eventId) =>
+        set((s) => ({
+          templates: s.templates.filter((x) => x.eventId !== eventId),
+        })),
     }),
     { name: TEMPLATES_KEY, storage: createJSONStorage(() => guardedStorage) },
   ),
@@ -73,6 +83,11 @@ export function templateById(
 ): EventTemplate | undefined {
   if (!id) return undefined;
   return useTemplates.getState().templates.find((t) => t.id === id);
+}
+
+/** Templates belonging to a given event. */
+export function templatesForEvent(eventId: string): EventTemplate[] {
+  return useTemplates.getState().templates.filter((t) => t.eventId === eventId);
 }
 
 /**

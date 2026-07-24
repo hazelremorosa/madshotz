@@ -57,6 +57,7 @@ export function PreviewScreen() {
               template={template}
               photos={photos}
               filterCss={filterCss}
+              code={code}
               className="max-h-full w-full shadow-float"
             />
           ) : (
