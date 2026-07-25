@@ -108,7 +108,10 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
       transition={{ type: "spring", stiffness: 260, damping: 28 }}
       className="fixed inset-0 z-[100] flex justify-center bg-cream-deep/95 backdrop-blur-xl"
     >
-      <div className="flex h-full w-full max-w-[540px] flex-col">
+      {/* No width cap of its own — KioskFrame already keeps the design box to a
+          sane column and scales it, so capping again just insets Admin from the
+          guest UI on a wider tablet. */}
+      <div className="flex h-full w-full flex-col">
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between gap-3 px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
           <div>
