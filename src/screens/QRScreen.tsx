@@ -19,6 +19,7 @@ export function QRScreen() {
 
   const [matrix, setMatrix] = useState<boolean[][] | null>(null);
   const [url, setUrl] = useState("");
+  const [pending, setPending] = useState(false);
   const [seconds, setSeconds] = useState(resetSeconds);
   const [toast, setToast] = useState<string | null>(null);
   const celebrated = useRef(false);
@@ -28,6 +29,7 @@ export function QRScreen() {
     DeliveryService.publish(code, composite ?? "").then(async (res) => {
       if (!alive) return;
       setUrl(res.url);
+      setPending(res.pending);
       setMatrix(await qrMatrix(res.url));
       if (!celebrated.current) {
         celebrated.current = true;
@@ -102,8 +104,21 @@ export function QRScreen() {
         <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Your memories are <span className="brand-text">ready!</span>
         </h2>
-        <p className="mt-1 text-sm text-cocoa/50">Scan to save your photos</p>
+        <p className="mt-1 text-sm text-cocoa/50">
+          {pending ? "Saved ✓ — download it here now" : "Scan to save your photos"}
+        </p>
       </motion.div>
+
+      {/* Offline: the photo is safe on the device; the QR link syncs later. */}
+      {pending && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-full bg-amber-100/80 px-4 py-1.5 text-center text-xs font-semibold text-amber-700"
+        >
+          📴 Offline — the QR link will work once this booth reconnects
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

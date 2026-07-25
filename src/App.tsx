@@ -4,6 +4,10 @@ import { useSession } from "@/store/session";
 import { applyBrandVars, effectiveBrand } from "@/store/settings";
 import { hydrateEvents } from "@/store/events";
 import { hydrateTemplates } from "@/store/templates";
+import { startUploadRetry } from "@/lib/delivery";
+import { useUploadQueue } from "@/lib/uploadQueue";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { cn } from "@/lib/cn";
 import { useIdleReset } from "@/hooks/useIdleReset";
 import { useKioskLockdown } from "@/hooks/useKioskLockdown";
 import { AdminRoot } from "@/components/admin/AdminRoot";
@@ -64,6 +68,8 @@ export default function App() {
   const soundOn = useSession((s) => s.soundOn);
   const toggleSound = useSession((s) => s.toggleSound);
   const theme = useSession((s) => s.theme);
+  const online = useOnlineStatus();
+  const pendingUploads = useUploadQueue((s) => s.pending);
   useIdleReset();
   useKioskLockdown();
 
@@ -77,6 +83,12 @@ export default function App() {
   useEffect(() => {
     void hydrateEvents();
     void hydrateTemplates();
+  }, []);
+
+  // Retry any photos that couldn't upload (wifi dropped) — on boot, on
+  // reconnect, and on a timer.
+  useEffect(() => {
+    startUploadRetry();
   }, []);
 
   const Screen = SCREENS[screen];
@@ -99,6 +111,24 @@ export default function App() {
       </motion.div>
 
       <ProgressRail />
+
+      {/* Offline / syncing status — reassures that nothing is lost. */}
+      {(!online || pendingUploads > 0) && (
+        <div className="pointer-events-none absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-50 -translate-x-1/2">
+          <span
+            className={cn(
+              "glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-glass",
+              online ? "text-cocoa/70" : "text-amber-600",
+            )}
+          >
+            {!online ? (
+              <>📴 Offline{pendingUploads > 0 ? ` · ${pendingUploads} to sync` : ""}</>
+            ) : (
+              <>🔄 Syncing {pendingUploads} photo{pendingUploads === 1 ? "" : "s"}…</>
+            )}
+          </span>
+        </div>
+      )}
 
       <button
         type="button"

@@ -102,8 +102,8 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 |---|---|---|---|
 | **Admin panel (PIN-locked)** ✅ **Done** | 5 taps on the top-left corner + PIN. Camera pick & mirror, countdown & fill light, enabled layouts/filters, event branding & palette, sound, idle + QR timings, kiosk, PIN change, status, factory reset. (Pricing waits on payments.) | ⭐⭐⭐ | M |
 | Kiosk lockdown ✅ **Done** | Fullscreen guard, wake lock, no context menu / pinch-zoom / browser shortcuts / back button / accidental close. | ⭐⭐ | S |
-| **Upload retry queue** | If wifi drops, queue photos and upload when it's back (don't lose any). | ⭐⭐⭐ | M |
-| Offline mode | Full session offline, sync later. | ⭐⭐ | L |
+| **Upload retry queue** ✅ **Done** | Every finished photo is stashed in **IndexedDB** before upload and removed once the Worker confirms it — so a dropped wifi never loses one. Failed uploads retry automatically on reconnect, on boot, and on a timer (dropped after the 24h link expiry). Admin → Status shows the pending count + **Retry now**. | ⭐⭐⭐ | M |
+| Offline mode ✅ **Done** | The whole capture→edit→print flow already runs client-side (PWA shell + local caches), events/templates work from local cache, and the retry queue syncs photos when back online. A **📴 Offline / 🔄 Syncing** pill and honest QR-screen messaging keep it clear nothing is lost. | ⭐⭐ | L |
 | Session analytics | Count, popular layouts/filters, busy times. | ⭐⭐ | M 🔌 |
 | Live slideshow screen | Second display looping the event's photos. | ⭐⭐ | M 🔌 |
 | Multi-language | Tagalog / English toggle (or more). | ⭐⭐ | M |

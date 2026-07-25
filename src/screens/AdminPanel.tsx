@@ -55,7 +55,9 @@ import { LAYOUTS } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
 import { listCameras, stopCameraStream, useCamera, type CameraOption } from "@/lib/camera";
 import { enterFullscreen, isFullscreen, wakeLockSupported } from "@/lib/kiosk";
-import { DeliveryService } from "@/lib/delivery";
+import { DeliveryService, drainUploadQueue } from "@/lib/delivery";
+import { useUploadQueue } from "@/lib/uploadQueue";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
   Chip,
   Row,
@@ -291,19 +293,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             <PinChanger onSaved={() => toast("PIN updated")} />
           </Section>
 
-          <Section emoji="🩺" title="Status">
-            <StatusRow
-              label="Cloud delivery"
-              value={DeliveryService.isConfigured ? "Connected" : "Not configured"}
-              ok={DeliveryService.isConfigured}
-            />
-            <StatusRow
-              label="Keep-awake support"
-              value={wakeLockSupported() ? "Available" : "Not on this browser"}
-              ok={wakeLockSupported()}
-            />
-            <StatusRow label="Version" value={APP_VERSION} ok />
-          </Section>
+          <StatusSection onToast={toast} />
 
           <Section emoji="⚠️" title="Danger zone">
             <Row label="Restart the guest session" hint="Back to the welcome screen.">
@@ -1490,6 +1480,58 @@ function PinChanger({ onSaved }: { onSaved: () => void }) {
         </SmallButton>
       </div>
     </>
+  );
+}
+
+function StatusSection({ onToast }: { onToast: (msg: string) => void }) {
+  const online = useOnlineStatus();
+  const pending = useUploadQueue((s) => s.pending);
+
+  return (
+    <Section
+      emoji="🩺"
+      title="Status"
+      note="Photos that can't upload (dropped wifi) are queued and retried automatically."
+    >
+      <StatusRow label="Network" value={online ? "Online" : "Offline"} ok={online} />
+      <StatusRow
+        label="Cloud delivery"
+        value={DeliveryService.isConfigured ? "Connected" : "Not configured"}
+        ok={DeliveryService.isConfigured}
+      />
+      <Row
+        label="Pending uploads"
+        hint={pending > 0 ? "Waiting to sync — will retry on reconnect." : "All photos delivered."}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "font-mono text-sm font-bold",
+              pending > 0 ? "text-amber-600" : "text-emerald-600",
+            )}
+          >
+            {pending}
+          </span>
+          {pending > 0 && (
+            <SmallButton
+              tone="brand"
+              onClick={() => {
+                drainUploadQueue();
+                onToast(online ? "Retrying uploads…" : "Still offline — will retry when back");
+              }}
+            >
+              Retry now
+            </SmallButton>
+          )}
+        </div>
+      </Row>
+      <StatusRow
+        label="Keep-awake support"
+        value={wakeLockSupported() ? "Available" : "Not on this browser"}
+        ok={wakeLockSupported()}
+      />
+      <StatusRow label="Version" value={APP_VERSION} ok />
+    </Section>
   );
 }
 
