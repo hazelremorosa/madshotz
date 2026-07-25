@@ -259,3 +259,74 @@ export function rasterWidthForStock(stock: LabelStock, marginMm = 2): number {
 export function rasterHeightForStock(stock: LabelStock, marginMm = 2): number {
   return Math.max(8, mmToDots(Math.max(4, stock.heightMm - marginMm * 2)));
 }
+
+// ── Protocol probes ─────────────────────────────────────────────────────────
+//
+// A job the printer accepts and silently discards is indistinguishable, from the
+// browser's side, from one it prints — `transferOut` reports success either way.
+// Each probe below is the smallest payload that proves one specific thing, so
+// "nothing comes out" can be narrowed down by observation instead of guesswork:
+//
+//   feed / formFeed  — does the motor move? If yes, TSPL is being parsed and the
+//                      fault is in our job content, not the language or the link.
+//   selfTest         — the printer prints its OWN config, using none of our
+//                      geometry or raster. Rules both in or out entirely.
+//   reset            — clears a printer sulking in an error state.
+//   minimalLabel     — TSPL stripped to the four commands that matter, in inch
+//                      units, in case DENSITY/SPEED/DIRECTION/REFERENCE or the
+//                      mm syntax is what's being rejected.
+//   escposHello      — if THIS prints and no TSPL does, the printer isn't
+//                      speaking TSPL and the encoder is simply the wrong one.
+//   statusQuery      — expects bytes back. Any reply proves the print engine is
+//                      listening rather than just buffering.
+
+export type ProbeId =
+  | "feed"
+  | "formFeed"
+  | "selfTest"
+  | "reset"
+  | "minimalLabel"
+  | "escposHello"
+  | "statusQuery";
+
+export const PROBES: { id: ProbeId; label: string; expect: string }[] = [
+  { id: "feed", label: "Feed", expect: "Paper should advance ~1 inch" },
+  { id: "formFeed", label: "Form feed", expect: "Should advance to the next label" },
+  { id: "selfTest", label: "Self test", expect: "Printer prints its own settings" },
+  // Not plain "Reset" — the Danger zone in the same tab has a "Reset" that wipes
+  // every booth setting, and these sit inches apart.
+  { id: "reset", label: "Reset printer", expect: "Clears an error state; may re-calibrate" },
+  { id: "minimalLabel", label: "Minimal TSPL", expect: "A label reading TEST" },
+  { id: "escposHello", label: "ESC/POS", expect: "Only prints if it is NOT TSPL" },
+  { id: "statusQuery", label: "Read status", expect: "Bytes come back" },
+];
+
+/** Builds a probe payload. Each is well under 100 bytes, so it can't stall. */
+export function probeBytes(id: ProbeId): Uint8Array {
+  switch (id) {
+    // The leading CRLF flushes any half-finished command left in the buffer.
+    case "feed":
+      return concat(["\r\nFEED 200\r\n"]);
+    case "formFeed":
+      return concat(["\r\nFORMFEED\r\n"]);
+    case "selfTest":
+      return concat(["\r\nSELFTEST\r\n"]);
+    case "reset":
+      return concat(["\r\n~!@\r\n"]);
+    case "minimalLabel":
+      // Inch units, no optional commands, PRINT with a single argument.
+      return concat([
+        '\r\nSIZE 4,6\r\nGAP 0,0\r\nCLS\r\nTEXT 40,40,"3",0,2,2,"TEST"\r\nPRINT 1\r\n',
+      ]);
+    case "escposHello":
+      // ESC @ (init), text, feed, GS V 0 (cut/eject where supported).
+      return concat(["\x1b@", "MAD SHOTS ESC/POS TEST\n\n\n\n", "\x1dV\x00"]);
+    case "statusQuery":
+      return concat(["\x1b!?"]);
+  }
+}
+
+/** Whether a probe expects a reply worth reading back. */
+export function probeReadsBack(id: ProbeId): boolean {
+  return id === "statusQuery";
+}

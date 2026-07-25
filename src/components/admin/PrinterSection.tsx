@@ -18,6 +18,7 @@ import {
 } from "@/lib/dither";
 import {
   LABEL_PRESETS,
+  PROBES,
   dotsToMm,
   mmToDots,
   rasterWidthForStock,
@@ -595,6 +596,50 @@ export function PrinterSection({
               </Row>
             </>
           )}
+
+          {/* ── Protocol probe ───────────────────────────────────────────── */}
+          <div className="flex flex-col gap-2 rounded-xl border border-cocoa/10 bg-white/40 p-3">
+            <div className="text-sm font-semibold text-cocoa">Protocol probe</div>
+            <p className="text-xs leading-snug text-cocoa/55">
+              If a job reports “sent” but nothing comes out, the printer is
+              accepting bytes and discarding them — from here that looks identical
+              to success. Tap these in order and watch the hardware; each one
+              isolates a different layer.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {PROBES.map((probe) => (
+                <SmallButton
+                  key={probe.id}
+                  disabled={printer.status === "printing"}
+                  onClick={async () => {
+                    const msg = await printer.runProbe(probe.id);
+                    onToast(`${probe.label}: ${msg}`);
+                  }}
+                >
+                  {probe.label}
+                </SmallButton>
+              ))}
+            </div>
+            <ul className="flex flex-col gap-0.5 text-[11px] leading-snug text-cocoa/45">
+              {PROBES.map((probe) => (
+                <li key={probe.id}>
+                  <span className="font-semibold">{probe.label}</span> — {probe.expect}
+                </li>
+              ))}
+            </ul>
+            {printer.probeResult && (
+              <div className="rounded-lg bg-cocoa/5 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-cocoa/70">
+                {printer.probeResult}
+              </div>
+            )}
+            <p className="text-[11px] leading-snug text-cocoa/45">
+              <span className="font-semibold">Feed or Self test working</span> means
+              TSPL is understood and the fault is in the job we build.{" "}
+              <span className="font-semibold">Only ESC/POS working</span> means the
+              printer isn't TSPL and needs a different encoder — tell me which and
+              I'll switch it.
+            </p>
+          </div>
 
           {/* ── Diagnostics ──────────────────────────────────────────────── */}
           <div className="rounded-xl bg-cocoa/5 px-3 py-2 font-mono text-[11px] leading-relaxed text-cocoa/60">
