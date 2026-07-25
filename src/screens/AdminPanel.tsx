@@ -94,11 +94,26 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("events");
   const [confirmClose, setConfirmClose] = useState(false);
+  /** True while a press that began on "Yes, return" is still down. */
+  const returnPressed = useRef(false);
 
   const toast = (msg: string) => {
     setNote(msg);
     window.setTimeout(() => setNote((n) => (n === msg ? null : n)), 2000);
   };
+
+  // A keyboard way out, for a host with a Bluetooth keyboard or a laptop. Esc
+  // steps back one level: dismiss the confirmation, or leave Admin.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (confirmClose) setConfirmClose(false);
+      else onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmClose, onClose]);
 
   return (
     <motion.div
@@ -121,9 +136,24 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               Saved automatically
             </p>
           </div>
-          <SmallButton tone="brand" onClick={() => setConfirmClose(true)}>
-            Done ✓
-          </SmallButton>
+          <div className="flex shrink-0 items-center gap-2">
+            <SmallButton tone="brand" onClick={() => setConfirmClose(true)}>
+              Done ✓
+            </SmallButton>
+            {/* A second, independent way out. "Done ✓" goes via a confirmation;
+                this leaves at once. Two paths on purpose — if the modal ever
+                fails to take a tap, the host should never be stuck in Admin with
+                no option but to kill the app. */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Return to customer view now"
+              title="Return to customer view now"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cocoa/15 bg-white/70 text-base font-bold text-cocoa/70 [touch-action:manipulation]"
+            >
+              ✕
+            </button>
+          </div>
         </header>
 
         {/* Tabs */}
@@ -371,17 +401,35 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => setConfirmClose(false)}
-                  className="flex-1 rounded-full border border-cocoa/15 bg-white/70 py-3 text-sm font-bold text-cocoa"
+                  className="flex-1 rounded-full border border-cocoa/15 bg-white/70 py-4 text-sm font-bold text-cocoa [touch-action:manipulation]"
                 >
                   No, stay
                 </button>
+                {/* Acts on pointer-up as well as click: on Android the synthesised
+                    click is sometimes lost when something cancels the gesture,
+                    which is the reported failure. Gated on the press having
+                    *started* here, so a drag that merely ends over the button
+                    doesn't close Admin, and `onClose` is idempotent so both
+                    handlers firing is harmless. */}
                 <button
                   type="button"
+                  onPointerDown={() => {
+                    returnPressed.current = true;
+                  }}
+                  onPointerUp={() => {
+                    if (!returnPressed.current) return;
+                    returnPressed.current = false;
+                    setConfirmClose(false);
+                    onClose();
+                  }}
+                  onPointerCancel={() => {
+                    returnPressed.current = false;
+                  }}
                   onClick={() => {
                     setConfirmClose(false);
                     onClose();
                   }}
-                  className="flex-1 rounded-full brand-fill py-3 text-sm font-bold text-white shadow-bloom"
+                  className="flex-1 rounded-full brand-fill py-4 text-sm font-bold text-white shadow-bloom [touch-action:manipulation]"
                 >
                   Yes, return
                 </button>

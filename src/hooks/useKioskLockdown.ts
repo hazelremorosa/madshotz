@@ -51,6 +51,12 @@ export function useKioskLockdown() {
       exitFullscreen();
       return;
     }
+    // Stand down while Admin is open. Entering fullscreen resizes the viewport,
+    // which rescales KioskFrame and moves every control — if that happens
+    // between a finger going down and coming up, the tap lands somewhere else or
+    // is cancelled outright. Claiming fullscreen on the host's every pointerdown
+    // is a poor trade against them being able to hit "Yes, return".
+    if (adminOpen) return;
     // Fullscreen can only be requested from a user gesture, so try immediately
     // (works when kiosk mode was just switched on by a tap) and then latch onto
     // every subsequent tap until it sticks.
@@ -64,7 +70,7 @@ export function useKioskLockdown() {
       window.removeEventListener("pointerdown", claim);
       document.removeEventListener("fullscreenchange", claim);
     };
-  }, [kioskMode]);
+  }, [kioskMode, adminOpen]);
 
   // 3. Input guards.
   useEffect(() => {
