@@ -58,6 +58,10 @@ interface USBDevice {
   selectConfiguration(configurationValue: number): Promise<void>;
   claimInterface(interfaceNumber: number): Promise<void>;
   releaseInterface(interfaceNumber: number): Promise<void>;
+  selectAlternateInterface(
+    interfaceNumber: number,
+    alternateSetting: number,
+  ): Promise<void>;
   transferOut(
     endpointNumber: number,
     data: ArrayBufferView | ArrayBuffer,

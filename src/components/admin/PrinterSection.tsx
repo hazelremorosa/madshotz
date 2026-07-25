@@ -195,6 +195,14 @@ export function PrinterSection({
             </p>
           )}
 
+          {/* A non-printer-class binding is the difference between "sent" and
+              "printed", so it needs to be impossible to miss. */}
+          {printer.warning && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+              ⚠️ {printer.warning}
+            </p>
+          )}
+
           {s.printTransport === "bluetooth" && (
             <p className="text-xs leading-snug text-cocoa/50">
               Munbyn devices advertise two Bluetooth names. Pick the one ending
@@ -448,7 +456,11 @@ export function PrinterSection({
               disabled={printer.status === "printing"}
               onClick={async () => {
                 const ok = await printer.printTest();
-                onToast(ok ? "Test label sent" : "Test print failed");
+                onToast(
+                  ok
+                    ? "Sent — if no label comes out, check the readout below"
+                    : "Test print failed",
+                );
               }}
             >
               Print test
@@ -464,7 +476,11 @@ export function PrinterSection({
               onClick={async () => {
                 const url = await buildPreviewComposite();
                 const ok = await printer.printImage(url);
-                onToast(ok ? "Preview sent" : "Print failed");
+                onToast(
+                  ok
+                    ? "Sent — if no label comes out, check the readout below"
+                    : "Print failed",
+                );
               }}
             >
               Print preview
@@ -485,7 +501,7 @@ export function PrinterSection({
           {s.printTransport === "usb" && (
             <Row
               label="Show all USB devices"
-              hint="Turn on if the printer doesn't appear — some report a vendor class, not the printer class."
+              hint="Only if the printer doesn't appear. Without the filter the chooser also lists non-printers, which accept a job and print nothing."
             >
               <Toggle
                 checked={s.usbAnyDevice}
@@ -493,6 +509,46 @@ export function PrinterSection({
                 label="Show all USB devices"
               />
             </Row>
+          )}
+
+          {s.printTransport === "usb" && (
+            <>
+              <Row
+                label="Chunk size"
+                hint="Bytes per USB transfer. Lower it to 1024 or 512 if a job stalls before any progress."
+              >
+                <NumberField
+                  label="USB chunk size"
+                  value={s.usbChunkSize}
+                  onChange={(v) => set("usbChunkSize", v)}
+                  min={64}
+                  max={16384}
+                  step={512}
+                  suffix="B"
+                />
+              </Row>
+              <Row
+                label="Force interface"
+                hint="-1 auto-picks a printer-class interface. Set a number from the readout below only if that picks wrong."
+              >
+                <NumberField
+                  label="USB interface number"
+                  value={s.usbInterface}
+                  onChange={(v) => set("usbInterface", v)}
+                  min={-1}
+                  max={16}
+                />
+              </Row>
+              <Row label="Force endpoint" hint="-1 auto-picks the first bulk OUT.">
+                <NumberField
+                  label="USB endpoint number"
+                  value={s.usbEndpoint}
+                  onChange={(v) => set("usbEndpoint", v)}
+                  min={-1}
+                  max={16}
+                />
+              </Row>
+            </>
           )}
 
           {s.printTransport === "bluetooth" && (
@@ -546,7 +602,7 @@ export function PrinterSection({
               head {headDots} dots · raster {rasterDots} dots (
               {Math.round(dotsToMm(rasterDots))} mm)
             </div>
-            <div>
+            <div className="whitespace-pre-line break-words">
               {printer.detail || "no device bound yet"}
             </div>
             {printer.lastJobBytes > 0 && (
