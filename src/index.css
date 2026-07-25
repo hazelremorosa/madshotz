@@ -7,6 +7,9 @@
   --brand-a: 255 122 173; /* candy pink   */
   --brand-b: 178 148 255; /* soft lavender */
   --brand-c: 122 224 196; /* mint          */
+  /* Stage (page/background) tones — repainted per palette by applyPalette(). */
+  --stage: 255 246 251; /* warm cream    */
+  --stage-deep: 255 238 246;
   color-scheme: light;
 }
 
@@ -22,9 +25,10 @@ body,
 
 body {
   margin: 0;
-  /* Matches the booth stage (bg-cream), so any margin KioskFrame leaves on a
-     landscape screen reads as part of the design, not as a bar beside it. */
-  background: #fff6fb;
+  /* Follows the booth stage, so any margin KioskFrame leaves on a landscape
+     screen reads as part of the design rather than a bar beside it — and
+     repaints with the Admin palette. */
+  background: rgb(var(--stage));
   color: #5a4552;
   font-family: theme("fontFamily.sans");
   overflow: hidden;

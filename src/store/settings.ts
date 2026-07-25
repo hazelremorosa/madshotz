@@ -27,20 +27,102 @@ import {
 
 export const SETTINGS_KEY = "madshots.settings.v1";
 
-/** Optional brand palettes the host can pick — "default" keeps the cute theme. */
+/**
+ * Optional brand palettes the host can pick — "default" keeps the cute theme.
+ *
+ * Each carries a **stage** pair as well as the three accents. Accents alone
+ * weren't enough: the background is `bg-cream`, so switching to, say, Ocean used
+ * to leave the whole booth sitting on a pink wash. `stage[0]` is the page tone
+ * and `stage[1]` a slightly deeper version used behind overlays like Admin.
+ *
+ * Every stage is kept very light on purpose — the `cocoa` body text and the
+ * white-translucent `.glass` surfaces are shared by all palettes, so a dark
+ * stage would need its own text and surface colours throughout.
+ */
 export interface BrandPreset {
   id: string;
   name: string;
   brand: [Rgb, Rgb, Rgb];
+  /** [page, deeper] background tones. */
+  stage: [Rgb, Rgb];
 }
 
+/** Stage tones for "default" — the original cute cream. */
+export const DEFAULT_STAGE: [Rgb, Rgb] = ["255 246 251", "255 238 246"];
+
 export const BRAND_PRESETS: BrandPreset[] = [
-  { id: "default", name: "Cute", brand: ["255 122 173", "178 148 255", "122 224 196"] },
-  { id: "wedding", name: "Wedding", brand: ["244 194 194", "212 175 140", "247 231 206"] },
-  { id: "birthday", name: "Birthday", brand: ["255 99 132", "255 159 64", "255 205 86"] },
-  { id: "corporate", name: "Corporate", brand: ["59 130 246", "14 165 233", "148 163 184"] },
-  { id: "retro", name: "Retro", brand: ["255 0 170", "0 234 255", "170 0 255"] },
-  { id: "mono", name: "Minimal", brand: ["148 163 184", "100 116 139", "203 213 225"] },
+  {
+    id: "default",
+    name: "Cute",
+    brand: ["255 122 173", "178 148 255", "122 224 196"],
+    stage: DEFAULT_STAGE,
+  },
+  {
+    id: "wedding",
+    name: "Wedding",
+    brand: ["244 194 194", "212 175 140", "247 231 206"],
+    stage: ["255 248 244", "253 238 230"],
+  },
+  {
+    id: "birthday",
+    name: "Birthday",
+    brand: ["255 99 132", "255 159 64", "255 205 86"],
+    stage: ["255 250 242", "255 241 222"],
+  },
+  {
+    id: "corporate",
+    name: "Corporate",
+    brand: ["59 130 246", "14 165 233", "148 163 184"],
+    stage: ["245 249 255", "232 241 253"],
+  },
+  {
+    id: "retro",
+    name: "Retro",
+    brand: ["255 0 170", "0 234 255", "170 0 255"],
+    stage: ["253 244 255", "246 230 255"],
+  },
+  {
+    id: "mono",
+    name: "Minimal",
+    brand: ["148 163 184", "100 116 139", "203 213 225"],
+    stage: ["248 250 252", "238 242 247"],
+  },
+  {
+    id: "tropical",
+    name: "Tropical",
+    brand: ["255 111 97", "0 191 165", "255 209 102"],
+    stage: ["244 253 250", "227 247 240"],
+  },
+  {
+    id: "lavender",
+    name: "Lavender",
+    brand: ["167 139 250", "129 140 248", "244 114 182"],
+    stage: ["248 245 255", "236 228 255"],
+  },
+  {
+    id: "sunset",
+    name: "Sunset",
+    brand: ["251 146 60", "244 63 94", "168 85 247"],
+    stage: ["255 246 242", "255 231 221"],
+  },
+  {
+    id: "ocean",
+    name: "Ocean",
+    brand: ["56 189 248", "45 212 191", "99 102 241"],
+    stage: ["242 251 255", "221 241 251"],
+  },
+  {
+    id: "botanical",
+    name: "Botanical",
+    brand: ["52 211 153", "132 204 22", "20 184 166"],
+    stage: ["244 253 246", "227 248 233"],
+  },
+  {
+    id: "gold",
+    name: "Gold",
+    brand: ["212 175 55", "196 164 132", "148 137 121"],
+    stage: ["250 248 245", "240 235 228"],
+  },
 ];
 
 export const BRAND_PRESET_BY_ID = (id: string): BrandPreset =>
@@ -663,6 +745,34 @@ export function applyBrandVars(brand: [Rgb, Rgb, Rgb]) {
   root.style.setProperty("--brand-a", brand[0]);
   root.style.setProperty("--brand-b", brand[1]);
   root.style.setProperty("--brand-c", brand[2]);
+}
+
+/** Paints the stage (background) tones — `bg-cream` / `bg-cream-deep` / `body`. */
+export function applyStageVars(stage: [Rgb, Rgb]) {
+  const root = document.documentElement;
+  root.style.setProperty("--stage", stage[0]);
+  root.style.setProperty("--stage-deep", stage[1]);
+}
+
+/**
+ * Paints a whole palette — accents *and* background.
+ *
+ * The single entry point for repainting, so no caller can update the accents and
+ * leave the stage behind (which is exactly how the background ended up stuck on
+ * pink). Pass `presetId` to preview a palette the host is only hovering over;
+ * omit it to paint whatever is saved.
+ *
+ * "default" means "use the theme's own accents", and keeps the original cream
+ * stage — themes carry brand colours but no background of their own.
+ */
+export function applyPalette(
+  theme: Theme,
+  presetId = useSettings.getState().brandPresetId,
+) {
+  const preset =
+    presetId && presetId !== "default" ? BRAND_PRESET_BY_ID(presetId) : null;
+  applyBrandVars(preset ? preset.brand : theme.brand);
+  applyStageVars(preset ? preset.stage : DEFAULT_STAGE);
 }
 
 /**

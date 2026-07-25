@@ -8,8 +8,7 @@ import {
   MAX_CUSTOM_FRAMES,
   MAX_CUSTOM_STICKERS,
   QR_RESET_OPTIONS,
-  applyBrandVars,
-  effectiveBrand,
+  applyPalette,
   overlayCategoryFor,
   receiptFooter,
   receiptHeader,
@@ -319,7 +318,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => {
                   if (!window.confirm("Reset every booth setting to defaults?")) return;
                   useSettings.getState().resetAll();
-                  applyBrandVars(effectiveBrand(theme));
+                  applyPalette(theme);
                   stopCameraStream();
                   toast("Settings reset");
                 }}
@@ -535,7 +534,11 @@ function PaletteSection() {
   const theme = useSession((st) => st.theme);
 
   return (
-    <Section emoji="🎨" title="Palette" note="Brand colours for the whole booth UI.">
+    <Section
+      emoji="🎨"
+      title="Palette"
+      note="Accents and background for the whole booth UI. Each chip is filled with its own background tone."
+    >
       <div className="flex flex-wrap gap-2">
         {BRAND_PRESETS.map((p) => (
           <button
@@ -544,14 +547,17 @@ function PaletteSection() {
             aria-pressed={brandPresetId === p.id}
             onClick={() => {
               set("brandPresetId", p.id);
-              applyBrandVars(p.id === "default" ? theme.brand : p.brand);
+              applyPalette(theme, p.id);
             }}
             className={cn(
               "flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition-colors",
               brandPresetId === p.id
-                ? "border-[rgb(var(--brand-a))] bg-white text-cocoa shadow"
-                : "border-cocoa/15 bg-white/60 text-cocoa/50",
+                ? "border-[rgb(var(--brand-a))] text-cocoa shadow"
+                : "border-cocoa/15 text-cocoa/50",
             )}
+            // The chip wears the palette's own stage tone, so the host can see
+            // what the background becomes without having to apply it first.
+            style={{ background: `rgb(${p.stage[0]})` }}
           >
             <span className="flex">
               {p.brand.map((c, i) => (
@@ -593,7 +599,7 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
     null,
   );
 
-  const repaint = () => applyBrandVars(effectiveBrand(theme));
+  const repaint = () => applyPalette(theme);
 
   const applyCategory = (cat: string) => {
     setCategory(cat);
