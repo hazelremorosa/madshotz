@@ -22,7 +22,9 @@ body,
 
 body {
   margin: 0;
-  background: #f7eef4;
+  /* Matches the booth stage (bg-cream), so any margin KioskFrame leaves on a
+     landscape screen reads as part of the design, not as a bar beside it. */
+  background: #fff6fb;
   color: #5a4552;
   font-family: theme("fontFamily.sans");
   overflow: hidden;

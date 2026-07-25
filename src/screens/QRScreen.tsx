@@ -5,6 +5,7 @@ import { useSettings } from "@/store/settings";
 import { AnimatedQR } from "@/components/AnimatedQR";
 import { Confetti } from "@/components/Confetti";
 import { Button } from "@/components/ui/Button";
+import { PrintStatus } from "@/components/PrintStatus";
 import { DeliveryService } from "@/lib/delivery";
 import { qrMatrix } from "@/lib/qr";
 import { sfx } from "@/lib/sound";
@@ -146,6 +147,10 @@ export function QRScreen() {
       </div>
 
       <div className="h-5 text-sm text-cocoa/70">{toast}</div>
+
+      {/* Printing runs past this screen's arrival, so the outcome (and a retry)
+          surfaces here rather than on the Printing screen alone. */}
+      <PrintStatus />
 
       <button
         type="button"

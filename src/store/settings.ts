@@ -4,6 +4,11 @@ import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
 import {
+  DITHER_DEFAULTS,
+  type DitherMode,
+  type PrintRotation,
+} from "@/lib/dither";
+import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
   type OverlayCategory,
@@ -127,6 +132,28 @@ export interface EventPreset {
 /** Cap on saved presets (they can carry uploaded assets, so keep it sane). */
 export const MAX_PRESETS = 8;
 
+/**
+ * Which browser API talks to the printer.
+ *
+ * Declared here rather than in `lib/printer.ts` so the settings store stays a
+ * leaf — the printer module reads settings, not the other way round.
+ */
+export type PrintTransport = "usb" | "bluetooth";
+
+/**
+ * Quarter-turn applied to the design before printing, or "auto" to let the
+ * printer layer pick whichever orientation uses more of the label.
+ */
+export type PrintRotationSetting = PrintRotation | "auto";
+
+export const PRINT_ROTATIONS: { value: PrintRotationSetting; label: string }[] =
+  [
+    { value: "auto", label: "Auto" },
+    { value: 0, label: "0°" },
+    { value: 90, label: "90°" },
+    { value: 270, label: "270°" },
+  ];
+
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -196,6 +223,59 @@ export interface SettingsState {
   idleTimeoutSec: number;
   qrResetSec: number;
 
+  // ── Printer ───────────────────────────────────────────────────────────────
+  /**
+   * Printer config lives here, alongside camera and PIN, and is deliberately
+   * absent from `BoothConfig`: loading somebody else's saved event must never
+   * repoint this kiosk at hardware or a label size it hasn't got.
+   */
+  printEnabled: boolean;
+  printTransport: PrintTransport;
+  /** Print without anyone tapping anything, as soon as the composite exists. */
+  autoPrint: boolean;
+  printCopies: number;
+  /** Which `LABEL_PRESETS` entry is selected, or "custom". */
+  labelPresetId: string;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  /** 0 for continuous stock — see `LabelStock.gapMm`. */
+  labelGapMm: number;
+  /** Unprinted border in mm, kept off the edges where feed drift shows. */
+  printMarginMm: number;
+  /** Burn intensity 0–15. */
+  printDensity: number;
+  /** Feed speed in ips, 1–6. */
+  printSpeed: number;
+  /**
+   * "width" fills the stock width and lets a tall strip run past the label
+   * (right for continuous roll); "label" fits the whole design on one label.
+   */
+  printFit: "width" | "label";
+  /**
+   * Turns the design before printing. Label stock can't be rotated — the width
+   * is fixed across the head — so this is how a landscape event template gets to
+   * use a whole portrait label instead of a band across the top.
+   */
+  printRotate: PrintRotationSetting;
+  ditherMode: DitherMode;
+  ditherThreshold: number;
+  printBrightness: number;
+  printContrast: number;
+  /** TSPL's bit polarity. Flip if the first test print comes out as a negative. */
+  printInvertRaster: boolean;
+
+  // ── Printer pairing (remembered so the kiosk reconnects unattended) ───────
+  usbVendorId: number | null;
+  usbProductId: number | null;
+  /** Widen the USB chooser past class 7 — some printers report a vendor class. */
+  usbAnyDevice: boolean;
+  btDeviceId: string | null;
+  /** BLE write size. 20 is the safe floor; raise once the real MTU is known. */
+  btChunkSize: number;
+  /** Optional UUID overrides, for when the real hardware reveals its service. */
+  btServiceUuid: string;
+  btCharUuid: string;
+
   // ── Kiosk ─────────────────────────────────────────────────────────────────
   kioskMode: boolean;
   keepAwake: boolean;
@@ -254,6 +334,51 @@ const DEFAULTS = {
   soundOn: false,
   idleTimeoutSec: 90,
   qrResetSec: 25,
+
+  // Printing starts OFF: a booth with no printer plugged in must behave exactly
+  // as it did before this feature existed.
+  printEnabled: false,
+  printTransport: "usb" as PrintTransport,
+  autoPrint: true,
+  printCopies: 1,
+  labelPresetId: "4x6",
+  labelWidthMm: 101.6,
+  labelHeightMm: 152.4,
+  labelGapMm: 3,
+  printMarginMm: 2,
+  printFit: "label" as "width" | "label",
+  // Auto by default: the landscape event templates want a quarter-turn on
+  // portrait stock and nothing else does, so this needs no host attention.
+  printRotate: "auto" as PrintRotationSetting,
+  printInvertRaster: true,
+
+  // ── Fixed image calibration ───────────────────────────────────────────────
+  // These five drive every print but have NO Admin controls right now
+  // (`SHOW_CALIBRATION = false` in PrinterSection — owner's call, 2026-07-25).
+  // They are the sensible baseline, not placeholders:
+  //   density 8 / speed 4 — the conventional TSPL defaults this class of 203 dpi
+  //     head ships with; safe on any stock and a sane starting point for tuning.
+  //   Floyd–Steinberg — smoothest halftone for faces, which is what a photobooth
+  //     prints; measured ~3.9% ink on the standard receipt, a healthy figure for
+  //     mostly-bare paper.
+  //   exposure 128 — the neutral cut point.
+  //   brightness 0 — deliberately not positive; see DitherOpts.brightness, a
+  //     positive bias here prints blank labels.
+  // Restoring the controls needs only the flag flip; nothing here changes.
+  printDensity: 8,
+  printSpeed: 4,
+  ditherMode: DITHER_DEFAULTS.mode,
+  ditherThreshold: DITHER_DEFAULTS.threshold,
+  printBrightness: DITHER_DEFAULTS.brightness,
+  printContrast: DITHER_DEFAULTS.contrast,
+
+  usbVendorId: null as number | null,
+  usbProductId: null as number | null,
+  usbAnyDevice: false,
+  btDeviceId: null as string | null,
+  btChunkSize: 20,
+  btServiceUuid: "",
+  btCharUuid: "",
 
   kioskMode: false,
   keepAwake: true,

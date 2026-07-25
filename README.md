@@ -7,10 +7,58 @@ Walk-up cinematic welcome → pick a vibe → choose a layout → pose for the c
 review & retake → grade with a filter → decorate with stickers & text → watch the
 receipt print → scan the QR to take your memories home.
 
-> **Scope (this build):** digital-only (the "print" is a ritual animation; the QR
-> download is the real deliverable) and frontend-only (delivery is stubbed behind
-> a clean interface). A real thermal/color printer and a cloud backend can drop in
-> later without touching any screen.
+> **Scope (this build):** the QR download is the primary deliverable; delivery runs
+> on Cloudflare (R2 + Worker). Physical printing is implemented for the **Munbyn
+> RealWriter 403B** and is **off by default** — enable and pair it in
+> Admin → System → Printing.
+
+### Printing (Munbyn RealWriter 403B)
+
+Direct thermal, 203 dpi, TSPL command language — *not* ESC/POS, so the usual
+web-thermal-printing snippets don't apply. Every dot is burned or bare paper, so
+photos are halftoned to 1-bit; the full-colour version goes out via the QR.
+
+There is no server in this path and there cannot be — a Vercel-hosted page can't
+reach a printer in the room. Bytes leave the tablet directly, two ways:
+
+| Transport | Use when | Notes |
+|---|---|---|
+| **WebUSB** (USB-OTG) | Preferred | ~120 KB raster in well under a second. Android has no vendor driver competing for the device. Needs a USB-C hub with PD pass-through if the tablet must also charge. |
+| **Web Bluetooth** | Charging port must stay free | Slower — budget 5–20 s for a 4×6. Pick the printer's **`-BLE`** name; a `-SPP`/`-COM` entry is Bluetooth Classic and unreachable from any browser. |
+
+Both need HTTPS and one user gesture to pair; after that `getDevices()` lets the
+kiosk reconnect unattended on boot (`App.tsx`). **Chrome on Android or desktop
+only — Safari and iOS implement neither API, so an iPad cannot print.**
+
+| File | Role |
+|---|---|
+| `lib/dither.ts` | Composite → 1-bit bitmap. Floyd–Steinberg / ordered Bayer / hard threshold. |
+| `lib/tspl.ts` | TSPL job encoding (`SIZE`/`GAP`/`DENSITY`/`BITMAP`/`PRINT`), stock presets, dot maths. |
+| `lib/printer.ts` | Transports, silent reconnect, job serialisation, `usePrinter` store. |
+| `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics. |
+
+**Fitting to the stock.** "Fit the label" scales any composite to sit inside the
+selected stock with its aspect intact — it letterboxes, never crops or stretches
+— and centres it in both axes (a raster taller than the label pins to the top so
+it loses its tail rather than both ends). Because it letterboxes, an aspect
+mismatch just wastes paper, so **Rotation** defaults to *Auto* and turns a design
+a quarter-turn when that uses more of the label: a 3:2 landscape event template
+on 4×6 stock goes from **40% to 91%** of the label. Upright receipts and strips
+are left alone. Matching stock to content still helps most — the `quad` layout is
+exactly 1:3, so it fills **2×6** stock with almost no waste.
+
+Two things can only be settled with the hardware in hand, so both are settings
+rather than constants — commissioning needs no code change:
+
+- **BLE service/characteristic UUIDs.** Pairing walks the GATT tree for any
+  writable characteristic and reports what it found in the diagnostics readout.
+  Web Bluetooth only exposes services declared up front, so if the real one isn't
+  in `BLE_SERVICE_CANDIDATES`, paste it into Admin's *Service UUID* field.
+- **Raster bit polarity.** TSPL's `BITMAP` treats a *clear* bit as a dot to burn.
+  If the first test print comes out as a negative, flip *Negative image*.
+
+Start with **Print test** (a few hundred bytes: border, text, density ladder) to
+prove the link and the stock geometry before sending a photo.
 
 ---
 

@@ -5,12 +5,14 @@ import { applyBrandVars, effectiveBrand } from "@/store/settings";
 import { hydrateEvents } from "@/store/events";
 import { hydrateTemplates } from "@/store/templates";
 import { startUploadRetry } from "@/lib/delivery";
+import { usePrinter } from "@/lib/printer";
 import { useUploadQueue } from "@/lib/uploadQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { cn } from "@/lib/cn";
 import { useIdleReset } from "@/hooks/useIdleReset";
 import { useKioskLockdown } from "@/hooks/useKioskLockdown";
 import { AdminRoot } from "@/components/admin/AdminRoot";
+import { KioskFrame } from "@/components/shell/KioskFrame";
 import type { ScreenId } from "@/types";
 
 import { AmbientBackground } from "@/components/shell/AmbientBackground";
@@ -91,58 +93,70 @@ export default function App() {
     startUploadRetry();
   }, []);
 
+  // Reconnect to an already-paired printer without prompting, so a kiosk that
+  // was power-cycled prints for the first guest of the day with nobody touching
+  // Admin. Does nothing (and never throws) if printing is off, unsupported, or
+  // the permission was never granted.
+  useEffect(() => {
+    void usePrinter.getState().autoConnect();
+  }, []);
+
   const Screen = SCREENS[screen];
 
   return (
-    <div className="relative h-[100dvh] w-full max-w-[540px] overflow-hidden bg-cream text-cocoa">
-      <ShapeDefs />
-      <AmbientBackground />
-      <ParticleField />
+    <KioskFrame>
+      {/* Sized by KioskFrame, which scales this whole box to fill the screen —
+          so it fills its parent rather than capping its own width. */}
+      <div className="relative h-full w-full overflow-hidden bg-cream text-cocoa">
+        <ShapeDefs />
+        <AmbientBackground />
+        <ParticleField />
 
-      <motion.div
-        key={screen}
-        custom={direction}
-        variants={variants}
-        initial="enter"
-        animate="center"
-        className="absolute inset-0 z-10"
-      >
-        <Screen />
-      </motion.div>
+        <motion.div
+          key={screen}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          className="absolute inset-0 z-10"
+        >
+          <Screen />
+        </motion.div>
 
-      <ProgressRail />
+        <ProgressRail />
 
-      {/* Offline / syncing status — reassures that nothing is lost. */}
-      {(!online || pendingUploads > 0) && (
-        <div className="pointer-events-none absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-50 -translate-x-1/2">
-          <span
-            className={cn(
-              "glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-glass",
-              online ? "text-cocoa/70" : "text-amber-600",
-            )}
-          >
-            {!online ? (
-              <>📴 Offline{pendingUploads > 0 ? ` · ${pendingUploads} to sync` : ""}</>
-            ) : (
-              <>🔄 Syncing {pendingUploads} photo{pendingUploads === 1 ? "" : "s"}…</>
-            )}
-          </span>
-        </div>
-      )}
+        {/* Offline / syncing status — reassures that nothing is lost. */}
+        {(!online || pendingUploads > 0) && (
+          <div className="pointer-events-none absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-50 -translate-x-1/2">
+            <span
+              className={cn(
+                "glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-glass",
+                online ? "text-cocoa/70" : "text-amber-600",
+              )}
+            >
+              {!online ? (
+                <>📴 Offline{pendingUploads > 0 ? ` · ${pendingUploads} to sync` : ""}</>
+              ) : (
+                <>🔄 Syncing {pendingUploads} photo{pendingUploads === 1 ? "" : "s"}…</>
+              )}
+            </span>
+          </div>
+        )}
 
-      <button
-        type="button"
-        onClick={toggleSound}
-        aria-label="Toggle sound"
-        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-9 w-9 items-center justify-center rounded-full glass text-sm text-cocoa/70 shadow-glass"
-      >
-        {soundOn ? "🔊" : "🔇"}
-      </button>
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label="Toggle sound"
+          className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-9 w-9 items-center justify-center rounded-full glass text-sm text-cocoa/70 shadow-glass"
+        >
+          {soundOn ? "🔊" : "🔇"}
+        </button>
 
-      <RippleLayer />
+        <RippleLayer />
 
-      {/* Hidden admin entry + the panel itself (renders above everything). */}
-      <AdminRoot />
-    </div>
+        {/* Hidden admin entry + the panel itself (renders above everything). */}
+        <AdminRoot />
+      </div>
+    </KioskFrame>
   );
 }

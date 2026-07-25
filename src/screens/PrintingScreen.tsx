@@ -9,6 +9,8 @@ import { resolveOverlaySrc } from "@/data/overlays";
 import { Receipt } from "@/components/Receipt";
 import { TemplateComposite } from "@/components/TemplateComposite";
 import { staticItems } from "@/components/StaticItems";
+import { PrintStatus } from "@/components/PrintStatus";
+import { usePrinter } from "@/lib/printer";
 import { composeReceipt } from "@/lib/compose";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { formatDate } from "@/lib/date";
@@ -67,7 +69,23 @@ export function PrintingScreen() {
           overlaySvg: frameOverlay,
           hideHeader: useSettings.getState().designMode !== "standard",
         });
-    build.then((url) => alive && setComposite(url)).catch(() => undefined);
+    build
+      .then((url) => {
+        if (!alive) return;
+        setComposite(url);
+
+        // Fire the real print, but deliberately do NOT await it before advancing
+        // to the QR screen. A Bluetooth job streams for 5–20 seconds, and making
+        // the guest watch a spinner for that would be worse than the animation
+        // this screen already shows. `printImage` resolves false instead of
+        // throwing, and the printer store serialises jobs, so a slow print can
+        // never stall or interleave with the next guest.
+        const st = useSettings.getState();
+        if (st.printEnabled && st.autoPrint) {
+          void usePrinter.getState().printImage(url);
+        }
+      })
+      .catch(() => undefined);
 
     const capIv = window.setInterval(
       () => setCaption((c) => (c + 1) % CAPTIONS.length),
@@ -147,6 +165,9 @@ export function PrintingScreen() {
         >
           {CAPTIONS[caption]}
         </motion.p>
+        <div className="mt-3 flex justify-center">
+          <PrintStatus />
+        </div>
       </div>
     </div>
   );
