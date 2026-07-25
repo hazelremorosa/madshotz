@@ -78,6 +78,17 @@ const BLE_SERVICE_CANDIDATES = [
 /** USB printer class — the right filter if the RW403B reports itself honestly. */
 const USB_PRINTER_CLASS = 7;
 
+/**
+ * How long a single USB transfer may take before it's called dead.
+ *
+ * Generous, because a genuinely busy printer can take a moment to free buffer
+ * space mid-job; the point is to fail *eventually* rather than hang for ever.
+ */
+const USB_WRITE_TIMEOUT_MS = 15000;
+
+/** Same idea for a single BLE characteristic write, which is far smaller. */
+const BLE_WRITE_TIMEOUT_MS = 10000;
+
 /** An open connection to the print head, whichever way the bytes get there. */
 export interface PrinterLink {
   kind: PrintTransport;
@@ -85,6 +96,11 @@ export interface PrinterLink {
   name: string;
   /** What the transport actually bound to — endpoint number, or GATT UUIDs. */
   detail: string;
+  /**
+   * Set when the binding looks suspect but isn't fatal — most importantly a
+   * non-printer-class USB interface, which accepts writes and prints nothing.
+   */
+  warning?: string;
   write(bytes: Uint8Array, onProgress?: (frac: number) => void): Promise<void>;
   close(): Promise<void>;
   connected(): boolean;
@@ -109,39 +125,132 @@ export function transportSupported(kind: PrintTransport): boolean {
 
 // ── WebUSB ───────────────────────────────────────────────────────────────────
 
+interface UsbTarget {
+  interfaceNumber: number;
+  /** Which alternate setting the endpoint lives on — must be selected to use it. */
+  alternateSetting: number;
+  endpoint: number;
+  interfaceClass: number;
+  packetSize: number;
+}
+
 /**
  * Finds an interface with a bulk OUT endpoint, preferring a printer-class one.
  *
  * Printers in this price bracket are inconsistent about whether they declare
  * class 7 or a vendor-specific class, so class is a preference and "has a bulk
- * OUT endpoint" is the actual requirement.
+ * OUT endpoint" is the actual requirement. The catch is that plenty of
+ * *non*-printers also expose a bulk OUT: they accept small writes into a buffer
+ * nobody drains, so the job looks sent and nothing ever prints. Hence the class
+ * is reported back for `usbClassWarning` to flag.
+ *
+ * The active alternate is tried before the others, because using an inactive one
+ * requires `selectAlternateInterface` and quietly writing to an endpoint from an
+ * unselected alternate goes nowhere.
  */
-function pickBulkOut(
-  device: USBDevice,
-): { interfaceNumber: number; endpoint: number } | null {
+function pickBulkOut(device: USBDevice): UsbTarget | null {
   const cfg = device.configuration;
   if (!cfg) return null;
 
-  const ordered = [...cfg.interfaces].sort(
-    (a, b) =>
-      Number(b.alternate.interfaceClass === USB_PRINTER_CLASS) -
-      Number(a.alternate.interfaceClass === USB_PRINTER_CLASS),
-  );
+  const override = useSettings.getState().usbInterface;
+
+  const ordered = [...cfg.interfaces]
+    .filter((i) => override < 0 || i.interfaceNumber === override)
+    .sort(
+      (a, b) =>
+        Number(b.alternate.interfaceClass === USB_PRINTER_CLASS) -
+        Number(a.alternate.interfaceClass === USB_PRINTER_CLASS),
+    );
+
+  const wantEp = useSettings.getState().usbEndpoint;
 
   for (const iface of ordered) {
-    const alts = [iface.alternate, ...iface.alternates];
+    // Active alternate first; only fall back to the others if it has no bulk OUT.
+    const alts = [
+      iface.alternate,
+      ...iface.alternates.filter(
+        (a) => a.alternateSetting !== iface.alternate.alternateSetting,
+      ),
+    ];
     for (const alt of alts) {
       const ep = alt.endpoints.find(
-        (e) => e.direction === "out" && e.type === "bulk",
+        (e) =>
+          e.direction === "out" &&
+          e.type === "bulk" &&
+          (wantEp < 0 || e.endpointNumber === wantEp),
       );
       if (ep)
         return {
           interfaceNumber: iface.interfaceNumber,
+          alternateSetting: alt.alternateSetting,
           endpoint: ep.endpointNumber,
+          interfaceClass: alt.interfaceClass,
+          packetSize: ep.packetSize || 64,
         };
     }
   }
   return null;
+}
+
+/**
+ * Every interface and bulk-OUT endpoint the device exposes, for the Admin
+ * readout — the only way to tell from the tablet whether the auto-pick chose
+ * sensibly, or which number to force if it didn't.
+ */
+function describeUsb(device: USBDevice): string {
+  const cfg = device.configuration;
+  if (!cfg) return "no active configuration";
+  return cfg.interfaces
+    .map((i) => {
+      const a = i.alternate;
+      const outs = a.endpoints
+        .filter((e) => e.direction === "out")
+        .map((e) => `ep${e.endpointNumber}/${e.type}/${e.packetSize}B`)
+        .join(" ");
+      const cls =
+        a.interfaceClass === USB_PRINTER_CLASS
+          ? "printer"
+          : a.interfaceClass === 0xff
+            ? "vendor"
+            : `class ${a.interfaceClass}`;
+      return `if${i.interfaceNumber}[${cls}] ${outs || "no OUT"}`;
+    })
+    .join(" · ");
+}
+
+/**
+ * Rejects if a transfer doesn't complete in time.
+ *
+ * `transferOut` never rejects on its own when the device stops draining its
+ * buffer — it just never settles, which surfaced as a print stuck on
+ * "Printing 0%" with no way to tell whether it was slow or dead. A bounded wait
+ * turns that into an error the host can act on.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () =>
+        reject(
+          new Error(
+            `${what} timed out after ${Math.round(ms / 1000)}s — the printer ` +
+              "stopped accepting data. Check it's powered, has labels loaded and " +
+              "the cover is shut; if the device you paired isn't printer-class, " +
+              "re-pair with “Show all USB devices” off.",
+          ),
+        ),
+      ms,
+    );
+    work.then(
+      (v) => {
+        window.clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
 }
 
 async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
@@ -164,6 +273,24 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
     );
   }
 
+  // An endpoint on a non-active alternate is unusable until it's selected —
+  // writes to it are accepted and go nowhere.
+  if (target.alternateSetting !== device.configuration?.interfaces
+        .find((i) => i.interfaceNumber === target.interfaceNumber)
+        ?.alternate.alternateSetting) {
+    try {
+      await device.selectAlternateInterface(
+        target.interfaceNumber,
+        target.alternateSetting,
+      );
+    } catch (e) {
+      throw new Error(
+        `Could not select alternate setting ${target.alternateSetting} on ` +
+          `interface ${target.interfaceNumber} (${errText(e)})`,
+      );
+    }
+  }
+
   const name =
     [device.manufacturerName, device.productName].filter(Boolean).join(" ") ||
     `USB ${hex4(device.vendorId)}:${hex4(device.productId)}`;
@@ -177,16 +304,34 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
   return {
     kind: "usb",
     name,
-    detail: `iface ${target.interfaceNumber}, bulk OUT ep ${target.endpoint}, ${hex4(
-      device.vendorId,
-    )}:${hex4(device.productId)}`,
+    detail:
+      `if${target.interfaceNumber}.${target.alternateSetting} ep${target.endpoint} ` +
+      `${target.interfaceClass === USB_PRINTER_CLASS ? "printer-class" : `CLASS ${target.interfaceClass}`} ` +
+      `${hex4(device.vendorId)}:${hex4(device.productId)}\n${describeUsb(device)}`,
+    warning:
+      target.interfaceClass === USB_PRINTER_CLASS
+        ? undefined
+        : `Bound to a class-${target.interfaceClass} interface, not a printer ` +
+          `(${hex4(device.vendorId)}:${hex4(device.productId)}). Plenty of ` +
+          "non-printers expose a bulk OUT endpoint: writes succeed and nothing " +
+          "ever prints. If this isn't the RW403B, turn “Show all USB devices” " +
+          "off and pair again.",
     connected: () => open && device.opened,
     async write(bytes, onProgress) {
-      // Chunked purely so progress is reportable; WebUSB is happy with the lot.
-      const CHUNK = 8192;
-      for (let i = 0; i < bytes.length; i += CHUNK) {
-        const slice = bytes.slice(i, i + CHUNK);
-        const res = await device.transferOut(target.endpoint, slice);
+      // Chunk size is a setting because an oversized first write is the classic
+      // way to wedge one of these printers: it stalls before a single byte is
+      // acknowledged, so progress never leaves 0% and there's nothing to see.
+      const chunk = Math.max(
+        64,
+        Math.min(16384, useSettings.getState().usbChunkSize),
+      );
+      for (let i = 0; i < bytes.length; i += chunk) {
+        const slice = bytes.slice(i, i + chunk);
+        const res = await withTimeout(
+          device.transferOut(target.endpoint, slice),
+          USB_WRITE_TIMEOUT_MS,
+          `Sending ${slice.length} bytes`,
+        );
         if (res.status !== "ok")
           throw new Error(`Printer rejected the data (${res.status})`);
         onProgress?.(Math.min(1, (i + slice.length) / bytes.length));
@@ -321,7 +466,11 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
       );
       for (let i = 0; i < bytes.length; i += chunk) {
         if (!open) throw new Error("Bluetooth dropped mid-print");
-        await writeOne(bytes.slice(i, i + chunk));
+        await withTimeout(
+          writeOne(bytes.slice(i, i + chunk)),
+          BLE_WRITE_TIMEOUT_MS,
+          `Sending ${chunk} bytes`,
+        );
         const done = Math.min(1, (i + chunk) / bytes.length);
         onProgress?.(done);
         // Yield periodically so the progress bar actually paints and the BLE
@@ -485,6 +634,8 @@ interface PrinterState {
   lastPrintedSource: string;
   /** Dot dimensions of the last raster — confirms what rotation/fit resolved to. */
   lastRaster: string;
+  /** Non-fatal problem with the current binding (e.g. not a printer-class interface). */
+  warning: string;
   /** Pairs with a printer. Must be called from a user gesture. */
   connect: () => Promise<boolean>;
   /** Silent reconnect to an already-granted device. Safe to call on boot. */
@@ -520,6 +671,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
   lastJobSource: "",
   lastPrintedSource: "",
   lastRaster: "",
+  warning: "",
 
   connect: async () => {
     const kind = useSettings.getState().printTransport;
@@ -562,6 +714,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         status: "ready",
         deviceName: link.name,
         detail: link.detail,
+        warning: link.warning ?? "",
         lastError: "",
       });
       return true;
@@ -612,6 +765,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         status: "ready",
         deviceName: link.name,
         detail: link.detail,
+        warning: link.warning ?? "",
         lastError: "",
       });
       return true;
@@ -629,7 +783,13 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       // Nothing useful to do if teardown fails.
     }
     link = null;
-    set({ status: "offline", deviceName: "", detail: "", progress: 0 });
+    set({
+      status: "offline",
+      deviceName: "",
+      detail: "",
+      warning: "",
+      progress: 0,
+    });
   },
 
   printImage: (dataUrl) =>
@@ -688,7 +848,9 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
           `Link ${s.printTransport.toUpperCase()}`,
           new Date().toLocaleString(),
         ]);
-        set({ lastJobBytes: bytes.length });
+        // Text-only job — clear any raster size left over from a photo print,
+        // which otherwise reads as though the test label were 68 KB of bitmap.
+        set({ lastJobBytes: bytes.length, lastRaster: "" });
         await link!.write(bytes, (frac) => set({ progress: frac }));
         set({ status: "ready", progress: 1 });
         return true;

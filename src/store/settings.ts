@@ -349,8 +349,23 @@ export interface SettingsState {
   // ── Printer pairing (remembered so the kiosk reconnects unattended) ───────
   usbVendorId: number | null;
   usbProductId: number | null;
-  /** Widen the USB chooser past class 7 — some printers report a vendor class. */
+  /**
+   * Widen the USB chooser past class 7 — some printers report a vendor class.
+   *
+   * Leave OFF unless the printer genuinely doesn't appear: with the filter gone
+   * the chooser also lists devices that are not printers at all, and those accept
+   * a small write without complaint and never print anything.
+   */
   usbAnyDevice: boolean;
+  /**
+   * Bytes per USB transfer. An oversized first write is the classic way to wedge
+   * one of these printers — it stalls before anything is acknowledged.
+   */
+  usbChunkSize: number;
+  /** Force a USB interface number, or -1 to auto-pick a printer-class one. */
+  usbInterface: number;
+  /** Force a bulk OUT endpoint number, or -1 to auto-pick. */
+  usbEndpoint: number;
   btDeviceId: string | null;
   /** BLE write size. 20 is the safe floor; raise once the real MTU is known. */
   btChunkSize: number;
@@ -457,6 +472,9 @@ const DEFAULTS = {
   usbVendorId: null as number | null,
   usbProductId: null as number | null,
   usbAnyDevice: false,
+  usbChunkSize: 4096,
+  usbInterface: -1,
+  usbEndpoint: -1,
   btDeviceId: null as string | null,
   btChunkSize: 20,
   btServiceUuid: "",
