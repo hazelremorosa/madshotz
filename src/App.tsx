@@ -5,6 +5,7 @@ import { applyBrandVars, effectiveBrand } from "@/store/settings";
 import { hydrateEvents } from "@/store/events";
 import { hydrateTemplates } from "@/store/templates";
 import { startUploadRetry } from "@/lib/delivery";
+import { usePrinter } from "@/lib/printer";
 import { useUploadQueue } from "@/lib/uploadQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { cn } from "@/lib/cn";
@@ -89,6 +90,14 @@ export default function App() {
   // reconnect, and on a timer.
   useEffect(() => {
     startUploadRetry();
+  }, []);
+
+  // Reconnect to an already-paired printer without prompting, so a kiosk that
+  // was power-cycled prints for the first guest of the day with nobody touching
+  // Admin. Does nothing (and never throws) if printing is off, unsupported, or
+  // the permission was never granted.
+  useEffect(() => {
+    void usePrinter.getState().autoConnect();
   }, []);
 
   const Screen = SCREENS[screen];

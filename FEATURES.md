@@ -82,7 +82,7 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 | SMS delivery | Text the link to a phone number. | ⭐⭐ | M 🔌 |
 | One-tap social share | Instagram Story / Facebook / TikTok with pre-filled caption + hashtag. | ⭐⭐⭐ | M |
 | **Event gallery page** | A single link/QR showing ALL photos from the event (host & guests love this). | ⭐⭐⭐ | L 🔌 |
-| Real printing | Thermal (ESC/POS) or dye-sub printer for physical receipts/strips. | ⭐⭐⭐ | L 🔌 |
+| ~~Real printing~~ | **SHIPPED** — Munbyn RealWriter 403B over WebUSB/Web Bluetooth. See "Printing" below. | ⭐⭐⭐ | ✅ |
 | Zip / "download all" | Grab a whole session at once. | ⭐ | S |
 | Thumbnail/resized variants | Faster QR pages via Cloudflare Images transforms. | ⭐ | M 🔌 |
 

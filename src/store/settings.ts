@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
+import { DITHER_DEFAULTS, type DitherMode } from "@/lib/dither";
 import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
@@ -127,6 +128,14 @@ export interface EventPreset {
 /** Cap on saved presets (they can carry uploaded assets, so keep it sane). */
 export const MAX_PRESETS = 8;
 
+/**
+ * Which browser API talks to the printer.
+ *
+ * Declared here rather than in `lib/printer.ts` so the settings store stays a
+ * leaf — the printer module reads settings, not the other way round.
+ */
+export type PrintTransport = "usb" | "bluetooth";
+
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -196,6 +205,53 @@ export interface SettingsState {
   idleTimeoutSec: number;
   qrResetSec: number;
 
+  // ── Printer ───────────────────────────────────────────────────────────────
+  /**
+   * Printer config lives here, alongside camera and PIN, and is deliberately
+   * absent from `BoothConfig`: loading somebody else's saved event must never
+   * repoint this kiosk at hardware or a label size it hasn't got.
+   */
+  printEnabled: boolean;
+  printTransport: PrintTransport;
+  /** Print without anyone tapping anything, as soon as the composite exists. */
+  autoPrint: boolean;
+  printCopies: number;
+  /** Which `LABEL_PRESETS` entry is selected, or "custom". */
+  labelPresetId: string;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  /** 0 for continuous stock — see `LabelStock.gapMm`. */
+  labelGapMm: number;
+  /** Unprinted border in mm, kept off the edges where feed drift shows. */
+  printMarginMm: number;
+  /** Burn intensity 0–15. */
+  printDensity: number;
+  /** Feed speed in ips, 1–6. */
+  printSpeed: number;
+  /**
+   * "width" fills the stock width and lets a tall strip run past the label
+   * (right for continuous roll); "label" fits the whole design on one label.
+   */
+  printFit: "width" | "label";
+  ditherMode: DitherMode;
+  ditherThreshold: number;
+  printBrightness: number;
+  printContrast: number;
+  /** TSPL's bit polarity. Flip if the first test print comes out as a negative. */
+  printInvertRaster: boolean;
+
+  // ── Printer pairing (remembered so the kiosk reconnects unattended) ───────
+  usbVendorId: number | null;
+  usbProductId: number | null;
+  /** Widen the USB chooser past class 7 — some printers report a vendor class. */
+  usbAnyDevice: boolean;
+  btDeviceId: string | null;
+  /** BLE write size. 20 is the safe floor; raise once the real MTU is known. */
+  btChunkSize: number;
+  /** Optional UUID overrides, for when the real hardware reveals its service. */
+  btServiceUuid: string;
+  btCharUuid: string;
+
   // ── Kiosk ─────────────────────────────────────────────────────────────────
   kioskMode: boolean;
   keepAwake: boolean;
@@ -254,6 +310,34 @@ const DEFAULTS = {
   soundOn: false,
   idleTimeoutSec: 90,
   qrResetSec: 25,
+
+  // Printing starts OFF: a booth with no printer plugged in must behave exactly
+  // as it did before this feature existed.
+  printEnabled: false,
+  printTransport: "usb" as PrintTransport,
+  autoPrint: true,
+  printCopies: 1,
+  labelPresetId: "4x6",
+  labelWidthMm: 101.6,
+  labelHeightMm: 152.4,
+  labelGapMm: 3,
+  printMarginMm: 2,
+  printDensity: 8,
+  printSpeed: 4,
+  printFit: "label" as "width" | "label",
+  ditherMode: DITHER_DEFAULTS.mode,
+  ditherThreshold: DITHER_DEFAULTS.threshold,
+  printBrightness: DITHER_DEFAULTS.brightness,
+  printContrast: DITHER_DEFAULTS.contrast,
+  printInvertRaster: true,
+
+  usbVendorId: null as number | null,
+  usbProductId: null as number | null,
+  usbAnyDevice: false,
+  btDeviceId: null as string | null,
+  btChunkSize: 20,
+  btServiceUuid: "",
+  btCharUuid: "",
 
   kioskMode: false,
   keepAwake: true,

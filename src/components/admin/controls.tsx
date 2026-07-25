@@ -176,14 +176,102 @@ export function TextField({
   );
 }
 
+export function Slider({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  label,
+  /** Shown at the right — pass a formatted string so units stay with the value. */
+  display,
+  disabled,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  label: string;
+  display?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="brand-range h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-cocoa/15 disabled:opacity-40"
+      />
+      <span className="w-16 shrink-0 text-right font-mono text-xs text-cocoa/50">
+        {display ?? value}
+      </span>
+    </div>
+  );
+}
+
+export function NumberField({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  suffix,
+  disabled,
+  label,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  suffix?: string;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        aria-label={label}
+        // Clamped on change rather than on blur: a half-typed label width would
+        // otherwise be sent to the printer as-is.
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+        }}
+        className={cn(
+          "w-20 rounded-xl border border-cocoa/15 bg-white/80 px-2 py-1.5 text-right font-mono text-sm text-cocoa outline-none focus:border-[rgb(var(--brand-a))]",
+          disabled && "cursor-not-allowed opacity-45",
+        )}
+      />
+      {suffix && <span className="text-xs text-cocoa/50">{suffix}</span>}
+    </div>
+  );
+}
+
 export function SmallButton({
   onClick,
   children,
   tone = "ghost",
+  disabled,
 }: {
   onClick: () => void;
   children: ReactNode;
   tone?: "ghost" | "brand" | "danger";
+  disabled?: boolean;
 }) {
   const tones = {
     ghost: "border-cocoa/15 bg-white/70 text-cocoa",
@@ -194,9 +282,11 @@ export function SmallButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         "rounded-full border px-4 py-2 text-xs font-bold transition-colors",
         tones[tone],
+        disabled && "cursor-not-allowed opacity-45",
       )}
     >
       {children}

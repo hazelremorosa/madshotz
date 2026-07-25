@@ -40,6 +40,8 @@ import {
 import { composeTemplate } from "@/lib/composeTemplate";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
+import { PrinterSection } from "@/components/admin/PrinterSection";
+import { PREVIEW_PHOTO } from "@/lib/previewComposite";
 import type { EventTemplate } from "@/types";
 import {
   ACCENT_BY_CATEGORY,
@@ -284,6 +286,8 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               <PaletteSection />
 
               <KioskSection onToast={toast} />
+
+              <PrinterSection onToast={toast} />
 
           <Section
             emoji="🔐"
@@ -914,12 +918,6 @@ function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) 
 // ── Customer preview ────────────────────────────────────────────────────────
 
 /** A soft portrait stand-in so the preview reads as a real receipt. */
-const PREVIEW_PHOTO =
-  "data:image/svg+xml," +
-  encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='250'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#ffe3c2'/><stop offset='1' stop-color='#e6b89c'/></linearGradient></defs><rect width='200' height='250' fill='url(#g)'/><circle cx='100' cy='96' r='40' fill='#ffffffbb'/><ellipse cx='100' cy='215' rx='72' ry='58' fill='#ffffffbb'/></svg>`,
-  );
-
 function CustomerPreviewSection() {
   const theme = useSession((st) => st.theme);
   // Subscribe to everything that changes the look so the preview stays live.
