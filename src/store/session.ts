@@ -10,8 +10,7 @@ import type {
 import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_FRAME_STYLE } from "@/data/frames";
 import {
-  applyBrandVars,
-  effectiveBrand,
+  applyPalette,
   startingLayout,
   startingOverlay,
   useSettings,
@@ -19,7 +18,7 @@ import {
 
 /** Paints the brand hues — the host's Admin palette wins over the theme's. */
 function applyBrand(theme: Theme) {
-  applyBrandVars(effectiveBrand(theme));
+  applyPalette(theme);
 }
 
 function makeCode(): string {

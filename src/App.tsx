@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import { useSession } from "@/store/session";
-import { applyBrandVars, effectiveBrand } from "@/store/settings";
+import { applyPalette } from "@/store/settings";
 import { hydrateEvents } from "@/store/events";
 import { hydrateTemplates } from "@/store/templates";
 import { startUploadRetry } from "@/lib/delivery";
@@ -77,7 +77,7 @@ export default function App() {
 
   // Paint the host's Admin palette (if any) on first paint, not just on reset.
   useEffect(() => {
-    applyBrandVars(effectiveBrand(theme));
+    applyPalette(theme);
   }, [theme]);
 
   // Pull the shared events + templates from the cloud so this kiosk sees the

@@ -15,10 +15,12 @@ export default {
           soft: "#12121c",
           raised: "#1a1a28",
         },
-        // Warm cream stage + soft plum text for the cute/light theme.
+        // The booth stage. Driven by CSS variables so the Admin palette repaints
+        // the background too, not just the accents — see applyPalette().
+        // `<alpha-value>` keeps utilities like `bg-cream-deep/95` working.
         cream: {
-          DEFAULT: "#fff6fb",
-          deep: "#ffeef6",
+          DEFAULT: "rgb(var(--stage) / <alpha-value>)",
+          deep: "rgb(var(--stage-deep) / <alpha-value>)",
         },
         cocoa: {
           DEFAULT: "#5a4552",
