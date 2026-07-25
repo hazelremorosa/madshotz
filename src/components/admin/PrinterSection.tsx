@@ -33,7 +33,12 @@ import {
   type PrintStatus,
 } from "@/lib/printer";
 import { buildPreviewComposite } from "@/lib/previewComposite";
-import { useSettings, type PrintTransport } from "@/store/settings";
+import {
+  PRINT_ROTATIONS,
+  useSettings,
+  type PrintRotationSetting,
+  type PrintTransport,
+} from "@/store/settings";
 import { cn } from "@/lib/cn";
 
 /**
@@ -322,6 +327,18 @@ export function PrinterSection({
             />
           </Row>
 
+          <Row
+            label="Rotation"
+            hint="Auto turns a landscape design a quarter-turn so it fills portrait stock instead of a band across the top."
+            stacked
+          >
+            <Segmented<PrintRotationSetting>
+              options={PRINT_ROTATIONS}
+              value={s.printRotate}
+              onChange={(v) => set("printRotate", v)}
+            />
+          </Row>
+
           {/* ── Calibration (hidden — see SHOW_CALIBRATION) ───────────────── */}
           {SHOW_CALIBRATION && (
             <>
@@ -533,7 +550,10 @@ export function PrinterSection({
               {printer.detail || "no device bound yet"}
             </div>
             {printer.lastJobBytes > 0 && (
-              <div>last job {(printer.lastJobBytes / 1024).toFixed(1)} KB</div>
+              <div>
+                last job {(printer.lastJobBytes / 1024).toFixed(1)} KB
+                {printer.lastRaster && ` · raster ${printer.lastRaster}`}
+              </div>
             )}
           </div>
         </>

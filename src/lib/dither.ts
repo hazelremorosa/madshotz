@@ -78,7 +78,19 @@ export interface DitherOpts {
   contrast: number;
   /** Swap black and white — for white-on-black designs. */
   invert?: boolean;
+  /**
+   * Quarter-turns applied to the source before rasterising, clockwise.
+   *
+   * Label stock can't be turned sideways — the width is fixed across the print
+   * head — so rotating the *image* is the only way to put a landscape design on
+   * portrait stock without wasting most of the label. A 3:2 landscape template
+   * becomes 2:3, which is exactly a 4×6 label.
+   */
+  rotate?: PrintRotation;
 }
+
+/** Clockwise quarter-turns. */
+export type PrintRotation = 0 | 90 | 180 | 270;
 
 export const DITHER_DEFAULTS: DitherOpts = {
   widthDots: 812,
@@ -192,8 +204,14 @@ export async function imageToBitmap1(
   opts: DitherOpts,
 ): Promise<Bitmap1> {
   const img = await loadImage(src);
-  const srcW = img.naturalWidth || img.width;
-  const srcH = img.naturalHeight || img.height;
+  const rotate = opts.rotate ?? 0;
+  const turned = rotate === 90 || rotate === 270;
+  const natW = img.naturalWidth || img.width;
+  const natH = img.naturalHeight || img.height;
+  // Aspect is measured on the *rotated* source, so an omitted height still
+  // follows the shape that will actually be printed.
+  const srcW = turned ? natH : natW;
+  const srcH = turned ? natW : natH;
 
   const width = Math.max(8, Math.round(opts.widthDots));
   const height = Math.max(
@@ -209,10 +227,33 @@ export async function imageToBitmap1(
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  // White ground: anything the image doesn't cover must stay unburned.
+  // White ground: anything the image doesn't cover must stay unburned. Painted
+  // outside the rotation transform so it always covers the whole canvas.
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(img, 0, 0, width, height);
+
+  // In the rotated frame the drawn extent has width and height swapped.
+  ctx.save();
+  switch (rotate) {
+    case 90:
+      ctx.translate(width, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0, height, width);
+      break;
+    case 180:
+      ctx.translate(width, height);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(img, 0, 0, width, height);
+      break;
+    case 270:
+      ctx.translate(0, height);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(img, 0, 0, height, width);
+      break;
+    default:
+      ctx.drawImage(img, 0, 0, width, height);
+  }
+  ctx.restore();
 
   const { data: px } = ctx.getImageData(0, 0, width, height);
   const n = width * height;

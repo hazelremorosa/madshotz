@@ -4,6 +4,7 @@ import {
   imageToBitmap1,
   type Bitmap1,
   type DitherOpts,
+  type PrintRotation,
 } from "@/lib/dither";
 import {
   LABEL_PRESETS,
@@ -14,7 +15,11 @@ import {
   type JobOpts,
   type LabelStock,
 } from "@/lib/tspl";
-import { useSettings, type PrintTransport } from "@/store/settings";
+import {
+  useSettings,
+  type PrintRotationSetting,
+  type PrintTransport,
+} from "@/store/settings";
 
 /**
  * Talking to the Munbyn RW403B from the browser.
@@ -380,23 +385,61 @@ export async function rasterFor(dataUrl: string): Promise<Bitmap1> {
   const stock = currentStock();
   const base = currentDither();
   const maxW = rasterWidthForStock(stock, s.printMarginMm);
+  const maxH = rasterHeightForStock(stock, s.printMarginMm);
+  const { width: sw, height: sh } = await imageSize(dataUrl);
+  const rotate = resolveRotation(s.printRotate, sw, sh, maxW, maxH, s.printFit);
+  // Everything downstream reasons about the design as it will be printed.
+  const turned = rotate === 90 || rotate === 270;
+  const ew = turned ? sh : sw;
+  const eh = turned ? sw : sh;
 
   if (s.printFit === "width") {
     // Fill the width and let a long strip run past the label edge — correct for
     // continuous roll, where "one label" is a length the host chooses.
-    return imageToBitmap1(dataUrl, { ...base, widthDots: maxW });
+    return imageToBitmap1(dataUrl, { ...base, rotate, widthDots: maxW });
   }
 
   // Contain the whole design on one label without distorting it.
-  const { width: sw, height: sh } = await imageSize(dataUrl);
-  const maxH = rasterHeightForStock(stock, s.printMarginMm);
-  const scale = Math.min(maxW / sw, maxH / sh);
+  const scale = Math.min(maxW / ew, maxH / eh);
   return imageToBitmap1(dataUrl, {
     ...base,
+    rotate,
     // Whole bytes, because TSPL places bitmaps on byte boundaries.
-    widthDots: Math.max(8, Math.floor((sw * scale) / 8) * 8),
-    heightDots: Math.max(8, Math.round(sh * scale)),
+    widthDots: Math.max(8, Math.floor((ew * scale) / 8) * 8),
+    heightDots: Math.max(8, Math.round(eh * scale)),
   });
+}
+
+/**
+ * Picks the rotation for a design, honouring an explicit choice or working it
+ * out.
+ *
+ * "auto" exists because the common case is unambiguous and the host shouldn't
+ * have to think about it: the designed event templates are 3:2 landscape, the
+ * stock is 4×6 portrait, and turning the image a quarter-turn takes it from
+ * filling ~44% of the label to nearly all of it. Since aspect is preserved, the
+ * larger fit scale is simply the better use of paper.
+ *
+ * The 3% margin is hysteresis. Without it a near-square design would flip
+ * orientation on a rounding difference, and the same session could print two
+ * copies facing different ways.
+ */
+function resolveRotation(
+  setting: PrintRotationSetting,
+  sw: number,
+  sh: number,
+  maxW: number,
+  maxH: number,
+  fit: "width" | "label",
+): PrintRotation {
+  if (setting !== "auto") return setting;
+  // With no height constraint there's nothing to optimise against, so leave a
+  // "fill the width" job alone unless the host asked for a turn explicitly.
+  if (fit === "width") return 0;
+
+  const upright = Math.min(maxW / sw, maxH / sh);
+  const turned = Math.min(maxW / sh, maxH / sw);
+  return turned > upright * 1.03 ? 90 : 0;
 }
 
 /** Applies a stock preset, or leaves the custom values alone. */
@@ -440,6 +483,8 @@ interface PrinterState {
    */
   lastJobSource: string;
   lastPrintedSource: string;
+  /** Dot dimensions of the last raster — confirms what rotation/fit resolved to. */
+  lastRaster: string;
   /** Pairs with a printer. Must be called from a user gesture. */
   connect: () => Promise<boolean>;
   /** Silent reconnect to an already-granted device. Safe to call on boot. */
@@ -474,6 +519,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
   lastJobBytes: 0,
   lastJobSource: "",
   lastPrintedSource: "",
+  lastRaster: "",
 
   connect: async () => {
     const kind = useSettings.getState().printTransport;
@@ -608,7 +654,10 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       try {
         const bitmap = await rasterFor(dataUrl);
         const bytes = tsplImageJob(bitmap, currentJob());
-        set({ lastJobBytes: bytes.length });
+        set({
+          lastJobBytes: bytes.length,
+          lastRaster: `${bitmap.width}×${bitmap.height}`,
+        });
         await link!.write(bytes, (frac) => set({ progress: frac }));
         set({ status: "ready", progress: 1, lastPrintedSource: dataUrl });
         return true;

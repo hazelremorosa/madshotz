@@ -170,21 +170,25 @@ function clampInt(v: number, lo: number, hi: number): number {
 /**
  * Encodes a full image job: geometry, then the raster, then PRINT.
  *
- * The bitmap is centred horizontally on the stock. Vertical placement is top-
- * aligned, since a photo strip taller than the label should lose its tail rather
- * than be silently cropped at both ends.
+ * The bitmap is centred on the stock in both axes. Vertical centring only kicks
+ * in when the raster is shorter than the label — a strip printed in "fill the
+ * width" mode can be taller than one label, and that must stay pinned to the top
+ * so it loses its tail rather than being cropped at both ends.
  */
 export function tsplImageJob(bm: Bitmap1, o: JobOpts): Uint8Array {
   const headDots = mmToDots(o.stock.widthMm);
+  const tallDots = mmToDots(o.stock.heightMm);
   // BITMAP's x offset is in *bytes*, not dots — a hard-won detail. Anything
   // else silently shifts the image by up to 7 dots.
   const xBytes = Math.max(0, Math.floor((headDots - bm.width) / 2 / 8));
+  // y is in dots, so this one centres exactly.
+  const y = Math.max(0, Math.round((tallDots - bm.height) / 2));
 
   const raster = o.invertRaster ?? true ? invert(bm.data) : bm.data;
 
   return concat([
     preamble(o).join("\r\n") + "\r\n",
-    `BITMAP ${xBytes},0,${bm.bytesPerRow},${bm.height},0,`,
+    `BITMAP ${xBytes},${y},${bm.bytesPerRow},${bm.height},0,`,
     raster,
     `\r\nPRINT ${clampInt(o.copies, 1, 9)},1\r\n`,
   ]);

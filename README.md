@@ -37,6 +37,16 @@ only — Safari and iOS implement neither API, so an iPad cannot print.**
 | `lib/printer.ts` | Transports, silent reconnect, job serialisation, `usePrinter` store. |
 | `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics. |
 
+**Fitting to the stock.** "Fit the label" scales any composite to sit inside the
+selected stock with its aspect intact — it letterboxes, never crops or stretches
+— and centres it in both axes (a raster taller than the label pins to the top so
+it loses its tail rather than both ends). Because it letterboxes, an aspect
+mismatch just wastes paper, so **Rotation** defaults to *Auto* and turns a design
+a quarter-turn when that uses more of the label: a 3:2 landscape event template
+on 4×6 stock goes from **40% to 91%** of the label. Upright receipts and strips
+are left alone. Matching stock to content still helps most — the `quad` layout is
+exactly 1:3, so it fills **2×6** stock with almost no waste.
+
 Two things can only be settled with the hardware in hand, so both are settings
 rather than constants — commissioning needs no code change:
 

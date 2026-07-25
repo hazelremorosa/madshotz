@@ -3,7 +3,11 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
-import { DITHER_DEFAULTS, type DitherMode } from "@/lib/dither";
+import {
+  DITHER_DEFAULTS,
+  type DitherMode,
+  type PrintRotation,
+} from "@/lib/dither";
 import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
@@ -136,6 +140,20 @@ export const MAX_PRESETS = 8;
  */
 export type PrintTransport = "usb" | "bluetooth";
 
+/**
+ * Quarter-turn applied to the design before printing, or "auto" to let the
+ * printer layer pick whichever orientation uses more of the label.
+ */
+export type PrintRotationSetting = PrintRotation | "auto";
+
+export const PRINT_ROTATIONS: { value: PrintRotationSetting; label: string }[] =
+  [
+    { value: "auto", label: "Auto" },
+    { value: 0, label: "0°" },
+    { value: 90, label: "90°" },
+    { value: 270, label: "270°" },
+  ];
+
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -233,6 +251,12 @@ export interface SettingsState {
    * (right for continuous roll); "label" fits the whole design on one label.
    */
   printFit: "width" | "label";
+  /**
+   * Turns the design before printing. Label stock can't be rotated — the width
+   * is fixed across the head — so this is how a landscape event template gets to
+   * use a whole portrait label instead of a band across the top.
+   */
+  printRotate: PrintRotationSetting;
   ditherMode: DitherMode;
   ditherThreshold: number;
   printBrightness: number;
@@ -323,6 +347,9 @@ const DEFAULTS = {
   labelGapMm: 3,
   printMarginMm: 2,
   printFit: "label" as "width" | "label",
+  // Auto by default: the landscape event templates want a quarter-turn on
+  // portrait stock and nothing else does, so this needs no host attention.
+  printRotate: "auto" as PrintRotationSetting,
   printInvertRaster: true,
 
   // ── Fixed image calibration ───────────────────────────────────────────────
