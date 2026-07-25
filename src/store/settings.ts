@@ -322,14 +322,28 @@ const DEFAULTS = {
   labelHeightMm: 152.4,
   labelGapMm: 3,
   printMarginMm: 2,
+  printFit: "label" as "width" | "label",
+  printInvertRaster: true,
+
+  // ── Fixed image calibration ───────────────────────────────────────────────
+  // These five drive every print but have NO Admin controls right now
+  // (`SHOW_CALIBRATION = false` in PrinterSection — owner's call, 2026-07-25).
+  // They are the sensible baseline, not placeholders:
+  //   density 8 / speed 4 — the conventional TSPL defaults this class of 203 dpi
+  //     head ships with; safe on any stock and a sane starting point for tuning.
+  //   Floyd–Steinberg — smoothest halftone for faces, which is what a photobooth
+  //     prints; measured ~3.9% ink on the standard receipt, a healthy figure for
+  //     mostly-bare paper.
+  //   exposure 128 — the neutral cut point.
+  //   brightness 0 — deliberately not positive; see DitherOpts.brightness, a
+  //     positive bias here prints blank labels.
+  // Restoring the controls needs only the flag flip; nothing here changes.
   printDensity: 8,
   printSpeed: 4,
-  printFit: "label" as "width" | "label",
   ditherMode: DITHER_DEFAULTS.mode,
   ditherThreshold: DITHER_DEFAULTS.threshold,
   printBrightness: DITHER_DEFAULTS.brightness,
   printContrast: DITHER_DEFAULTS.contrast,
-  printInvertRaster: true,
 
   usbVendorId: null as number | null,
   usbProductId: null as number | null,

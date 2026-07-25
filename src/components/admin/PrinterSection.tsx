@@ -52,6 +52,22 @@ import { cn } from "@/lib/cn";
  *   settings change rather than a code change and a redeploy.
  */
 
+/**
+ * Hides the image-calibration controls (halftone, exposure, brightness,
+ * contrast, density, speed) and the 1-bit preview.
+ *
+ * Owner's call (2026-07-25): run on fixed sensible values for now and decide
+ * later whether these come back. Flip to `true` to restore the whole group —
+ * the controls and the settings behind them are untouched, so nothing needs
+ * rebuilding, and the values keep driving every print either way.
+ *
+ * The fixed values live in `DEFAULTS` in `store/settings.ts` (Floyd–Steinberg,
+ * exposure 128, brightness 0, contrast 25) and `JOB_DEFAULTS` in `lib/tspl.ts`
+ * (density 8, speed 4 — the conventional TSPL baseline this class of head ships
+ * with). Same pattern as `ALLOW_FRAME_UPLOAD` in `AdminPanel`.
+ */
+const SHOW_CALIBRATION = false;
+
 const STATUS_LABEL: Record<PrintStatus, string> = {
   offline: "Not connected",
   connecting: "Connecting…",
@@ -306,89 +322,104 @@ export function PrinterSection({
             />
           </Row>
 
-          {/* ── Exposure ─────────────────────────────────────────────────── */}
-          <Row
-            label="Halftone"
-            hint="How grey is faked with black-or-nothing dots."
-            stacked
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {DITHER_MODES.map((m) => (
-                <Chip
-                  key={m.id}
-                  active={s.ditherMode === m.id}
-                  onClick={() => set("ditherMode", m.id as DitherMode)}
-                >
-                  {m.label}
-                </Chip>
-              ))}
-            </div>
-          </Row>
+          {/* ── Calibration (hidden — see SHOW_CALIBRATION) ───────────────── */}
+          {SHOW_CALIBRATION && (
+            <>
+              <Row
+                label="Halftone"
+                hint="How grey is faked with black-or-nothing dots."
+                stacked
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {DITHER_MODES.map((m) => (
+                    <Chip
+                      key={m.id}
+                      active={s.ditherMode === m.id}
+                      onClick={() => set("ditherMode", m.id as DitherMode)}
+                    >
+                      {m.label}
+                    </Chip>
+                  ))}
+                </div>
+              </Row>
 
-          <p className="-mt-1 text-xs leading-snug text-cocoa/50">
-            {DITHER_MODES.find((m) => m.id === s.ditherMode)?.hint}
-          </p>
+              <p className="-mt-1 text-xs leading-snug text-cocoa/50">
+                {DITHER_MODES.find((m) => m.id === s.ditherMode)?.hint}
+              </p>
 
-          <Row label="Exposure" hint="Lower = more black. Start here if prints look muddy." stacked>
-            <Slider
-              label="Dither threshold"
-              value={s.ditherThreshold}
-              onChange={(v) => set("ditherThreshold", v)}
-              min={40}
-              max={215}
-              display={String(s.ditherThreshold)}
-            />
-          </Row>
+              <Row
+                label="Exposure"
+                hint="Lower = more black. Start here if prints look muddy."
+                stacked
+              >
+                <Slider
+                  label="Dither threshold"
+                  value={s.ditherThreshold}
+                  onChange={(v) => set("ditherThreshold", v)}
+                  min={40}
+                  max={215}
+                  display={String(s.ditherThreshold)}
+                />
+              </Row>
 
-          <Row label="Brightness" stacked>
-            <Slider
-              label="Print brightness"
-              value={s.printBrightness}
-              onChange={(v) => set("printBrightness", v)}
-              min={-60}
-              max={60}
-              display={`${s.printBrightness > 0 ? "+" : ""}${s.printBrightness}`}
-            />
-          </Row>
+              {/* Redundant with Exposure — the two are algebraically the same
+                  knob with opposite signs. Kept only so the control matches the
+                  setting; pick one if this section ever comes back. */}
+              <Row label="Brightness" stacked>
+                <Slider
+                  label="Print brightness"
+                  value={s.printBrightness}
+                  onChange={(v) => set("printBrightness", v)}
+                  min={-60}
+                  max={60}
+                  display={`${s.printBrightness > 0 ? "+" : ""}${s.printBrightness}`}
+                />
+              </Row>
 
-          <Row label="Contrast" hint="Photos need a push to survive halftoning." stacked>
-            <Slider
-              label="Print contrast"
-              value={s.printContrast}
-              onChange={(v) => set("printContrast", v)}
-              min={-40}
-              max={80}
-              display={`${s.printContrast > 0 ? "+" : ""}${s.printContrast}`}
-            />
-          </Row>
+              <Row
+                label="Contrast"
+                hint="Photos need a push to survive halftoning."
+                stacked
+              >
+                <Slider
+                  label="Print contrast"
+                  value={s.printContrast}
+                  onChange={(v) => set("printContrast", v)}
+                  min={-40}
+                  max={80}
+                  display={`${s.printContrast > 0 ? "+" : ""}${s.printContrast}`}
+                />
+              </Row>
 
-          <Row
-            label="Density"
-            hint="Burn intensity. Higher is darker but slower and wears the head."
-            stacked
-          >
-            <Slider
-              label="Print density"
-              value={s.printDensity}
-              onChange={(v) => set("printDensity", v)}
-              min={0}
-              max={15}
-              display={String(s.printDensity)}
-            />
-          </Row>
+              <Row
+                label="Density"
+                hint="Burn intensity. Higher is darker but slower and wears the head."
+                stacked
+              >
+                <Slider
+                  label="Print density"
+                  value={s.printDensity}
+                  onChange={(v) => set("printDensity", v)}
+                  min={0}
+                  max={15}
+                  display={String(s.printDensity)}
+                />
+              </Row>
 
-          <Row label="Speed" hint="Inches per second. Slower prints darker." stacked>
-            <Slider
-              label="Print speed"
-              value={s.printSpeed}
-              onChange={(v) => set("printSpeed", v)}
-              min={1}
-              max={6}
-              display={`${s.printSpeed} ips`}
-            />
-          </Row>
+              <Row label="Speed" hint="Inches per second. Slower prints darker." stacked>
+                <Slider
+                  label="Print speed"
+                  value={s.printSpeed}
+                  onChange={(v) => set("printSpeed", v)}
+                  min={1}
+                  max={6}
+                  display={`${s.printSpeed} ips`}
+                />
+              </Row>
 
-          <PrintPreview />
+              <PrintPreview />
+            </>
+          )}
 
           {/* ── Commissioning ────────────────────────────────────────────── */}
           <Row
@@ -408,8 +439,8 @@ export function PrinterSection({
           </Row>
 
           <Row
-            label="Print the preview"
-            hint="Sends the composite above — the real raster path, end to end."
+            label="Print a sample photo"
+            hint="A full receipt with placeholder photos — the real raster path, end to end."
           >
             <SmallButton
               disabled={printer.status === "printing"}
