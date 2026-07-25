@@ -8,12 +8,15 @@ import {
 } from "@/lib/dither";
 import {
   LABEL_PRESETS,
+  probeBytes,
+  probeReadsBack,
   rasterHeightForStock,
   rasterWidthForStock,
   tsplImageJob,
   tsplTestJob,
   type JobOpts,
   type LabelStock,
+  type ProbeId,
 } from "@/lib/tspl";
 import {
   useSettings,
@@ -102,6 +105,12 @@ export interface PrinterLink {
    */
   warning?: string;
   write(bytes: Uint8Array, onProgress?: (frac: number) => void): Promise<void>;
+  /**
+   * Reads a reply, where the transport has one. Any bytes coming back prove the
+   * print engine is actually listening rather than buffering into a void — the
+   * most useful signal available when a job is accepted and nothing prints.
+   */
+  read?(length: number): Promise<Uint8Array | null>;
   close(): Promise<void>;
   connected(): boolean;
 }
@@ -130,6 +139,8 @@ interface UsbTarget {
   /** Which alternate setting the endpoint lives on — must be selected to use it. */
   alternateSetting: number;
   endpoint: number;
+  /** Bulk IN on the same interface, if any — used to read a status reply back. */
+  inEndpoint: number | null;
   interfaceClass: number;
   packetSize: number;
 }
@@ -184,6 +195,9 @@ function pickBulkOut(device: USBDevice): UsbTarget | null {
           interfaceNumber: iface.interfaceNumber,
           alternateSetting: alt.alternateSetting,
           endpoint: ep.endpointNumber,
+          inEndpoint:
+            alt.endpoints.find((e) => e.direction === "in" && e.type === "bulk")
+              ?.endpointNumber ?? null,
           interfaceClass: alt.interfaceClass,
           packetSize: ep.packetSize || 64,
         };
@@ -307,7 +321,21 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
     detail:
       `if${target.interfaceNumber}.${target.alternateSetting} ep${target.endpoint} ` +
       `${target.interfaceClass === USB_PRINTER_CLASS ? "printer-class" : `CLASS ${target.interfaceClass}`} ` +
-      `${hex4(device.vendorId)}:${hex4(device.productId)}\n${describeUsb(device)}`,
+      `${hex4(device.vendorId)}:${hex4(device.productId)}` +
+      `${target.inEndpoint === null ? " (no IN ep)" : ` in-ep${target.inEndpoint}`}` +
+      `\n${describeUsb(device)}`,
+    read:
+      target.inEndpoint === null
+        ? undefined
+        : async (length) => {
+            const res = await withTimeout(
+              device.transferIn(target.inEndpoint!, length),
+              3000,
+              "Reading a reply",
+            );
+            if (res.status !== "ok" || !res.data) return null;
+            return new Uint8Array(res.data.buffer.slice(0));
+          },
     warning:
       target.interfaceClass === USB_PRINTER_CLASS
         ? undefined
@@ -645,6 +673,17 @@ interface PrinterState {
   printImage: (dataUrl: string) => Promise<boolean>;
   /** Tiny text label — proves the link and the stock geometry in ~1 second. */
   printTest: () => Promise<boolean>;
+  /**
+   * Sends one protocol probe and reports what came back.
+   *
+   * Exists because a printer that accepts a job and prints nothing is opaque
+   * from the browser: `transferOut` succeeds either way. Each probe isolates one
+   * layer (motor, parser, language, print engine) so the fault can be located by
+   * watching the hardware.
+   */
+  runProbe: (id: ProbeId) => Promise<string>;
+  /** Human-readable outcome of the last probe, for the Admin readout. */
+  probeResult: string;
 }
 
 let link: PrinterLink | null = null;
@@ -672,6 +711,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
   lastPrintedSource: "",
   lastRaster: "",
   warning: "",
+  probeResult: "",
 
   connect: async () => {
     const kind = useSettings.getState().printTransport;
@@ -824,6 +864,39 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       } catch (e) {
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
+      }
+    }),
+
+  runProbe: (id) =>
+    queue(async () => {
+      if (!link?.connected() && !(await get().autoConnect())) {
+        const msg = "No printer connected.";
+        set({ probeResult: msg });
+        return msg;
+      }
+      const bytes = probeBytes(id);
+      try {
+        await link!.write(bytes);
+        let reply = "";
+        if (probeReadsBack(id)) {
+          if (!link!.read) {
+            reply = " — no IN endpoint on this interface, cannot read a reply";
+          } else {
+            const data = await link!.read(64).catch(() => null);
+            reply = data?.length
+              ? ` — replied ${data.length}B: ${[...data]
+                  .map((b) => b.toString(16).padStart(2, "0"))
+                  .join(" ")}`
+              : " — no reply (the print engine may not be listening)";
+          }
+        }
+        const msg = `Sent ${bytes.length}B${reply}`;
+        set({ probeResult: `${id}: ${msg}`, lastError: "" });
+        return msg;
+      } catch (e) {
+        const msg = errText(e);
+        set({ probeResult: `${id}: failed — ${msg}`, lastError: msg });
+        return msg;
       }
     }),
 
