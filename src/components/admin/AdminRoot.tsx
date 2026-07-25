@@ -100,21 +100,24 @@ export function AdminRoot() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {pinOpen && (
-          <AdminPinPad
-            onUnlock={() => {
-              setPinOpen(false);
-              setAdminOpen(true);
-            }}
-            onCancel={() => setPinOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Deliberately NOT wrapped in AnimatePresence. Neither of these defines an
+          `exit`, so it animated nothing — but it did keep them mounted until
+          framer-motion decided the exit was complete, and this codebase has
+          already been bitten once by exits that never complete around trees
+          containing layout animations (see the note in App.tsx). A host tapping
+          "Yes, return" and staying stuck in Admin is exactly that shape of
+          failure, so the risk buys nothing here. React unmounts immediately. */}
+      {pinOpen && (
+        <AdminPinPad
+          onUnlock={() => {
+            setPinOpen(false);
+            setAdminOpen(true);
+          }}
+          onCancel={() => setPinOpen(false)}
+        />
+      )}
 
-      <AnimatePresence>
-        {adminOpen && <AdminPanel onClose={() => setAdminOpen(false)} />}
-      </AnimatePresence>
+      {adminOpen && <AdminPanel onClose={() => setAdminOpen(false)} />}
     </>
   );
 }
