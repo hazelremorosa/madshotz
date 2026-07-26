@@ -18,6 +18,7 @@ import {
   type LabelStock,
   type ProbeId,
 } from "@/lib/tspl";
+import { zplImageJob, zplProbeBytes, zplTestJob } from "@/lib/zpl";
 import {
   useSettings,
   type PrintRotationSetting,
@@ -853,7 +854,13 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       set({ status: "printing", progress: 0, lastError: "" });
       try {
         const bitmap = await rasterFor(dataUrl);
-        const bytes = tsplImageJob(bitmap, currentJob());
+        const job = currentJob();
+        // ZPL's ^GF treats a set bit as black, matching Bitmap1, so it needs no
+        // inversion — the polarity knob is TSPL's problem alone.
+        const bytes =
+          useSettings.getState().printerLanguage === "zpl"
+            ? zplImageJob(bitmap, job)
+            : tsplImageJob(bitmap, job);
         set({
           lastJobBytes: bytes.length,
           lastRaster: `${bitmap.width}×${bitmap.height}`,
@@ -874,7 +881,12 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         set({ probeResult: msg });
         return msg;
       }
-      const bytes = probeBytes(id);
+      const bytes =
+        id === "zplConfig"
+          ? zplProbeBytes("config")
+          : id === "zplLabel"
+            ? zplProbeBytes("label")
+            : probeBytes(id);
       try {
         await link!.write(bytes);
         let reply = "";
@@ -913,12 +925,16 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       const s = useSettings.getState();
       set({ status: "printing", progress: 0, lastError: "" });
       try {
-        const bytes = tsplTestJob(currentJob(), [
+        const bytes = (
+          useSettings.getState().printerLanguage === "zpl"
+            ? zplTestJob
+            : tsplTestJob
+        )(currentJob(), [
           "MAD SHOTS",
           `Stock ${round1(s.labelWidthMm)} x ${round1(s.labelHeightMm)} mm`,
           `Gap ${round1(s.labelGapMm)} mm  Margin ${round1(s.printMarginMm)} mm`,
           `Density ${s.printDensity}  Speed ${s.printSpeed}`,
-          `Link ${s.printTransport.toUpperCase()}`,
+          `Link ${s.printTransport.toUpperCase()} ${s.printerLanguage.toUpperCase()}`,
           new Date().toLocaleString(),
         ]);
         // Text-only job — clear any raster size left over from a photo print,

@@ -61,20 +61,22 @@ export const LABEL_PRESETS: {
   {
     id: "4x6",
     label: '4 × 6"',
-    hint: "The standard shipping label the printer ships with.",
-    stock: { widthMm: 101.6, heightMm: 152.4, gapMm: 3 },
+    // 1 mm, not the 3 mm guessed originally: the RW403B's own self-test label
+    // reports "Label Length 152mm / GAP Length 1mm" for Munbyn's own stock.
+    hint: "The standard shipping label the printer ships with (1 mm gap).",
+    stock: { widthMm: 101.6, heightMm: 152.4, gapMm: 1 },
   },
   {
     id: "2x6",
     label: '2 × 6"',
     hint: "Classic photobooth strip — matches the Quad layout exactly.",
-    stock: { widthMm: 50.8, heightMm: 152.4, gapMm: 3 },
+    stock: { widthMm: 50.8, heightMm: 152.4, gapMm: 1 },
   },
   {
     id: "3x2",
     label: '3 × 2"',
     hint: "Small product label — fits the Single layout.",
-    stock: { widthMm: 76.2, heightMm: 50.8, gapMm: 3 },
+    stock: { widthMm: 76.2, heightMm: 50.8, gapMm: 1 },
   },
   {
     id: "cont80",
@@ -286,6 +288,8 @@ export type ProbeId =
   | "selfTest"
   | "reset"
   | "minimalLabel"
+  | "zplConfig"
+  | "zplLabel"
   | "escposHello"
   | "statusQuery";
 
@@ -297,12 +301,17 @@ export const PROBES: { id: ProbeId; label: string; expect: string }[] = [
   // every booth setting, and these sit inches apart.
   { id: "reset", label: "Reset printer", expect: "Clears an error state; may re-calibrate" },
   { id: "minimalLabel", label: "Minimal TSPL", expect: "A label reading TEST" },
+  // The printer's self-test reports "PCL: ZPL or TSPL", so ZPL is a real second
+  // option — and `~WC` uses none of our geometry, which makes it the cleanest
+  // single test of whether commands are arriving and being understood at all.
+  { id: "zplConfig", label: "ZPL config", expect: "Printer prints its config — proves ZPL works" },
+  { id: "zplLabel", label: "ZPL label", expect: "A label reading ZPL TEST" },
   { id: "escposHello", label: "ESC/POS", expect: "Only prints if it is NOT TSPL" },
   { id: "statusQuery", label: "Read status", expect: "Bytes come back" },
 ];
 
 /** Builds a probe payload. Each is well under 100 bytes, so it can't stall. */
-export function probeBytes(id: ProbeId): Uint8Array {
+export function probeBytes(id: Exclude<ProbeId, "zplConfig" | "zplLabel">): Uint8Array {
   switch (id) {
     // The leading CRLF flushes any half-finished command left in the buffer.
     case "feed":
