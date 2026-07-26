@@ -626,6 +626,8 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
   detail: string;
   /** Every writable characteristic found, so the sweep can try each in turn. */
   all: { char: BluetoothRemoteGATTCharacteristic; service: string }[];
+  /** Service the chosen characteristic belongs to. */
+  service: string;
 }> {
   const wantChar = normaliseUuid(useSettings.getState().btCharUuid);
 
@@ -688,13 +690,37 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
     (wantChar && writable.find((w) => w.char.uuid.toLowerCase() === wantChar)) ||
     ranked[0];
 
+  /**
+   * Subscribe to a notify characteristic in the chosen service before any write.
+   *
+   * Several thermal heads hold incoming writes until a client has registered for
+   * notifications — the vendor app always subscribes, so firmware can treat an
+   * unsubscribed client as not really connected. Best-effort: a printer that
+   * doesn't need it is unaffected either way.
+   */
+  let subscribed = "no notify char";
+  try {
+    const svc = services.find((x) => x.uuid === chosen.service);
+    for (const c of svc ? await svc.getCharacteristics() : []) {
+      if (!c.properties.notify || !c.startNotifications) continue;
+      await c.startNotifications();
+      subscribed = `subscribed ${short(c.uuid)}`;
+      break;
+    }
+  } catch (e) {
+    subscribed = `subscribe failed (${errText(e)})`;
+  }
+
   const all = writable
     .map((w) => `${short(w.service)}/${short(w.char.uuid)}`)
     .join(", ");
   return {
     char: chosen.char,
-    detail: `using ${short(chosen.service)}/${short(chosen.char.uuid)} — found: ${all}`,
+    detail:
+      `using ${short(chosen.service)}/${short(chosen.char.uuid)} (${subscribed})` +
+      ` — found: ${all}`,
     all: writable,
+    service: chosen.service,
   };
 }
 
@@ -746,7 +772,8 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
   if (!gatt) throw new Error("That Bluetooth device exposes no GATT server");
 
   await gatt.connect();
-  const { char, detail, all: writable } = await findWriteChar(gatt);
+  const { char, detail, all: writable, service: chosenService } = await findWriteChar(gatt);
+  void chosenService;
 
   let open = true;
   device.addEventListener("gattserverdisconnected", () => {
@@ -754,6 +781,7 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
   });
 
   useSettings.getState().set("btDeviceId", device.id);
+
 
   /**
    * Picks the write call for a characteristic.
@@ -824,18 +852,37 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
         }`;
         onStep(label, n + 1, combos.length);
         try {
-          const put = writerFor(w.char, mode);
+          // Reconnect for every combination.
+          //
+          // A write that times out is abandoned but NOT cancelled — Web Bluetooth
+          // has no way to cancel one — so it stays pending and every later write
+          // fails with "GATT operation already in progress". A sweep of sixteen
+          // then reports fifteen meaningless failures caused entirely by the
+          // first. Tearing the link down between tests is the only way to make
+          // each result stand on its own.
+          if (gatt.connected) gatt.disconnect();
+          await wait(300);
+          await gatt.connect();
+          const svc = await gatt.getPrimaryService(w.service);
+          const fresh = await svc.getCharacteristic(w.char.uuid);
+          const put = writerFor(fresh, mode);
           // Probes are tiny, but BLE still caps a single write at the MTU.
           const chunk = Math.max(20, Math.min(512, useSettings.getState().btChunkSize));
           for (let i = 0; i < payload.length; i += chunk)
-            // Short timeout: a dead combination has to fail fast or a sweep of
-            // sixteen takes minutes.
+            // Short timeout: a dead combination has to fail fast, or a full sweep
+            // takes minutes.
             await withTimeout(put(payload.slice(i, i + chunk)), 2500, `Sweep write to ${label}`);
-          tried.push(`${n + 1}. ${label}`);
+          tried.push(`${n + 1}. ${label} — accepted`);
         } catch (e) {
           tried.push(`${n + 1}. ${label} — failed (${errText(e)})`);
         }
         await wait(SWEEP_DWELL_MS);
+      }
+      // Leave the link in a usable state for the next print.
+      try {
+        if (!gatt.connected) await gatt.connect();
+      } catch {
+        // The store will reconnect on the next job.
       }
       return tried;
     },
