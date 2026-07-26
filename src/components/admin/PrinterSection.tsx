@@ -94,9 +94,19 @@ function diagnosticsReport(
   printer: ReturnType<typeof usePrinter.getState>,
 ): string {
   const stock = currentStock();
+  const bound = printer.status !== "offline" && !!printer.detail;
   const lines = [
     "MAD SHOTS — printer diagnostics",
     new Date().toISOString(),
+    // A report taken while disconnected has no binding in it, and that is not
+    // obvious from a wall of settings — it cost a full round trip to discover.
+    ...(bound
+      ? []
+      : [
+          "",
+          "*** NOT CONNECTED — there is no binding in this report. ***",
+          '*** Plug in the OTG cable, tap "Choose printer", then copy again. ***',
+        ]),
     `UA: ${navigator.userAgent}`,
     `WebUSB: ${usbSupported() ? "yes" : "no"}   Web Bluetooth: ${bluetoothSupported() ? "yes" : "no"}`,
     "",
