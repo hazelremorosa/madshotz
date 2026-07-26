@@ -120,6 +120,11 @@ interface BluetoothCharacteristicProperties {
 interface BluetoothRemoteGATTCharacteristic {
   readonly uuid: string;
   readonly properties: BluetoothCharacteristicProperties;
+  /**
+   * Subscribing is a prerequisite on some printers: they hold writes until a
+   * client has registered for notifications.
+   */
+  startNotifications?(): Promise<BluetoothRemoteGATTCharacteristic>;
   writeValue(value: ArrayBufferView | ArrayBuffer): Promise<void>;
   /** Newer name for `writeValue`; not in every Chrome build. */
   writeValueWithResponse?(value: ArrayBufferView | ArrayBuffer): Promise<void>;
@@ -130,6 +135,9 @@ interface BluetoothRemoteGATTCharacteristic {
 interface BluetoothRemoteGATTService {
   readonly uuid: string;
   getCharacteristics(): Promise<BluetoothRemoteGATTCharacteristic[]>;
+  getCharacteristic(
+    characteristic: string,
+  ): Promise<BluetoothRemoteGATTCharacteristic>;
 }
 
 interface BluetoothRemoteGATTServer {
@@ -139,6 +147,7 @@ interface BluetoothRemoteGATTServer {
   getPrimaryServices(
     service?: string,
   ): Promise<BluetoothRemoteGATTService[]>;
+  getPrimaryService(service: string): Promise<BluetoothRemoteGATTService>;
 }
 
 interface BluetoothDevice extends EventTarget {
