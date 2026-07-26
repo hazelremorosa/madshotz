@@ -75,6 +75,58 @@ import { cn } from "@/lib/cn";
  */
 const SHOW_CALIBRATION = false;
 
+/**
+ * Everything worth knowing about the current printer setup, as plain text.
+ *
+ * Exists because diagnosing a printer remotely means asking someone to scroll to
+ * the bottom of a long panel and photograph a small grey box, and to read out
+ * numbers that matter to the byte. One tap and a paste is far less lossy — and it
+ * captures the settings around the binding, which a photo of the binding alone
+ * leaves out.
+ */
+/** `0x0483`-style, or "-" when nothing has been paired yet. */
+function hex4o(n: number | null): string {
+  return n === null ? "-" : `0x${n.toString(16).padStart(4, "0")}`;
+}
+
+function diagnosticsReport(
+  s: ReturnType<typeof useSettings.getState>,
+  printer: ReturnType<typeof usePrinter.getState>,
+): string {
+  const stock = currentStock();
+  const lines = [
+    "MAD SHOTS — printer diagnostics",
+    new Date().toISOString(),
+    `UA: ${navigator.userAgent}`,
+    `WebUSB: ${usbSupported() ? "yes" : "no"}   Web Bluetooth: ${bluetoothSupported() ? "yes" : "no"}`,
+    "",
+    `status:    ${printer.status}`,
+    `device:    ${printer.deviceName || "(none)"}`,
+    `binding:   ${printer.detail || "(not bound)"}`,
+  ];
+  if (printer.warning) lines.push(`warning:   ${printer.warning}`);
+  if (printer.lastError) lines.push(`lastError: ${printer.lastError}`);
+
+  lines.push(
+    "",
+    `transport: ${s.printTransport}   language: ${s.printerLanguage}`,
+    `enabled:   ${s.printEnabled}   autoPrint: ${s.autoPrint}   copies: ${s.printCopies}`,
+    `stock:     ${stock.widthMm} x ${stock.heightMm} mm, gap ${stock.gapMm} mm, margin ${s.printMarginMm} mm (${s.labelPresetId})`,
+    `fit:       ${s.printFit}   rotation: ${s.printRotate}`,
+    `geometry:  head ${mmToDots(stock.widthMm)} dots, raster ${rasterWidthForStock(stock, s.printMarginMm)} dots`,
+    `burn:      density ${s.printDensity}   speed ${s.printSpeed}`,
+    `halftone:  ${s.ditherMode} exposure ${s.ditherThreshold} brightness ${s.printBrightness} contrast ${s.printContrast} invertRaster ${s.printInvertRaster}`,
+    `usb:       interface ${s.usbInterface}, endpoint ${s.usbEndpoint}, chunk ${s.usbChunkSize}B, showAllDevices ${s.usbAnyDevice}`,
+    // Hex, to match the binding line above — comparing 0x0483 against 1155 is
+    // needless friction when the whole point is spotting a wrong device.
+    `usb ids:   ${hex4o(s.usbVendorId)}:${hex4o(s.usbProductId)}`,
+    `bluetooth: chunk ${s.btChunkSize}B, service "${s.btServiceUuid}", char "${s.btCharUuid}", device ${s.btDeviceId ?? "-"}`,
+    `last job:  ${printer.lastJobBytes ? `${(printer.lastJobBytes / 1024).toFixed(1)} KB` : "-"}   raster ${printer.lastRaster || "-"}`,
+  );
+  if (printer.probeResult) lines.push("", "probe / sweep:", printer.probeResult);
+  return lines.join("\n");
+}
+
 const STATUS_LABEL: Record<PrintStatus, string> = {
   offline: "Not connected",
   connecting: "Connecting…",
@@ -99,6 +151,13 @@ export function PrinterSection({
   const s = useSettings();
   const set = useSettings((st) => st.set);
   const printer = usePrinter();
+  /**
+   * Holds the report when the clipboard is unavailable. Android restricts
+   * clipboard writes in some contexts, and a diagnostics button that silently
+   * does nothing would be worse than no button — so fall back to showing the
+   * text for a long-press copy.
+   */
+  const [reportText, setReportText] = useState("");
 
   const supported = transportSupported(s.printTransport);
   const stock = currentStock();
@@ -705,6 +764,45 @@ export function PrinterSection({
               </div>
             )}
           </div>
+
+          <Row
+            label="Copy diagnostics"
+            hint="Puts this whole readout — binding, settings, last job, probe results — on the clipboard."
+          >
+            <SmallButton
+              onClick={async () => {
+                const text = diagnosticsReport(
+                  useSettings.getState(),
+                  usePrinter.getState(),
+                );
+                try {
+                  await navigator.clipboard.writeText(text);
+                  setReportText("");
+                  onToast("Diagnostics copied");
+                } catch {
+                  // No clipboard permission — show it instead so it can still
+                  // be selected and copied by hand.
+                  setReportText(text);
+                  onToast("Clipboard blocked — select the text below");
+                }
+              }}
+            >
+              Copy
+            </SmallButton>
+          </Row>
+
+          {reportText && (
+            <div className="flex flex-col gap-1.5">
+              <textarea
+                readOnly
+                value={reportText}
+                rows={10}
+                onFocus={(e) => e.currentTarget.select()}
+                className="w-full rounded-xl border border-cocoa/15 bg-white/80 p-2 font-mono text-[10px] leading-relaxed text-cocoa"
+              />
+              <SmallButton onClick={() => setReportText("")}>Hide</SmallButton>
+            </div>
+          )}
         </>
       )}
     </Section>
