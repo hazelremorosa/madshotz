@@ -643,8 +643,37 @@ export function PrinterSection({
                 </li>
               ))}
             </ul>
+            <div className="rounded-lg border border-cocoa/15 bg-white/60 p-2.5">
+              <div className="text-xs font-bold text-cocoa">
+                Nothing moved at all?
+              </div>
+              <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
+                Then the bytes aren't reaching the print engine, and the channel is
+                wrong rather than the language. This writes a feed command to every
+                interface and endpoint the device exposes, pausing about 2 seconds
+                on each. Watch the printer and note which step moves the paper.
+              </p>
+              <div className="mt-2">
+                <SmallButton
+                  tone="brand"
+                  disabled={printer.status === "printing"}
+                  onClick={async () => {
+                    const msg = await printer.sweepChannels();
+                    onToast(msg);
+                  }}
+                >
+                  Find the print channel
+                </SmallButton>
+              </div>
+              {printer.sweepStep && (
+                <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">
+                  {printer.sweepStep}
+                </div>
+              )}
+            </div>
+
             {printer.probeResult && (
-              <div className="rounded-lg bg-cocoa/5 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-cocoa/70">
+              <div className="whitespace-pre-line rounded-lg bg-cocoa/5 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-cocoa/70">
                 {printer.probeResult}
               </div>
             )}

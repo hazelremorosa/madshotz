@@ -112,9 +112,28 @@ export interface PrinterLink {
    * most useful signal available when a job is accepted and nothing prints.
    */
   read?(length: number): Promise<Uint8Array | null>;
+  /**
+   * Writes the same payload to every plausible data channel in turn, pausing on
+   * each so a human can watch the printer.
+   *
+   * This exists because a channel that silently swallows data is indistinguishable
+   * from the right one: `transferOut` succeeds either way, and a printer that
+   * ignores a `FEED` looks exactly like a printer that never received it. Rather
+   * than guess which interface/endpoint (or GATT characteristic) is the print
+   * path, try them all and let the paper decide.
+   */
+  sweep?(
+    payload: Uint8Array,
+    onStep: (label: string, index: number, total: number) => void,
+  ): Promise<string[]>;
   close(): Promise<void>;
   connected(): boolean;
 }
+
+/** How long each sweep step dwells, so a person can see which one acted. */
+const SWEEP_DWELL_MS = 2200;
+
+const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 function errText(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -366,6 +385,41 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
         onProgress?.(Math.min(1, (i + slice.length) / bytes.length));
       }
     },
+    async sweep(payload, onStep) {
+      const cfg = device.configuration;
+      if (!cfg) return [];
+      const candidates: { label: string; iface: number; ep: number }[] = [];
+      for (const i of cfg.interfaces) {
+        for (const e of i.alternate.endpoints) {
+          if (e.direction === "out" && e.type === "bulk")
+            candidates.push({
+              label: `interface ${i.interfaceNumber}, endpoint ${e.endpointNumber}`,
+              iface: i.interfaceNumber,
+              ep: e.endpointNumber,
+            });
+        }
+      }
+
+      const tried: string[] = [];
+      for (let n = 0; n < candidates.length; n++) {
+        const c = candidates[n];
+        onStep(c.label, n + 1, candidates.length);
+        try {
+          // Already-claimed interfaces throw; that's fine, we only need it held.
+          await device.claimInterface(c.iface).catch(() => undefined);
+          await withTimeout(
+            device.transferOut(c.ep, payload),
+            5000,
+            `Sweep write to ${c.label}`,
+          );
+          tried.push(`${n + 1}. ${c.label}`);
+        } catch (e) {
+          tried.push(`${n + 1}. ${c.label} — failed (${errText(e)})`);
+        }
+        await wait(SWEEP_DWELL_MS);
+      }
+      return tried;
+    },
     async close() {
       open = false;
       try {
@@ -402,9 +456,12 @@ function bleServiceList(): string[] {
  * well be wrong, take whatever the printer offers and report it. Writable
  * characteristics are effectively always the command pipe on these devices.
  */
-async function findWriteChar(
-  gatt: BluetoothRemoteGATTServer,
-): Promise<{ char: BluetoothRemoteGATTCharacteristic; detail: string }> {
+async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
+  char: BluetoothRemoteGATTCharacteristic;
+  detail: string;
+  /** Every writable characteristic found, so the sweep can try each in turn. */
+  all: { char: BluetoothRemoteGATTCharacteristic; service: string }[];
+}> {
   const wantChar = useSettings.getState().btCharUuid.trim().toLowerCase();
 
   let services: BluetoothRemoteGATTService[] = [];
@@ -450,6 +507,7 @@ async function findWriteChar(
   return {
     char: chosen.char,
     detail: `using ${short(chosen.service)}/${short(chosen.char.uuid)} — found: ${all}`,
+    all: writable,
   };
 }
 
@@ -464,7 +522,7 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
   if (!gatt) throw new Error("That Bluetooth device exposes no GATT server");
 
   await gatt.connect();
-  const { char, detail } = await findWriteChar(gatt);
+  const { char, detail, all: writable } = await findWriteChar(gatt);
 
   let open = true;
   device.addEventListener("gattserverdisconnected", () => {
@@ -507,6 +565,31 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
         if ((i / chunk) % 16 === 0)
           await new Promise((r) => window.setTimeout(r, 0));
       }
+    },
+    async sweep(payload, onStep) {
+      const tried: string[] = [];
+      for (let n = 0; n < writable.length; n++) {
+        const w = writable[n];
+        const label = `${short(w.service)}/${short(w.char.uuid)}`;
+        onStep(label, n + 1, writable.length);
+        try {
+          const c = w.char;
+          const put = c.properties.writeWithoutResponse && c.writeValueWithoutResponse
+            ? c.writeValueWithoutResponse.bind(c)
+            : c.writeValueWithResponse
+              ? c.writeValueWithResponse.bind(c)
+              : c.writeValue.bind(c);
+          // Probes are tiny, but BLE still caps a single write at the MTU.
+          const chunk = Math.max(20, Math.min(512, useSettings.getState().btChunkSize));
+          for (let i = 0; i < payload.length; i += chunk)
+            await withTimeout(put(payload.slice(i, i + chunk)), 5000, `Sweep write to ${label}`);
+          tried.push(`${n + 1}. ${label}`);
+        } catch (e) {
+          tried.push(`${n + 1}. ${label} — failed (${errText(e)})`);
+        }
+        await wait(SWEEP_DWELL_MS);
+      }
+      return tried;
     },
     async close() {
       open = false;
@@ -685,6 +768,16 @@ interface PrinterState {
   runProbe: (id: ProbeId) => Promise<string>;
   /** Human-readable outcome of the last probe, for the Admin readout. */
   probeResult: string;
+  /**
+   * Writes a wake-the-motor payload to every channel in turn so the host can see
+   * which one the printer actually listens on, then reports the numbered list.
+   *
+   * The last resort when a job reports sent and the printer does nothing: it
+   * removes the need for me to know the right interface/endpoint at all.
+   */
+  sweepChannels: () => Promise<string>;
+  /** Live commentary while a sweep runs. */
+  sweepStep: string;
 }
 
 let link: PrinterLink | null = null;
@@ -713,6 +806,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
   lastRaster: "",
   warning: "",
   probeResult: "",
+  sweepStep: "",
 
   connect: async () => {
     const kind = useSettings.getState().printTransport;
@@ -871,6 +965,51 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       } catch (e) {
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
+      }
+    }),
+
+  sweepChannels: () =>
+    queue(async () => {
+      if (!link?.connected() && !(await get().autoConnect())) {
+        const msg = "No printer connected.";
+        set({ probeResult: msg });
+        return msg;
+      }
+      if (!link!.sweep) {
+        const msg = "This transport can't be swept.";
+        set({ probeResult: msg });
+        return msg;
+      }
+
+      // Both languages in one payload: a TSPL feed and a ZPL config request. If
+      // the channel is right, one of them must produce movement, whichever
+      // language the printer is in.
+      const payload = new Uint8Array([
+        ...probeBytes("feed"),
+        ...zplProbeBytes("config"),
+      ]);
+
+      set({ status: "printing", progress: 0, lastError: "", sweepStep: "" });
+      try {
+        const tried = await link!.sweep(payload, (label, i, total) => {
+          set({
+            sweepStep: `Step ${i} of ${total}: ${label} — watch the printer`,
+            progress: i / total,
+          });
+        });
+        set({
+          status: "ready",
+          progress: 1,
+          sweepStep: "",
+          probeResult:
+            `Swept ${tried.length} channel(s). Which step made the paper move?\n` +
+            tried.join("\n"),
+        });
+        return `Tried ${tried.length} channel(s)`;
+      } catch (e) {
+        const msg = errText(e);
+        set({ status: "error", lastError: msg, sweepStep: "", progress: 0 });
+        return msg;
       }
     }),
 
