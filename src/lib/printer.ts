@@ -59,25 +59,40 @@ import {
  */
 
 /**
- * Service UUIDs to ask permission for, since Web Bluetooth will not reveal a
- * service that wasn't declared before connecting.
+ * Service UUIDs to ask permission for.
  *
- * These are the ones that show up across cheap thermal print heads. It is a
- * guess-list, not a specification: if the RW403B turns out to use something
- * else, the real UUID goes in Admin's override field and everything else works
- * unchanged.
+ * Web Bluetooth will not reveal a service that wasn't declared *before*
+ * connecting, and a printer's UUID is not discoverable any other way — so
+ * guessing a handful meant a coin toss on whether `getPrimaryServices()` would
+ * return anything at all.
+ *
+ * Instead of guessing, ask for the whole space these devices live in: the two
+ * 16-bit vendor ranges (`0xFExx` and `0xFFxx`) plus the specific 128-bit UUIDs
+ * used by the common serial-bridge chips. It's a long list, but `optionalServices`
+ * costs nothing beyond one permission prompt, and it turns "did I guess right?"
+ * into "show me everything you have".
  */
-const BLE_SERVICE_CANDIDATES = [
-  "000018f0-0000-1000-8000-00805f9b34fb", // by far the most common on thermal heads
-  "0000ff00-0000-1000-8000-00805f9b34fb",
-  "0000ffe0-0000-1000-8000-00805f9b34fb", // HM-10 style serial bridge
-  "0000fee7-0000-1000-8000-00805f9b34fb",
-  "0000ff12-0000-1000-8000-00805f9b34fb",
-  "0000ae30-0000-1000-8000-00805f9b34fb",
+function uuid16(n: number): string {
+  return `0000${n.toString(16).padStart(4, "0")}-0000-1000-8000-00805f9b34fb`;
+}
+
+const BLE_SERVICE_CANDIDATES: string[] = [
+  // Where thermal print heads are actually found, in likelihood order.
+  uuid16(0x18f0), // by far the most common on these printers
+  uuid16(0xff00),
+  uuid16(0xffe0), // HM-10 style serial bridge
+  uuid16(0xfee7),
+  // Known 128-bit serial bridges.
   "49535343-fe7d-4ae5-8fa9-9fafd205e455", // Microchip/ISSC transparent UART
   "6e400001-b5a3-f393-e0a9-e50e24dcca9e", // Nordic UART
   "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
-];
+  // Then sweep both vendor-assignable 16-bit ranges so an unlisted UUID can't
+  // hide the printer's service from us.
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0xff00 + i)),
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0xfe00 + i)),
+  // A few standard-range services these devices sometimes squat on.
+  ...Array.from({ length: 16 }, (_, i) => uuid16(0x18f0 + i)),
+].filter((u, i, all) => all.indexOf(u) === i);
 
 /** USB printer class — the right filter if the RW403B reports itself honestly. */
 const USB_PRINTER_CLASS = 7;
@@ -619,12 +634,16 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
     }
   }
 
-  if (!writable.length)
+  if (!writable.length) {
+    const seen = services.map((x) => short(x.uuid)).join(", ") || "none";
     throw new Error(
-      "Connected, but the printer exposed no writable characteristic. " +
-        "Its service UUID is probably outside the candidate list — find the " +
-        "real one and paste it into the Service UUID field.",
+      "Connected, but found no writable characteristic. " +
+        `Services visible: ${seen}. ` +
+        (services.length
+          ? "None of them accepts writes — try the other Bluetooth name, or paste the printer's service UUID into the Service UUID field."
+          : "The printer exposed no services at all, which usually means you picked its Bluetooth Classic (-SPP/-COM) name; pick the -BLE one."),
     );
+  }
 
   // Honour an explicit override, then prefer the faster write mode.
   const chosen =
