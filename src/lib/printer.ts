@@ -91,6 +91,9 @@ const BLE_SERVICE_CANDIDATES: string[] = [
   ...Array.from({ length: 256 }, (_, i) => uuid16(0xff00 + i)),
   ...Array.from({ length: 256 }, (_, i) => uuid16(0xfe00 + i)),
   ...Array.from({ length: 256 }, (_, i) => uuid16(0xae00 + i)),
+  // The RW403B also advertises abf0 and af30, so cover those families too.
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0xab00 + i)),
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0xaf00 + i)),
   ...Array.from({ length: 256 }, (_, i) => uuid16(0x1800 + i)),
 ].filter((u, i, all) => all.indexOf(u) === i);
 
@@ -672,11 +675,17 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
     );
   }
 
-  // Honour an explicit override, then prefer the faster write mode.
+  // An explicit override always wins; otherwise take the best-known channel,
+  // breaking ties towards the faster write mode.
+  const ranked = [...writable].sort(
+    (a, z) =>
+      channelRank(a.service, a.char.uuid) - channelRank(z.service, z.char.uuid) ||
+      Number(z.char.properties.writeWithoutResponse) -
+        Number(a.char.properties.writeWithoutResponse),
+  );
   const chosen =
     (wantChar && writable.find((w) => w.char.uuid.toLowerCase() === wantChar)) ||
-    writable.find((w) => w.char.properties.writeWithoutResponse) ||
-    writable[0];
+    ranked[0];
 
   const all = writable
     .map((w) => `${short(w.service)}/${short(w.char.uuid)}`)
@@ -686,6 +695,43 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
     detail: `using ${short(chosen.service)}/${short(chosen.char.uuid)} — found: ${all}`,
     all: writable,
   };
+}
+
+/**
+ * Known print channels, best first.
+ *
+ * The RW403B exposes six GATT services (ae3a, abf0, ae30, ae00, 1801, 1800) and
+ * several may hold a writable characteristic — so "first writable one wins" is a
+ * guess with a one-in-several chance. `AE30`/`AE01` is the documented print
+ * service on this family of thermal heads; the rest are the pairings used by the
+ * common serial-bridge chips.
+ */
+const PREFERRED_CHANNELS: { service: string; char: string }[] = [
+  { service: "ae30", char: "ae01" },
+  { service: "18f0", char: "2af1" },
+  { service: "ff00", char: "ff02" },
+  { service: "ffe0", char: "ffe1" },
+  { service: "fee7", char: "fec7" },
+  {
+    service: "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+    char: "49535343-8841-43f4-a8d4-ecbe34729bb3",
+  },
+  {
+    service: "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+    char: "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+  },
+];
+
+/**
+ * Lower is better: an exact known service+characteristic pair, then the right
+ * service with some other writable characteristic, then anything at all.
+ */
+function channelRank(service: string, char: string): number {
+  const s = short(service);
+  const c = short(char);
+  const idx = PREFERRED_CHANNELS.findIndex((p) => p.service === s);
+  if (idx >= 0) return PREFERRED_CHANNELS[idx].char === c ? idx : 50 + idx;
+  return 100;
 }
 
 /** Trims a full 128-bit UUID to its recognisable short form for display. */
@@ -745,10 +791,16 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
     },
     async sweep(payload, onStep) {
       const tried: string[] = [];
-      for (let n = 0; n < writable.length; n++) {
-        const w = writable[n];
+      // Best-known channels first, so the likely answer is step 1 rather than 5.
+      const order = [...writable].sort(
+        (a, z) =>
+          channelRank(a.service, a.char.uuid) -
+          channelRank(z.service, z.char.uuid),
+      );
+      for (let n = 0; n < order.length; n++) {
+        const w = order[n];
         const label = `${short(w.service)}/${short(w.char.uuid)}`;
-        onStep(label, n + 1, writable.length);
+        onStep(label, n + 1, order.length);
         try {
           const c = w.char;
           const put = c.properties.writeWithoutResponse && c.writeValueWithoutResponse
