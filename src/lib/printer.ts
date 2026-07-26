@@ -126,6 +126,10 @@ export interface PrinterLink {
     payload: Uint8Array,
     onStep: (label: string, index: number, total: number) => void,
   ): Promise<string[]>;
+  /** USB printer-class control requests — answers even when the data path is deaf. */
+  classRequest?(
+    kind: "portStatus" | "deviceId" | "softReset",
+  ): Promise<string>;
   close(): Promise<void>;
   connected(): boolean;
 }
@@ -382,8 +386,94 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
         );
         if (res.status !== "ok")
           throw new Error(`Printer rejected the data (${res.status})`);
+        // A bulk transfer whose length is an exact multiple of the endpoint's
+        // packet size carries no short packet, so the device has no way to know
+        // the transfer ended — plenty of printer firmware simply waits for more.
+        // This endpoint is 64 bytes, and a 4096-byte chunk is exactly 64 of them,
+        // so without a zero-length packet a job can sit in the buffer for ever.
+        if (slice.length % target.packetSize === 0)
+          await withTimeout(
+            device.transferOut(target.endpoint, new Uint8Array(0)),
+            USB_WRITE_TIMEOUT_MS,
+            "Sending end-of-transfer packet",
+          );
         onProgress?.(Math.min(1, (i + slice.length) / bytes.length));
       }
+    },
+    /**
+     * The three requests every USB printer-class interface must answer.
+     *
+     * These go over the control pipe rather than the data endpoint, which makes
+     * them the only way to ask the printer a question it *has* to reply to. If
+     * the data path is silently discarding jobs, these still work — and
+     * GET_DEVICE_ID returns the IEEE-1284 identity string, whose `CMD:` field
+     * names the command sets the firmware actually supports. That settles
+     * TSPL-vs-ZPL from the printer's own mouth instead of by experiment.
+     */
+    async classRequest(kind) {
+      const iface = target.interfaceNumber;
+      if (kind === "softReset") {
+        // SOFT_RESET (2) — flushes the interface's buffers.
+        const res = await withTimeout(
+          device.controlTransferOut({
+            requestType: "class",
+            recipient: "interface",
+            request: 2,
+            value: 0,
+            index: iface,
+          }),
+          4000,
+          "Soft reset",
+        );
+        return `soft reset: ${res.status}`;
+      }
+
+      if (kind === "portStatus") {
+        // GET_PORT_STATUS (1) — one byte of live printer state.
+        const res = await withTimeout(
+          device.controlTransferIn(
+            {
+              requestType: "class",
+              recipient: "interface",
+              request: 1,
+              value: 0,
+              index: iface,
+            },
+            1,
+          ),
+          4000,
+          "Port status",
+        );
+        const v = res.data?.getUint8(0);
+        if (v === undefined) return `port status: no data (${res.status})`;
+        return (
+          `port status: 0x${v.toString(16).padStart(2, "0")} — ` +
+          `${v & 0x20 ? "PAPER EMPTY" : "paper ok"}, ` +
+          `${v & 0x10 ? "selected" : "NOT SELECTED"}, ` +
+          `${v & 0x08 ? "no error" : "ERROR"}`
+        );
+      }
+
+      // GET_DEVICE_ID (0) — IEEE-1284 identity, length-prefixed big-endian.
+      const res = await withTimeout(
+        device.controlTransferIn(
+          {
+            requestType: "class",
+            recipient: "interface",
+            request: 0,
+            value: 0,
+            index: iface,
+          },
+          1024,
+        ),
+        4000,
+        "Device ID",
+      );
+      if (!res.data || res.data.byteLength < 3)
+        return `device id: no data (${res.status})`;
+      const bytes = new Uint8Array(res.data.buffer.slice(0));
+      const text = new TextDecoder("latin1").decode(bytes.subarray(2));
+      return `device id: ${text.replace(/[^\x20-\x7e]/g, " ").trim()}`;
     },
     async sweep(payload, onStep) {
       const cfg = device.configuration;
@@ -405,8 +495,12 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
         const c = candidates[n];
         onStep(c.label, n + 1, candidates.length);
         try {
-          // Already-claimed interfaces throw; that's fine, we only need it held.
+          // Claiming alone isn't enough: an endpoint is only usable once its
+          // alternate setting is *selected*, which is why sweeping a second
+          // interface previously failed with "not part of a claimed and selected
+          // alternate interface".
           await device.claimInterface(c.iface).catch(() => undefined);
+          await device.selectAlternateInterface(c.iface, 0).catch(() => undefined);
           await withTimeout(
             device.transferOut(c.ep, payload),
             5000,
@@ -778,6 +872,11 @@ interface PrinterState {
   sweepChannels: () => Promise<string>;
   /** Live commentary while a sweep runs. */
   sweepStep: string;
+  /**
+   * Asks the printer a question over the USB control pipe, which it is obliged to
+   * answer regardless of what the data endpoint is doing.
+   */
+  askPrinter: (kind: "portStatus" | "deviceId" | "softReset") => Promise<string>;
 }
 
 let link: PrinterLink | null = null;
@@ -965,6 +1064,29 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       } catch (e) {
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
+      }
+    }),
+
+  askPrinter: (kind) =>
+    queue(async () => {
+      if (!link?.connected() && !(await get().autoConnect())) {
+        const msg = "No printer connected.";
+        set({ probeResult: msg });
+        return msg;
+      }
+      if (!link!.classRequest) {
+        const msg = "Control requests need the USB transport.";
+        set({ probeResult: msg });
+        return msg;
+      }
+      try {
+        const msg = await link!.classRequest(kind);
+        set({ probeResult: msg, lastError: "" });
+        return msg;
+      } catch (e) {
+        const msg = `${kind} failed — ${errText(e)}`;
+        set({ probeResult: msg, lastError: errText(e) });
+        return msg;
       }
     }),
 
