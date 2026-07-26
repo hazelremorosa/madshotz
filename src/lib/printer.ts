@@ -144,6 +144,24 @@ function errText(e: unknown): string {
   return String(e);
 }
 
+/**
+ * Throws the connection away after a timeout.
+ *
+ * `withTimeout` stops waiting but cannot cancel the underlying USB transfer, so
+ * the pipe may still have a half-finished operation on it and anything sent
+ * afterwards is undefined — failing in exactly the silent way that has made this
+ * hard to diagnose. Force a clean reconnect on the next job instead.
+ */
+async function dropLinkIfWedged(e: unknown): Promise<void> {
+  if (!/timed out/i.test(errText(e))) return;
+  try {
+    await link?.close();
+  } catch {
+    // Discarding it either way.
+  }
+  link = null;
+}
+
 export function usbSupported(): boolean {
   return typeof navigator !== "undefined" && !!navigator.usb;
 }
@@ -313,9 +331,12 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
 
   // An endpoint on a non-active alternate is unusable until it's selected —
   // writes to it are accepted and go nowhere.
-  if (target.alternateSetting !== device.configuration?.interfaces
-        .find((i) => i.interfaceNumber === target.interfaceNumber)
-        ?.alternate.alternateSetting) {
+  const activeAlt = device.configuration?.interfaces.find(
+    (i) => i.interfaceNumber === target.interfaceNumber,
+  )?.alternate.alternateSetting;
+  // Only when it genuinely differs. A needless SET_INTERFACE can stall on a
+  // single-alternate device and leave every endpoint on that interface unusable.
+  if (activeAlt !== undefined && activeAlt !== target.alternateSetting) {
     try {
       await device.selectAlternateInterface(
         target.interfaceNumber,
@@ -478,13 +499,19 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
     async sweep(payload, onStep) {
       const cfg = device.configuration;
       if (!cfg) return [];
-      const candidates: { label: string; iface: number; ep: number }[] = [];
+      const candidates: {
+        label: string;
+        iface: number;
+        alt: number;
+        ep: number;
+      }[] = [];
       for (const i of cfg.interfaces) {
         for (const e of i.alternate.endpoints) {
           if (e.direction === "out" && e.type === "bulk")
             candidates.push({
               label: `interface ${i.interfaceNumber}, endpoint ${e.endpointNumber}`,
               iface: i.interfaceNumber,
+              alt: i.alternate.alternateSetting,
               ep: e.endpointNumber,
             });
         }
@@ -495,12 +522,22 @@ async function openUsbLink(device: USBDevice): Promise<PrinterLink> {
         const c = candidates[n];
         onStep(c.label, n + 1, candidates.length);
         try {
-          // Claiming alone isn't enough: an endpoint is only usable once its
-          // alternate setting is *selected*, which is why sweeping a second
-          // interface previously failed with "not part of a claimed and selected
-          // alternate interface".
+          // Claim, but only touch the alternate setting if it genuinely needs
+          // changing.
+          //
+          // Calling selectAlternateInterface unconditionally broke this: on a
+          // device with a single alternate, SET_INTERFACE can stall, and a failed
+          // SET_INTERFACE leaves the interface with *no* alternate selected — so
+          // every endpoint on it becomes unusable for the rest of the session.
+          // Interface 0 swept fine before that call was added and failed after.
           await device.claimInterface(c.iface).catch(() => undefined);
-          await device.selectAlternateInterface(c.iface, 0).catch(() => undefined);
+          const active = device.configuration?.interfaces.find(
+            (i) => i.interfaceNumber === c.iface,
+          )?.alternate.alternateSetting;
+          if (active !== undefined && active !== c.alt)
+            await device
+              .selectAlternateInterface(c.iface, c.alt)
+              .catch(() => undefined);
           await withTimeout(
             device.transferOut(c.ep, payload),
             5000,
@@ -1062,6 +1099,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         set({ status: "ready", progress: 1, lastPrintedSource: dataUrl });
         return true;
       } catch (e) {
+        await dropLinkIfWedged(e);
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
       }
@@ -1085,6 +1123,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         return msg;
       } catch (e) {
         const msg = `${kind} failed — ${errText(e)}`;
+        await dropLinkIfWedged(e);
         set({ probeResult: msg, lastError: errText(e) });
         return msg;
       }
@@ -1168,6 +1207,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         return msg;
       } catch (e) {
         const msg = errText(e);
+        await dropLinkIfWedged(e);
         set({ probeResult: `${id}: failed — ${msg}`, lastError: msg });
         return msg;
       }
@@ -1205,6 +1245,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         set({ status: "ready", progress: 1 });
         return true;
       } catch (e) {
+        await dropLinkIfWedged(e);
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
       }
