@@ -331,6 +331,36 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
 
           <StatusSection onToast={toast} />
 
+          <Section
+            emoji="🧪"
+            title="Development"
+            note="For testing only. Leave these alone on a booth that's running an event."
+          >
+            <Row
+              label="Upload photos to the cloud"
+              hint={
+                s.cloudUploadEnabled
+                  ? "On — composites upload to Cloudflare and the QR resolves."
+                  : "OFF — nothing is uploaded or queued, and QR codes will not work."
+              }
+            >
+              <Toggle
+                checked={s.cloudUploadEnabled}
+                onChange={(v) => {
+                  set("cloudUploadEnabled", v);
+                  toast(v ? "Cloud upload on" : "Cloud upload OFF — QR codes won't work");
+                }}
+                label="Upload photos to the cloud"
+              />
+            </Row>
+            {!s.cloudUploadEnabled && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                ⚠️ Guests' QR codes will not work while this is off, and nothing is
+                queued to upload later. Switch it back on before an event.
+              </p>
+            )}
+          </Section>
+
           <Section emoji="⚠️" title="Danger zone">
             <Row label="Restart the guest session" hint="Back to the welcome screen.">
               <SmallButton
@@ -1541,6 +1571,7 @@ function PinChanger({ onSaved }: { onSaved: () => void }) {
 function StatusSection({ onToast }: { onToast: (msg: string) => void }) {
   const online = useOnlineStatus();
   const pending = useUploadQueue((s) => s.pending);
+  const uploadsOn = useSettings((st) => st.cloudUploadEnabled);
 
   return (
     <Section
@@ -1551,8 +1582,14 @@ function StatusSection({ onToast }: { onToast: (msg: string) => void }) {
       <StatusRow label="Network" value={online ? "Online" : "Offline"} ok={online} />
       <StatusRow
         label="Cloud delivery"
-        value={DeliveryService.isConfigured ? "Connected" : "Not configured"}
-        ok={DeliveryService.isConfigured}
+        value={
+          !DeliveryService.isConfigured
+            ? "Not configured"
+            : uploadsOn
+              ? "Connected"
+              : "Switched off (dev)"
+        }
+        ok={DeliveryService.isConfigured && uploadsOn}
       />
       <Row
         label="Pending uploads"

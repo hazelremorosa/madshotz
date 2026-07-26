@@ -5,6 +5,7 @@ import {
   queuePut,
   refreshPending,
 } from "@/lib/uploadQueue";
+import { useSettings } from "@/store/settings";
 
 /**
  * Photo delivery — Cloudflare (R2 + Worker).
@@ -20,6 +21,12 @@ import {
  * photo — it retries automatically when the network returns.
  *
  * With no base configured, it falls back to a placeholder link so dev still runs.
+ *
+ * The host can also switch uploads off from Admin → System → Development. That
+ * is stronger than being offline: offline *queues* for later, whereas switched
+ * off never touches the network or the queue at all, so a development session
+ * can't quietly bank a pile of test photos that all flush to R2 the moment it's
+ * switched back on.
  */
 
 export interface PublishResult {
@@ -50,6 +57,11 @@ async function uploadBlob(code: string, blob: Blob): Promise<boolean> {
   }
 }
 
+/** Whether photos should actually be uploaded right now. */
+export function uploadsEnabled(): boolean {
+  return configured && useSettings.getState().cloudUploadEnabled;
+}
+
 export const DeliveryService = {
   isConfigured: configured,
 
@@ -66,6 +78,17 @@ export const DeliveryService = {
    */
   async publish(code: string, composite: string): Promise<PublishResult> {
     const url = this.linkFor(code);
+
+    // Development switch: behave as though the upload happened, but touch
+    // nothing. Not queued — see the note at the top of this file.
+    if (configured && !useSettings.getState().cloudUploadEnabled) {
+      await new Promise((r) => setTimeout(r, 650)); // keep the QR draw-in breathing
+      console.info(
+        "[Mad Shots] Cloud upload is OFF (Admin → System → Development). " +
+          `Nothing was uploaded and this QR will not resolve: ${url}`,
+      );
+      return { code, url, pending: false };
+    }
 
     if (!configured || !composite) {
       await new Promise((r) => setTimeout(r, 650)); // keep the QR draw-in breathing
@@ -100,7 +123,9 @@ let draining = false;
 
 /** Uploads everything in the queue that can still be delivered. */
 export async function drainUploadQueue(): Promise<void> {
-  if (!configured || draining || !navigator.onLine) return;
+  // Checked here rather than only at the call sites, so the retry timer, the
+  // "online" listener and the Admin "Retry now" button all respect the switch.
+  if (!uploadsEnabled() || draining || !navigator.onLine) return;
   draining = true;
   try {
     const items = await queueAll();

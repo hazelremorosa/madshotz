@@ -223,6 +223,15 @@ export const MAX_PRESETS = 8;
 export type PrintTransport = "usb" | "bluetooth";
 
 /**
+ * Which command language the printer is listening in.
+ *
+ * The RW403B's self-test reports `PCL: ZPL or TSPL`, so both are viable and only
+ * the hardware can say which actually produces paper — hence a setting rather
+ * than a constant.
+ */
+export type PrinterLanguage = "tspl" | "zpl";
+
+/**
  * Quarter-turn applied to the design before printing, or "auto" to let the
  * printer layer pick whichever orientation uses more of the label.
  */
@@ -313,6 +322,8 @@ export interface SettingsState {
    */
   printEnabled: boolean;
   printTransport: PrintTransport;
+  /** TSPL or ZPL — this printer accepts either. See `PrinterLanguage`. */
+  printerLanguage: PrinterLanguage;
   /** Print without anyone tapping anything, as soon as the composite exists. */
   autoPrint: boolean;
   printCopies: number;
@@ -372,6 +383,17 @@ export interface SettingsState {
   /** Optional UUID overrides, for when the real hardware reveals its service. */
   btServiceUuid: string;
   btCharUuid: string;
+
+  // ── Development ───────────────────────────────────────────────────────────
+  /**
+   * Uploads the finished composite to Cloudflare. Off is a **development**
+   * switch: nothing reaches R2, nothing is queued for later, and the QR points
+   * at a link that won't resolve until it's turned back on.
+   *
+   * Deliberately not in `BoothConfig` — loading an event must never be able to
+   * silently stop a live booth delivering photos.
+   */
+  cloudUploadEnabled: boolean;
 
   // ── Kiosk ─────────────────────────────────────────────────────────────────
   kioskMode: boolean;
@@ -436,12 +458,14 @@ const DEFAULTS = {
   // as it did before this feature existed.
   printEnabled: false,
   printTransport: "usb" as PrintTransport,
+  printerLanguage: "tspl" as PrinterLanguage,
   autoPrint: true,
   printCopies: 1,
   labelPresetId: "4x6",
   labelWidthMm: 101.6,
   labelHeightMm: 152.4,
-  labelGapMm: 3,
+  // 1 mm — what the RW403B's own self-test label reports for Munbyn 4x6 stock.
+  labelGapMm: 1,
   printMarginMm: 2,
   printFit: "label" as "width" | "label",
   // Auto by default: the landscape event templates want a quarter-turn on
@@ -479,6 +503,10 @@ const DEFAULTS = {
   btChunkSize: 20,
   btServiceUuid: "",
   btCharUuid: "",
+
+  // On by default: a booth that quietly stops delivering photos is the worst
+  // possible failure, so this only ever goes off by an explicit decision.
+  cloudUploadEnabled: true,
 
   kioskMode: false,
   keepAwake: true,

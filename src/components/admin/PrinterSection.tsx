@@ -37,6 +37,7 @@ import { buildPreviewComposite } from "@/lib/previewComposite";
 import {
   PRINT_ROTATIONS,
   useSettings,
+  type PrinterLanguage,
   type PrintRotationSetting,
   type PrintTransport,
 } from "@/store/settings";
@@ -213,6 +214,21 @@ export function PrinterSection({
               Classic, which no web page can reach.
             </p>
           )}
+
+          <Row
+            label="Command language"
+            hint="This printer's self-test reports “ZPL or TSPL”. Only the hardware can say which one actually produces paper — if TSPL prints nothing, try ZPL."
+            stacked
+          >
+            <Segmented<PrinterLanguage>
+              options={[
+                { value: "tspl", label: "TSPL" },
+                { value: "zpl", label: "ZPL" },
+              ]}
+              value={s.printerLanguage}
+              onChange={(v) => set("printerLanguage", v)}
+            />
+          </Row>
 
           <Row
             label="Print automatically"
@@ -633,11 +649,14 @@ export function PrinterSection({
               </div>
             )}
             <p className="text-[11px] leading-snug text-cocoa/45">
+              <span className="font-semibold">ZPL config printing</span> is the
+              answer to look for — it means ZPL arrives and is understood, so set
+              Command language to ZPL above and printing works.{" "}
               <span className="font-semibold">Feed or Self test working</span> means
-              TSPL is understood and the fault is in the job we build.{" "}
-              <span className="font-semibold">Only ESC/POS working</span> means the
-              printer isn't TSPL and needs a different encoder — tell me which and
-              I'll switch it.
+              TSPL is understood too, and the fault is in the job we build.{" "}
+              <span className="font-semibold">Nothing at all</span> means commands
+              aren't reaching the print engine — try the Bluetooth transport, since
+              the vendor app uses it.
             </p>
           </div>
 

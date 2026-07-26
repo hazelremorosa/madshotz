@@ -17,6 +17,7 @@ export function QRScreen() {
   const reset = useSession((s) => s.reset);
   /** Host setting (Admin → Sound & timing). Read once so it can't shift mid-countdown. */
   const [resetSeconds] = useState(() => useSettings.getState().qrResetSec);
+  const uploadsOn = useSettings((st) => st.cloudUploadEnabled);
 
   const [matrix, setMatrix] = useState<boolean[][] | null>(null);
   const [url, setUrl] = useState("");
@@ -109,6 +110,19 @@ export function QRScreen() {
           {pending ? "Saved ✓ — download it here now" : "Scan to save your photos"}
         </p>
       </motion.div>
+
+      {/* Uploads switched off for development. Deliberately loud and deliberately
+          guest-visible: a booth silently handing out dead QR codes is far worse
+          than an ugly banner, and this is the only reminder that it's off. */}
+      {!uploadsOn && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-full bg-amber-100/90 px-4 py-1.5 text-center text-xs font-semibold text-amber-800"
+        >
+          🧪 Cloud upload is OFF — this QR won't work
+        </motion.div>
+      )}
 
       {/* Offline: the photo is safe on the device; the QR link syncs later. */}
       {pending && (
