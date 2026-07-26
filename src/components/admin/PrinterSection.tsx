@@ -35,8 +35,10 @@ import {
 } from "@/lib/printer";
 import { buildPreviewComposite } from "@/lib/previewComposite";
 import {
+  BT_WRITE_MODES,
   PRINT_ROTATIONS,
   useSettings,
+  type BtWriteMode,
   type PrinterLanguage,
   type PrintRotationSetting,
   type PrintTransport,
@@ -653,6 +655,17 @@ export function PrinterSection({
                   max={512}
                   step={20}
                   suffix="B"
+                />
+              </Row>
+              <Row
+                label="Write mode"
+                hint="“No reply” is much faster, but a printer that only pretends to support it queues the write for ever — which shows up as a timeout. Try “With reply” if writes time out."
+                stacked
+              >
+                <Segmented<BtWriteMode>
+                  options={BT_WRITE_MODES}
+                  value={s.btWriteMode}
+                  onChange={(v) => set("btWriteMode", v)}
                 />
               </Row>
               <Row

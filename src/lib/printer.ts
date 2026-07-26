@@ -21,6 +21,7 @@ import {
 import { zplImageJob, zplProbeBytes, zplTestJob } from "@/lib/zpl";
 import {
   useSettings,
+  type BtWriteMode,
   type PrintRotationSetting,
   type PrintTransport,
 } from "@/store/settings";
@@ -754,12 +755,24 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
 
   useSettings.getState().set("btDeviceId", device.id);
 
-  const writeOne = async (slice: Uint8Array) => {
-    if (char.properties.writeWithoutResponse && char.writeValueWithoutResponse)
-      return char.writeValueWithoutResponse(slice);
-    if (char.writeValueWithResponse) return char.writeValueWithResponse(slice);
-    return char.writeValue(slice);
+  /**
+   * Picks the write call for a characteristic.
+   *
+   * Write-without-response is much faster, but a peripheral that advertises it
+   * without truly honouring it will queue the write and never complete it — which
+   * appears as a timeout, not an error, and is exactly what the RW403B did on
+   * ae30/ae01. Hence a host override rather than always trusting the property.
+   */
+  const writerFor = (c: BluetoothRemoteGATTCharacteristic, mode: BtWriteMode) => {
+    const noResp = c.writeValueWithoutResponse?.bind(c);
+    const resp = c.writeValueWithResponse?.bind(c) ?? c.writeValue.bind(c);
+    if (mode === "response") return resp;
+    if (mode === "noResponse") return noResp ?? resp;
+    return c.properties.writeWithoutResponse && noResp ? noResp : resp;
   };
+
+  const writeOne = (slice: Uint8Array) =>
+    writerFor(char, useSettings.getState().btWriteMode)(slice);
 
   return {
     kind: "bluetooth",
@@ -797,21 +810,27 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
           channelRank(a.service, a.char.uuid) -
           channelRank(z.service, z.char.uuid),
       );
-      for (let n = 0; n < order.length; n++) {
-        const w = order[n];
-        const label = `${short(w.service)}/${short(w.char.uuid)}`;
-        onStep(label, n + 1, order.length);
+      // Characteristic *and* write mode: a peripheral that queues a
+      // without-response write for ever looks identical to the wrong
+      // characteristic, so both have to be varied to tell them apart.
+      const combos = order.flatMap((w) =>
+        (["response", "noResponse"] as BtWriteMode[]).map((mode) => ({ w, mode })),
+      );
+
+      for (let n = 0; n < combos.length; n++) {
+        const { w, mode } = combos[n];
+        const label = `${short(w.service)}/${short(w.char.uuid)} ${
+          mode === "response" ? "with reply" : "no reply"
+        }`;
+        onStep(label, n + 1, combos.length);
         try {
-          const c = w.char;
-          const put = c.properties.writeWithoutResponse && c.writeValueWithoutResponse
-            ? c.writeValueWithoutResponse.bind(c)
-            : c.writeValueWithResponse
-              ? c.writeValueWithResponse.bind(c)
-              : c.writeValue.bind(c);
+          const put = writerFor(w.char, mode);
           // Probes are tiny, but BLE still caps a single write at the MTU.
           const chunk = Math.max(20, Math.min(512, useSettings.getState().btChunkSize));
           for (let i = 0; i < payload.length; i += chunk)
-            await withTimeout(put(payload.slice(i, i + chunk)), 5000, `Sweep write to ${label}`);
+            // Short timeout: a dead combination has to fail fast or a sweep of
+            // sixteen takes minutes.
+            await withTimeout(put(payload.slice(i, i + chunk)), 2500, `Sweep write to ${label}`);
           tried.push(`${n + 1}. ${label}`);
         } catch (e) {
           tried.push(`${n + 1}. ${label} — failed (${errText(e)})`);
