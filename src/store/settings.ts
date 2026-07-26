@@ -232,6 +232,22 @@ export type PrintTransport = "usb" | "bluetooth";
 export type PrinterLanguage = "tspl" | "zpl";
 
 /**
+ * How BLE writes are issued.
+ *
+ * "Without response" is far faster but only works if the peripheral genuinely
+ * honours it — when it doesn't, the write is queued and never completes, which
+ * surfaces as a timeout rather than an error. Only the hardware can say which it
+ * wants, so this is a setting.
+ */
+export type BtWriteMode = "auto" | "response" | "noResponse";
+
+export const BT_WRITE_MODES: { value: BtWriteMode; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "response", label: "With reply" },
+  { value: "noResponse", label: "No reply" },
+];
+
+/**
  * Quarter-turn applied to the design before printing, or "auto" to let the
  * printer layer pick whichever orientation uses more of the label.
  */
@@ -383,6 +399,8 @@ export interface SettingsState {
   /** Optional UUID overrides, for when the real hardware reveals its service. */
   btServiceUuid: string;
   btCharUuid: string;
+  /** Which BLE write call to use — see `BtWriteMode`. */
+  btWriteMode: BtWriteMode;
 
   // ── Development ───────────────────────────────────────────────────────────
   /**
@@ -503,6 +521,7 @@ const DEFAULTS = {
   btChunkSize: 20,
   btServiceUuid: "",
   btCharUuid: "",
+  btWriteMode: "auto" as BtWriteMode,
 
   // On by default: a booth that quietly stops delivering photos is the worst
   // possible failure, so this only ever goes off by an explicit decision.
