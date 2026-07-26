@@ -19,6 +19,8 @@ import {
   type ProbeId,
 } from "@/lib/tspl";
 import { zplImageJob, zplProbeBytes, zplTestJob } from "@/lib/zpl";
+import { sendToRawBt } from "@/lib/rawbt";
+import { systemPrintImage, systemTestImage } from "@/lib/systemPrint";
 import {
   useSettings,
   type BtWriteMode,
@@ -205,7 +207,17 @@ export function bluetoothSupported(): boolean {
 }
 
 export function transportSupported(kind: PrintTransport): boolean {
-  return kind === "usb" ? usbSupported() : bluetoothSupported();
+  if (kind === "usb") return usbSupported();
+  if (kind === "bluetooth") return bluetoothSupported();
+  // RawBT hands bytes to an Android app and the system route hands an image to
+  // the OS — neither needs a browser capability we can feature-detect. Whether
+  // anything is listening on the other side only shows up when a job is sent.
+  return true;
+}
+
+/** Transports with no connection to establish — every job stands alone. */
+export function isLinkless(kind: PrintTransport): boolean {
+  return kind === "rawbt" || kind === "system";
 }
 
 // ── WebUSB ───────────────────────────────────────────────────────────────────
@@ -897,6 +909,37 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
   };
 }
 
+// ── RawBT bridge ─────────────────────────────────────────────────────────────
+
+/**
+ * A link that isn't one.
+ *
+ * RawBT takes a whole job in a single hand-off, so there's nothing to open, hold
+ * or close, and no acknowledgement to wait for. It fits `PrinterLink` because the
+ * payload is still bytes — which means the TSPL encoder, the probes and the
+ * language switch all work through it unchanged.
+ *
+ * `connected()` reports true unconditionally: there is genuinely nothing to
+ * check, and pretending otherwise would just block jobs that might work.
+ */
+function rawbtLink(): PrinterLink {
+  return {
+    kind: "rawbt",
+    name: "RawBT bridge",
+    detail:
+      "handing jobs to the RawBT app via a rawbt: URL — no acknowledgement is " +
+      "possible, so “sent” means handed to Android, not printed",
+    connected: () => true,
+    async write(bytes, onProgress) {
+      sendToRawBt(bytes, useSettings.getState().rawbtFormat);
+      onProgress?.(1);
+    },
+    async close() {
+      // Nothing held.
+    },
+  };
+}
+
 // ── Config assembled from settings ───────────────────────────────────────────
 
 /** The stock currently loaded, in the shape the TSPL layer wants. */
@@ -1110,6 +1153,25 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
 
   connect: async () => {
     const kind = useSettings.getState().printTransport;
+
+    // Nothing to pair: RawBT and the system route are per-job hand-offs. Report
+    // ready so the rest of the UI behaves normally.
+    if (isLinkless(kind)) {
+      if (link) await link.close();
+      link = kind === "rawbt" ? rawbtLink() : null;
+      set({
+        status: "ready",
+        deviceName: kind === "rawbt" ? "RawBT bridge" : "System print dialog",
+        detail:
+          link?.detail ??
+          "handing the composite to the OS print dialog — the driver or print " +
+            "service does the rest",
+        warning: "",
+        lastError: "",
+      });
+      return true;
+    }
+
     if (!transportSupported(kind)) {
       set({
         status: "error",
@@ -1172,6 +1234,10 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
     const s = useSettings.getState();
     if (!s.printEnabled) return false;
     const kind = s.printTransport;
+
+    // Linkless transports are always "available" — there is no grant to restore.
+    if (isLinkless(kind)) return get().connect();
+
     if (!transportSupported(kind)) return false;
 
     try {
@@ -1246,6 +1312,26 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       }
 
       set({ status: "printing", progress: 0, lastError: "" });
+
+      // The OS print path wants a picture, not a command stream — the driver or
+      // print service owns the halftoning and the printer's language.
+      if (useSettings.getState().printTransport === "system") {
+        try {
+          await systemPrintImage(dataUrl, currentStock());
+          set({
+            status: "ready",
+            progress: 1,
+            lastPrintedSource: dataUrl,
+            lastRaster: "(via OS)",
+            lastJobBytes: 0,
+          });
+          return true;
+        } catch (e) {
+          set({ status: "error", lastError: errText(e), progress: 0 });
+          return false;
+        }
+      }
+
       try {
         const bitmap = await rasterFor(dataUrl);
         const job = currentJob();
@@ -1389,6 +1475,19 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
 
       const s = useSettings.getState();
       set({ status: "printing", progress: 0, lastError: "" });
+
+      // The OS route can't take a command stream, so its test is a picture.
+      if (s.printTransport === "system") {
+        try {
+          await systemPrintImage(systemTestImage(currentStock()), currentStock());
+          set({ status: "ready", progress: 1, lastRaster: "", lastJobBytes: 0 });
+          return true;
+        } catch (e) {
+          set({ status: "error", lastError: errText(e), progress: 0 });
+          return false;
+        }
+      }
+
       try {
         const bytes = (
           useSettings.getState().printerLanguage === "zpl"

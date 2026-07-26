@@ -8,6 +8,7 @@ import {
   type DitherMode,
   type PrintRotation,
 } from "@/lib/dither";
+import type { RawBtFormat } from "@/lib/rawbt";
 import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
@@ -220,7 +221,14 @@ export const MAX_PRESETS = 8;
  * Declared here rather than in `lib/printer.ts` so the settings store stays a
  * leaf — the printer module reads settings, not the other way round.
  */
-export type PrintTransport = "usb" | "bluetooth";
+export type PrintTransport = "usb" | "bluetooth" | "rawbt" | "system";
+
+export const PRINT_TRANSPORTS: { value: PrintTransport; label: string }[] = [
+  { value: "usb", label: "USB" },
+  { value: "bluetooth", label: "BLE" },
+  { value: "rawbt", label: "RawBT" },
+  { value: "system", label: "System" },
+];
 
 /**
  * Which command language the printer is listening in.
@@ -402,6 +410,10 @@ export interface SettingsState {
   /** Which BLE write call to use — see `BtWriteMode`. */
   btWriteMode: BtWriteMode;
 
+  // ── RawBT bridge ──────────────────────────────────────────────────────────
+  /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
+  rawbtFormat: RawBtFormat;
+
   // ── Development ───────────────────────────────────────────────────────────
   /**
    * Uploads the finished composite to Cloudflare. Off is a **development**
@@ -522,6 +534,7 @@ const DEFAULTS = {
   btServiceUuid: "",
   btCharUuid: "",
   btWriteMode: "auto" as BtWriteMode,
+  rawbtFormat: "base64Prefix" as RawBtFormat,
 
   // On by default: a booth that quietly stops delivering photos is the worst
   // possible failure, so this only ever goes off by an explicit decision.

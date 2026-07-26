@@ -34,9 +34,11 @@ import {
   type PrintStatus,
 } from "@/lib/printer";
 import { buildPreviewComposite } from "@/lib/previewComposite";
+import { RAWBT_FORMATS, type RawBtFormat } from "@/lib/rawbt";
 import {
   BT_WRITE_MODES,
   PRINT_ROTATIONS,
+  PRINT_TRANSPORTS,
   useSettings,
   type BtWriteMode,
   type PrinterLanguage,
@@ -139,6 +141,14 @@ function diagnosticsReport(
   return lines.join("\n");
 }
 
+/** One line on what each route actually is, since they differ fundamentally. */
+const TRANSPORT_HINT: Record<PrintTransport, string> = {
+  usb: "Direct over an OTG cable. Fastest, but the browser must be able to claim the printer interface.",
+  bluetooth: "Direct over Bluetooth Low Energy. Slower, and only works if the printer accepts print data on a GATT characteristic.",
+  rawbt: "Via the RawBT Android app, which reaches the printer over Bluetooth Classic — the same route the vendor app uses. Needs RawBT installed and paired.",
+  system: "Hands the photo to the OS print dialog. The driver or Android print service does the halftoning, so nothing here needs to know TSPL.",
+};
+
 const STATUS_LABEL: Record<PrintStatus, string> = {
   offline: "Not connected",
   connecting: "Connecting…",
@@ -196,22 +206,19 @@ export function PrinterSection({
       {s.printEnabled && (
         <>
           {/* ── Connection ───────────────────────────────────────────────── */}
-          <Row
-            label="Connection"
-            hint="USB needs an OTG cable but is far faster. Bluetooth keeps the charging port free."
-            stacked
-          >
+          <Row label="Connection" stacked>
             <Segmented<PrintTransport>
-              options={[
-                { value: "usb", label: "USB (OTG)" },
-                { value: "bluetooth", label: "Bluetooth" },
-              ]}
+              options={PRINT_TRANSPORTS}
               value={s.printTransport}
               onChange={(v) => set("printTransport", v)}
             />
           </Row>
 
-          {!supported && (
+          <p className="-mt-1 text-xs leading-snug text-cocoa/50">
+            {TRANSPORT_HINT[s.printTransport]}
+          </p>
+
+          {!supported && (s.printTransport === "usb" || s.printTransport === "bluetooth") && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-700">
               {s.printTransport === "usb" ? "WebUSB" : "Web Bluetooth"} isn't
               available in this browser. Use Chrome on Android or desktop —
@@ -284,6 +291,34 @@ export function PrinterSection({
               <span className="font-semibold"> -COM</span> entry is Bluetooth
               Classic, which no web page can reach.
             </p>
+          )}
+
+          {s.printTransport === "rawbt" && (
+            <>
+              <Row
+                label="Payload format"
+                hint="How the job is encoded into the rawbt: URL. RawBT's accepted form isn't documented clearly — try these in order."
+                stacked
+              >
+                <Segmented<RawBtFormat>
+                  options={RAWBT_FORMATS.map((f) => ({
+                    value: f.value,
+                    label: f.label,
+                  }))}
+                  value={s.rawbtFormat}
+                  onChange={(v) => set("rawbtFormat", v)}
+                />
+              </Row>
+              <p className="-mt-1 text-xs leading-snug text-cocoa/50">
+                {RAWBT_FORMATS.find((f) => f.value === s.rawbtFormat)?.hint}
+              </p>
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                RawBT can't report back, so “sent” only means the job reached
+                Android — never that it printed. Pair the printer inside the RawBT
+                app first, and note that a photo may exceed what an Android intent
+                will carry.
+              </p>
+            </>
           )}
 
           <Row
