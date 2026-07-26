@@ -657,13 +657,13 @@ export function PrinterSection({
               </Row>
               <Row
                 label="Service UUID"
-                hint="Only needed if pairing reports no writable characteristic. Leave blank to auto-discover."
+                hint="Only if pairing reports no services. Find it in chrome://bluetooth-internals (Start Scan → tap the printer → Inspect). Short form like FF20 is fine."
                 stacked
               >
                 <TextField
                   value={s.btServiceUuid}
                   onChange={(v) => set("btServiceUuid", v.trim())}
-                  placeholder="0000ff00-0000-1000-8000-00805f9b34fb"
+                  placeholder="FF20  or  0000ff20-0000-1000-8000-00805f9b34fb"
                   maxLength={40}
                   mono
                 />

@@ -86,13 +86,28 @@ const BLE_SERVICE_CANDIDATES: string[] = [
   "49535343-fe7d-4ae5-8fa9-9fafd205e455", // Microchip/ISSC transparent UART
   "6e400001-b5a3-f393-e0a9-e50e24dcca9e", // Nordic UART
   "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
-  // Then sweep both vendor-assignable 16-bit ranges so an unlisted UUID can't
-  // hide the printer's service from us.
+  // Then sweep the 16-bit families these printers actually use, so an unlisted
+  // UUID can't hide the service from us.
   ...Array.from({ length: 256 }, (_, i) => uuid16(0xff00 + i)),
   ...Array.from({ length: 256 }, (_, i) => uuid16(0xfe00 + i)),
-  // A few standard-range services these devices sometimes squat on.
-  ...Array.from({ length: 16 }, (_, i) => uuid16(0x18f0 + i)),
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0xae00 + i)),
+  ...Array.from({ length: 256 }, (_, i) => uuid16(0x1800 + i)),
 ].filter((u, i, all) => all.indexOf(u) === i);
+
+/**
+ * Accepts a UUID the way a person is likely to have copied it.
+ *
+ * A BLE scanner shows short services as `FF20` or `0xFF20`, but Web Bluetooth
+ * only takes a full 128-bit string — so pasting exactly what's on screen would
+ * silently fail, which is a poor reward for going and looking it up.
+ */
+function normaliseUuid(input: string): string {
+  const v = input.trim().toLowerCase().replace(/^0x/, "");
+  if (!v) return "";
+  if (/^[0-9a-f]{4}$/.test(v)) return uuid16(parseInt(v, 16));
+  if (/^[0-9a-f]{8}$/.test(v)) return `${v}-0000-1000-8000-00805f9b34fb`;
+  return v;
+}
 
 /** USB printer class — the right filter if the RW403B reports itself honestly. */
 const USB_PRINTER_CLASS = 7;
@@ -589,7 +604,7 @@ function hex4(n: number): string {
 // ── Web Bluetooth ────────────────────────────────────────────────────────────
 
 function bleServiceList(): string[] {
-  const override = useSettings.getState().btServiceUuid.trim().toLowerCase();
+  const override = normaliseUuid(useSettings.getState().btServiceUuid);
   return override
     ? [override, ...BLE_SERVICE_CANDIDATES.filter((u) => u !== override)]
     : BLE_SERVICE_CANDIDATES;
@@ -608,13 +623,25 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
   /** Every writable characteristic found, so the sweep can try each in turn. */
   all: { char: BluetoothRemoteGATTCharacteristic; service: string }[];
 }> {
-  const wantChar = useSettings.getState().btCharUuid.trim().toLowerCase();
+  const wantChar = normaliseUuid(useSettings.getState().btCharUuid);
 
   let services: BluetoothRemoteGATTService[] = [];
   try {
     services = await gatt.getPrimaryServices();
   } catch (e) {
-    throw new Error(`No readable GATT services (${errText(e)})`);
+    // Chrome reports "No Services found in device" both when the device really
+    // has no GATT services (the Bluetooth Classic name) and when it has one we
+    // never declared — it cannot show us a service we didn't ask for. Spell out
+    // both, because the fixes are completely different.
+    throw new Error(
+      `No GATT services (${errText(e)}). Either you picked the printer's ` +
+        "Bluetooth Classic name — the entry ending -SPP or -COM, which no " +
+        "browser can reach — so try the -BLE one; or its service UUID sits " +
+        "outside the range asked for. To find the real one: open " +
+        "chrome://bluetooth-internals in a new tab, Start Scan, tap the " +
+        "printer, Inspect, and copy a service UUID into the Service UUID field " +
+        "below (FF20 or the long form both work).",
+    );
   }
 
   const writable: {
