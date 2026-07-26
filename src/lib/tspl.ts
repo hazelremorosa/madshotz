@@ -284,6 +284,8 @@ export function rasterHeightForStock(stock: LabelStock, marginMm = 2): number {
 
 export type ProbeId =
   | "feed"
+  | "feedLf"
+  | "feedBare"
   | "formFeed"
   | "selfTest"
   | "reset"
@@ -295,6 +297,11 @@ export type ProbeId =
 
 export const PROBES: { id: ProbeId; label: string; expect: string }[] = [
   { id: "feed", label: "Feed", expect: "Paper should advance ~1 inch" },
+  // Line-ending and framing variants. TSPL is specified as CRLF, but firmware in
+  // this bracket is inconsistent, and a parser that ignores a command it can't
+  // frame looks exactly like one that never received it.
+  { id: "feedLf", label: "Feed (LF)", expect: "Same, with \n line endings only" },
+  { id: "feedBare", label: "Feed (bare)", expect: "Same, with no leading blank line" },
   { id: "formFeed", label: "Form feed", expect: "Should advance to the next label" },
   { id: "selfTest", label: "Self test", expect: "Printer prints its own settings" },
   // Not plain "Reset" — the Danger zone in the same tab has a "Reset" that wipes
@@ -316,6 +323,10 @@ export function probeBytes(id: Exclude<ProbeId, "zplConfig" | "zplLabel">): Uint
     // The leading CRLF flushes any half-finished command left in the buffer.
     case "feed":
       return concat(["\r\nFEED 200\r\n"]);
+    case "feedLf":
+      return concat(["\nFEED 200\n"]);
+    case "feedBare":
+      return concat(["FEED 200\r\n"]);
     case "formFeed":
       return concat(["\r\nFORMFEED\r\n"]);
     case "selfTest":

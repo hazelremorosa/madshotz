@@ -569,7 +569,9 @@ export function PrinterSection({
                 );
               }}
             >
-              Print preview
+              {/* Matches the row label. Calling it "Print preview" while the row
+                  said "Print a sample photo" read as two different things. */}
+              Print photo
             </SmallButton>
           </Row>
 
