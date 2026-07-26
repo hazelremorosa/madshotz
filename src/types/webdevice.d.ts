@@ -49,6 +49,15 @@ interface USBInTransferResult {
   readonly status: "ok" | "stall" | "babble";
 }
 
+/** Setup packet for a control transfer. */
+interface USBControlTransferParameters {
+  requestType: "standard" | "class" | "vendor";
+  recipient: "device" | "interface" | "endpoint" | "other";
+  request: number;
+  value: number;
+  index: number;
+}
+
 interface USBDevice {
   readonly vendorId: number;
   readonly productId: number;
@@ -75,6 +84,14 @@ interface USBDevice {
     endpointNumber: number,
     length: number,
   ): Promise<USBInTransferResult>;
+  controlTransferIn(
+    setup: USBControlTransferParameters,
+    length: number,
+  ): Promise<USBInTransferResult>;
+  controlTransferOut(
+    setup: USBControlTransferParameters,
+    data?: ArrayBufferView | ArrayBuffer,
+  ): Promise<USBOutTransferResult>;
 }
 
 interface USBDeviceFilter {

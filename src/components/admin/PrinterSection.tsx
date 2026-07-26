@@ -712,6 +712,42 @@ export function PrinterSection({
                 </li>
               ))}
             </ul>
+            {s.printTransport === "usb" && (
+              <div className="rounded-lg border border-cocoa/15 bg-white/60 p-2.5">
+                <div className="text-xs font-bold text-cocoa">
+                  Ask the printer directly
+                </div>
+                <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
+                  These go over the USB control pipe, not the data endpoint, so the
+                  printer has to answer even if it's ignoring print jobs.{" "}
+                  <span className="font-semibold">Device ID</span> reports the
+                  command sets its firmware actually supports — that settles
+                  TSPL-vs-ZPL from the printer's own mouth.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <SmallButton
+                    tone="brand"
+                    disabled={printer.status === "printing"}
+                    onClick={async () => onToast(await printer.askPrinter("deviceId"))}
+                  >
+                    Device ID
+                  </SmallButton>
+                  <SmallButton
+                    disabled={printer.status === "printing"}
+                    onClick={async () => onToast(await printer.askPrinter("portStatus"))}
+                  >
+                    Printer status
+                  </SmallButton>
+                  <SmallButton
+                    disabled={printer.status === "printing"}
+                    onClick={async () => onToast(await printer.askPrinter("softReset"))}
+                  >
+                    Soft reset
+                  </SmallButton>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-lg border border-cocoa/15 bg-white/60 p-2.5">
               <div className="text-xs font-bold text-cocoa">
                 Nothing moved at all?
