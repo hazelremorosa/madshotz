@@ -27,6 +27,7 @@ import {
   applyLabelPreset,
   bluetoothSupported,
   currentStock,
+  listAvailablePrinters,
   rasterFor,
   transportSupported,
   usbSupported,
@@ -34,9 +35,11 @@ import {
   type PrintStatus,
 } from "@/lib/printer";
 import { buildPreviewComposite } from "@/lib/previewComposite";
+import { RAWBT_FORMATS, type RawBtFormat } from "@/lib/rawbt";
 import {
   BT_WRITE_MODES,
   PRINT_ROTATIONS,
+  PRINT_TRANSPORTS,
   useSettings,
   type BtWriteMode,
   type PrinterLanguage,
@@ -135,9 +138,21 @@ function diagnosticsReport(
     `bluetooth: chunk ${s.btChunkSize}B, service "${s.btServiceUuid}", char "${s.btCharUuid}", device ${s.btDeviceId ?? "-"}`,
     `last job:  ${printer.lastJobBytes ? `${(printer.lastJobBytes / 1024).toFixed(1)} KB` : "-"}   raster ${printer.lastRaster || "-"}`,
   );
-  if (printer.probeResult) lines.push("", "probe / sweep:", printer.probeResult);
+  if (printer.probeResult)
+    lines.push("", "probe / sweep:", printer.probeResult);
   return lines.join("\n");
 }
+
+/** One line on what each route actually is, since they differ fundamentally. */
+const TRANSPORT_HINT: Record<PrintTransport, string> = {
+  usb: "Direct over an OTG cable. Fastest, but the browser must be able to claim the printer interface.",
+  bluetooth:
+    "Direct over Bluetooth Low Energy. Slower, and only works if the printer accepts print data on a GATT characteristic.",
+  rawbt:
+    "Via the RawBT Android app, which reaches the printer over Bluetooth Classic — the same route the vendor app uses. Needs RawBT installed and paired.",
+  system:
+    "Hands the photo to the OS print dialog. The driver or Android print service does the halftoning, so nothing here needs to know TSPL.",
+};
 
 const STATUS_LABEL: Record<PrintStatus, string> = {
   offline: "Not connected",
@@ -175,12 +190,26 @@ export function PrinterSection({
   const stock = currentStock();
   const headDots = mmToDots(stock.widthMm);
   const rasterDots = rasterWidthForStock(stock, s.printMarginMm);
+  const [availablePrinters, setAvailablePrinters] = useState<
+    Awaited<ReturnType<typeof listAvailablePrinters>>
+  >([]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const printers = await listAvailablePrinters();
+      if (active) setAvailablePrinters(printers);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [s.printTransport, s.printerDeviceName, s.printerSelectionId]);
 
   return (
     <Section
       emoji="🖨️"
       title="Printing"
-      note="Munbyn RealWriter 403B — direct thermal, 203 dpi. Prints are black-and-white halftone; the colour copy goes out by QR."
+      note="Thermal label printer — connect to whatever printer is available. Prints are black-and-white halftone; the colour copy goes out by QR."
     >
       <Row
         label="Print physical copies"
@@ -196,29 +225,73 @@ export function PrinterSection({
       {s.printEnabled && (
         <>
           {/* ── Connection ───────────────────────────────────────────────── */}
-          <Row
-            label="Connection"
-            hint="USB needs an OTG cable but is far faster. Bluetooth keeps the charging port free."
-            stacked
-          >
+          <Row label="Connection" stacked>
             <Segmented<PrintTransport>
-              options={[
-                { value: "usb", label: "USB (OTG)" },
-                { value: "bluetooth", label: "Bluetooth" },
-              ]}
+              options={PRINT_TRANSPORTS}
               value={s.printTransport}
               onChange={(v) => set("printTransport", v)}
             />
           </Row>
 
-          {!supported && (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-700">
-              {s.printTransport === "usb" ? "WebUSB" : "Web Bluetooth"} isn't
-              available in this browser. Use Chrome on Android or desktop —
-              Safari and iOS support neither, so an iPad can't print.
-              {!usbSupported() && !bluetoothSupported() && " Neither API is present here."}
-            </p>
-          )}
+          <p className="-mt-1 text-xs leading-snug text-cocoa/50">
+            {TRANSPORT_HINT[s.printTransport]}
+          </p>
+
+          <Row
+            label="Printer selection"
+            hint="Pick the available printer, defaulting to the Epson L15150 when present."
+            stacked
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={s.printerSelectionId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  const nextPrinter = availablePrinters.find(
+                    (p) => p.id === nextId,
+                  );
+                  set("printerSelectionId", nextId);
+                  set("printerDeviceName", nextPrinter?.name ?? "");
+                }}
+                className="min-w-0 flex-1 rounded-xl border border-cocoa/15 bg-white/80 px-3 py-2 text-sm text-cocoa outline-none focus:border-brand/50"
+              >
+                {availablePrinters.length === 0 ? (
+                  <option value="">No printers detected</option>
+                ) : (
+                  availablePrinters.map((printer) => (
+                    <option key={printer.id} value={printer.id}>
+                      {printer.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <SmallButton
+                onClick={async () => {
+                  const printers = await listAvailablePrinters();
+                  setAvailablePrinters(printers);
+                  if (!s.printerSelectionId && printers[0]) {
+                    set("printerSelectionId", printers[0].id);
+                    set("printerDeviceName", printers[0].name);
+                  }
+                }}
+              >
+                Refresh
+              </SmallButton>
+            </div>
+          </Row>
+
+          {!supported &&
+            (s.printTransport === "usb" ||
+              s.printTransport === "bluetooth") && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-700">
+                {s.printTransport === "usb" ? "WebUSB" : "Web Bluetooth"} isn't
+                available in this browser. Use Chrome on Android or desktop —
+                Safari and iOS support neither, so an iPad can't print.
+                {!usbSupported() &&
+                  !bluetoothSupported() &&
+                  " Neither API is present here."}
+              </p>
+            )}
 
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -278,12 +351,40 @@ export function PrinterSection({
 
           {s.printTransport === "bluetooth" && (
             <p className="text-xs leading-snug text-cocoa/50">
-              Munbyn devices advertise two Bluetooth names. Pick the one ending
-              <span className="font-semibold"> -BLE</span> — a
+              Some thermal printers advertise two Bluetooth names. Pick the one
+              ending <span className="font-semibold">-BLE</span> — a
               <span className="font-semibold"> -SPP</span> or
               <span className="font-semibold"> -COM</span> entry is Bluetooth
               Classic, which no web page can reach.
             </p>
+          )}
+
+          {s.printTransport === "rawbt" && (
+            <>
+              <Row
+                label="Payload format"
+                hint="How the job is encoded into the rawbt: URL. RawBT's accepted form isn't documented clearly — try these in order."
+                stacked
+              >
+                <Segmented<RawBtFormat>
+                  options={RAWBT_FORMATS.map((f) => ({
+                    value: f.value,
+                    label: f.label,
+                  }))}
+                  value={s.rawbtFormat}
+                  onChange={(v) => set("rawbtFormat", v)}
+                />
+              </Row>
+              <p className="-mt-1 text-xs leading-snug text-cocoa/50">
+                {RAWBT_FORMATS.find((f) => f.value === s.rawbtFormat)?.hint}
+              </p>
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                RawBT can't report back, so “sent” only means the job reached
+                Android — never that it printed. Pair the printer inside the
+                RawBT app first, and note that a photo may exceed what an
+                Android intent will carry.
+              </p>
+            </>
           )}
 
           <Row
@@ -348,7 +449,10 @@ export function PrinterSection({
               "Measure the stock yourself — width is across the head, height is the feed direction."}
           </p>
 
-          <Row label="Width" hint="Across the head. This model covers 40–108 mm.">
+          <Row
+            label="Width"
+            hint="Across the head. This model covers 40–108 mm."
+          >
             <NumberField
               label="Label width"
               value={s.labelWidthMm}
@@ -396,7 +500,10 @@ export function PrinterSection({
             />
           </Row>
 
-          <Row label="Margin" hint="Unprinted border — feed drift shows at the edges.">
+          <Row
+            label="Margin"
+            hint="Unprinted border — feed drift shows at the edges."
+          >
             <NumberField
               label="Print margin"
               value={s.printMarginMm}
@@ -519,7 +626,11 @@ export function PrinterSection({
                 />
               </Row>
 
-              <Row label="Speed" hint="Inches per second. Slower prints darker." stacked>
+              <Row
+                label="Speed"
+                hint="Inches per second. Slower prints darker."
+                stacked
+              >
                 <Slider
                   label="Print speed"
                   value={s.printSpeed}
@@ -629,7 +740,10 @@ export function PrinterSection({
                   max={16}
                 />
               </Row>
-              <Row label="Force endpoint" hint="-1 auto-picks the first bulk OUT.">
+              <Row
+                label="Force endpoint"
+                hint="-1 auto-picks the first bulk OUT."
+              >
                 <NumberField
                   label="USB endpoint number"
                   value={s.usbEndpoint}
@@ -699,12 +813,14 @@ export function PrinterSection({
 
           {/* ── Protocol probe ───────────────────────────────────────────── */}
           <div className="flex flex-col gap-2 rounded-xl border border-cocoa/10 bg-white/40 p-3">
-            <div className="text-sm font-semibold text-cocoa">Protocol probe</div>
+            <div className="text-sm font-semibold text-cocoa">
+              Protocol probe
+            </div>
             <p className="text-xs leading-snug text-cocoa/55">
               If a job reports “sent” but nothing comes out, the printer is
-              accepting bytes and discarding them — from here that looks identical
-              to success. Tap these in order and watch the hardware; each one
-              isolates a different layer.
+              accepting bytes and discarding them — from here that looks
+              identical to success. Tap these in order and watch the hardware;
+              each one isolates a different layer.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {PROBES.map((probe) => (
@@ -723,7 +839,8 @@ export function PrinterSection({
             <ul className="flex flex-col gap-0.5 text-[11px] leading-snug text-cocoa/45">
               {PROBES.map((probe) => (
                 <li key={probe.id}>
-                  <span className="font-semibold">{probe.label}</span> — {probe.expect}
+                  <span className="font-semibold">{probe.label}</span> —{" "}
+                  {probe.expect}
                 </li>
               ))}
             </ul>
@@ -733,8 +850,8 @@ export function PrinterSection({
                   Ask the printer directly
                 </div>
                 <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
-                  These go over the USB control pipe, not the data endpoint, so the
-                  printer has to answer even if it's ignoring print jobs.{" "}
+                  These go over the USB control pipe, not the data endpoint, so
+                  the printer has to answer even if it's ignoring print jobs.{" "}
                   <span className="font-semibold">Device ID</span> reports the
                   command sets its firmware actually supports — that settles
                   TSPL-vs-ZPL from the printer's own mouth.
@@ -743,19 +860,25 @@ export function PrinterSection({
                   <SmallButton
                     tone="brand"
                     disabled={printer.status === "printing"}
-                    onClick={async () => onToast(await printer.askPrinter("deviceId"))}
+                    onClick={async () =>
+                      onToast(await printer.askPrinter("deviceId"))
+                    }
                   >
                     Device ID
                   </SmallButton>
                   <SmallButton
                     disabled={printer.status === "printing"}
-                    onClick={async () => onToast(await printer.askPrinter("portStatus"))}
+                    onClick={async () =>
+                      onToast(await printer.askPrinter("portStatus"))
+                    }
                   >
                     Printer status
                   </SmallButton>
                   <SmallButton
                     disabled={printer.status === "printing"}
-                    onClick={async () => onToast(await printer.askPrinter("softReset"))}
+                    onClick={async () =>
+                      onToast(await printer.askPrinter("softReset"))
+                    }
                   >
                     Soft reset
                   </SmallButton>
@@ -768,10 +891,11 @@ export function PrinterSection({
                 Nothing moved at all?
               </div>
               <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
-                Then the bytes aren't reaching the print engine, and the channel is
-                wrong rather than the language. This writes a feed command to every
-                interface and endpoint the device exposes, pausing about 2 seconds
-                on each. Watch the printer and note which step moves the paper.
+                Then the bytes aren't reaching the print engine, and the channel
+                is wrong rather than the language. This writes a feed command to
+                every interface and endpoint the device exposes, pausing about 2
+                seconds on each. Watch the printer and note which step moves the
+                paper.
               </p>
               <div className="mt-2">
                 <SmallButton
@@ -799,13 +923,13 @@ export function PrinterSection({
             )}
             <p className="text-[11px] leading-snug text-cocoa/45">
               <span className="font-semibold">ZPL config printing</span> is the
-              answer to look for — it means ZPL arrives and is understood, so set
-              Command language to ZPL above and printing works.{" "}
-              <span className="font-semibold">Feed or Self test working</span> means
-              TSPL is understood too, and the fault is in the job we build.{" "}
-              <span className="font-semibold">Nothing at all</span> means commands
-              aren't reaching the print engine — try the Bluetooth transport, since
-              the vendor app uses it.
+              answer to look for — it means ZPL arrives and is understood, so
+              set Command language to ZPL above and printing works.{" "}
+              <span className="font-semibold">Feed or Self test working</span>{" "}
+              means TSPL is understood too, and the fault is in the job we
+              build. <span className="font-semibold">Nothing at all</span> means
+              commands aren't reaching the print engine — try the Bluetooth
+              transport, since the vendor app uses it.
             </p>
           </div>
 
@@ -934,8 +1058,9 @@ function PrintPreview() {
         What the printer will burn
       </div>
       <div className="text-xs leading-snug text-cocoa/50">
-        Actual 1-bit output at 203 dpi. Zoom in to judge the halftone — on screen
-        it's shown small, so the dots blur together the way they will on paper.
+        Actual 1-bit output at 203 dpi. Zoom in to judge the halftone — on
+        screen it's shown small, so the dots blur together the way they will on
+        paper.
       </div>
       <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-cocoa/15 bg-white">
         {error ? (
@@ -950,7 +1075,9 @@ function PrintPreview() {
             )}
           />
         ) : (
-          <div className="p-6 text-center text-xs text-cocoa/40">Rendering…</div>
+          <div className="p-6 text-center text-xs text-cocoa/40">
+            Rendering…
+          </div>
         )}
       </div>
       {!error && src && (

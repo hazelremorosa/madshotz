@@ -8,6 +8,7 @@ import {
   type DitherMode,
   type PrintRotation,
 } from "@/lib/dither";
+import type { RawBtFormat } from "@/lib/rawbt";
 import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
@@ -220,7 +221,14 @@ export const MAX_PRESETS = 8;
  * Declared here rather than in `lib/printer.ts` so the settings store stays a
  * leaf — the printer module reads settings, not the other way round.
  */
-export type PrintTransport = "usb" | "bluetooth";
+export type PrintTransport = "usb" | "bluetooth" | "rawbt" | "system";
+
+export const PRINT_TRANSPORTS: { value: PrintTransport; label: string }[] = [
+  { value: "usb", label: "USB" },
+  { value: "bluetooth", label: "BLE" },
+  { value: "rawbt", label: "RawBT" },
+  { value: "system", label: "System" },
+];
 
 /**
  * Which command language the printer is listening in.
@@ -338,6 +346,10 @@ export interface SettingsState {
    */
   printEnabled: boolean;
   printTransport: PrintTransport;
+  /** Human label for the currently selected or preferred printer. */
+  printerDeviceName: string;
+  /** Stable id for the chosen printer in the current browser session. */
+  printerSelectionId: string;
   /** TSPL or ZPL — this printer accepts either. See `PrinterLanguage`. */
   printerLanguage: PrinterLanguage;
   /** Print without anyone tapping anything, as soon as the composite exists. */
@@ -401,6 +413,10 @@ export interface SettingsState {
   btCharUuid: string;
   /** Which BLE write call to use — see `BtWriteMode`. */
   btWriteMode: BtWriteMode;
+
+  // ── RawBT bridge ──────────────────────────────────────────────────────────
+  /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
+  rawbtFormat: RawBtFormat;
 
   // ── Development ───────────────────────────────────────────────────────────
   /**
@@ -476,6 +492,8 @@ const DEFAULTS = {
   // as it did before this feature existed.
   printEnabled: false,
   printTransport: "usb" as PrintTransport,
+  printerDeviceName: "",
+  printerSelectionId: "",
   printerLanguage: "tspl" as PrinterLanguage,
   autoPrint: true,
   printCopies: 1,
@@ -522,6 +540,7 @@ const DEFAULTS = {
   btServiceUuid: "",
   btCharUuid: "",
   btWriteMode: "auto" as BtWriteMode,
+  rawbtFormat: "base64Prefix" as RawBtFormat,
 
   // On by default: a booth that quietly stops delivering photos is the worst
   // possible failure, so this only ever goes off by an explicit decision.
@@ -539,9 +558,7 @@ function uploadId(prefix: string): string {
 
 /** Flips a member of a "must keep at least one" list. */
 function toggleIn(list: string[], id: string, all: string[]): string[] {
-  const next = list.includes(id)
-    ? list.filter((x) => x !== id)
-    : [...list, id];
+  const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   if (!next.length) return list; // never let the host disable everything
   // Keep the canonical data order so the UI stays stable.
   return all.filter((x) => next.includes(x));
@@ -691,23 +708,28 @@ export const useSettings = create<SettingsState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<SettingsState>;
         // Drop ids that no longer exist in the data files (e.g. after an update).
-        const layouts = (saved.enabledLayoutIds ?? DEFAULTS.enabledLayoutIds).filter(
-          (id) => LAYOUTS.some((l) => l.id === id),
-        );
-        const filters = (saved.enabledFilterIds ?? DEFAULTS.enabledFilterIds).filter(
-          (id) => FILTERS.some((f) => f.id === id),
-        );
+        const layouts = (
+          saved.enabledLayoutIds ?? DEFAULTS.enabledLayoutIds
+        ).filter((id) => LAYOUTS.some((l) => l.id === id));
+        const filters = (
+          saved.enabledFilterIds ?? DEFAULTS.enabledFilterIds
+        ).filter((id) => FILTERS.some((f) => f.id === id));
         // The forced overlay must still resolve to a real built-in or upload.
         const frames = saved.customFrames ?? DEFAULTS.customFrames;
-        const savedDefaultOverlay = saved.defaultOverlayId ?? DEFAULTS.defaultOverlayId;
+        const savedDefaultOverlay =
+          saved.defaultOverlayId ?? DEFAULTS.defaultOverlayId;
         const defaultOverlayId = isKnownOverlay(savedDefaultOverlay, frames)
           ? savedDefaultOverlay
           : "none";
         return {
           ...current,
           ...saved,
-          enabledLayoutIds: layouts.length ? layouts : DEFAULTS.enabledLayoutIds,
-          enabledFilterIds: filters.length ? filters : DEFAULTS.enabledFilterIds,
+          enabledLayoutIds: layouts.length
+            ? layouts
+            : DEFAULTS.enabledLayoutIds,
+          enabledFilterIds: filters.length
+            ? filters
+            : DEFAULTS.enabledFilterIds,
           defaultOverlayId,
           adminOpen: false,
         };

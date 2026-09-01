@@ -19,6 +19,8 @@ import {
   type ProbeId,
 } from "@/lib/tspl";
 import { zplImageJob, zplProbeBytes, zplTestJob } from "@/lib/zpl";
+import { sendToRawBt } from "@/lib/rawbt";
+import { systemPrintImage, systemTestImage } from "@/lib/systemPrint";
 import {
   useSettings,
   type BtWriteMode,
@@ -161,9 +163,7 @@ export interface PrinterLink {
     onStep: (label: string, index: number, total: number) => void,
   ): Promise<string[]>;
   /** USB printer-class control requests — answers even when the data path is deaf. */
-  classRequest?(
-    kind: "portStatus" | "deviceId" | "softReset",
-  ): Promise<string>;
+  classRequest?(kind: "portStatus" | "deviceId" | "softReset"): Promise<string>;
   close(): Promise<void>;
   connected(): boolean;
 }
@@ -205,7 +205,88 @@ export function bluetoothSupported(): boolean {
 }
 
 export function transportSupported(kind: PrintTransport): boolean {
-  return kind === "usb" ? usbSupported() : bluetoothSupported();
+  if (kind === "usb") return usbSupported();
+  if (kind === "bluetooth") return bluetoothSupported();
+  // RawBT hands bytes to an Android app and the system route hands an image to
+  // the OS — neither needs a browser capability we can feature-detect. Whether
+  // anything is listening on the other side only shows up when a job is sent.
+  return true;
+}
+
+export interface PrinterCandidate {
+  id: string;
+  name: string;
+  transport: PrintTransport;
+  detail: string;
+}
+
+function normalizePrinterName(name: string): string {
+  return (name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function preferPrinterName(name: string): boolean {
+  const normalized = normalizePrinterName(name);
+  return (
+    normalized.includes("epson7ede1f") ||
+    normalized.includes("l15150") ||
+    normalized.includes("epson") ||
+    normalized.includes("munbyn")
+  );
+}
+
+export async function listAvailablePrinters(): Promise<PrinterCandidate[]> {
+  const preferred = useSettings.getState().printerDeviceName || "EPSON7EDE1F";
+  const found: PrinterCandidate[] = [];
+
+  if (navigator.usb) {
+    const devices = await navigator.usb.getDevices();
+    for (const device of devices) {
+      const name =
+        [device.manufacturerName, device.productName]
+          .filter(Boolean)
+          .join(" ") ||
+        `USB ${hex4(device.vendorId)}:${hex4(device.productId)}`;
+      found.push({
+        id: `usb:${device.vendorId}:${device.productId}`,
+        name,
+        transport: "usb",
+        detail: `${hex4(device.vendorId)}:${hex4(device.productId)}`,
+      });
+    }
+  }
+
+  if (navigator.bluetooth?.getDevices) {
+    const devices = await navigator.bluetooth.getDevices();
+    for (const device of devices) {
+      const name = device.name || "Bluetooth printer";
+      found.push({
+        id: `bluetooth:${device.id}`,
+        name,
+        transport: "bluetooth",
+        detail: device.id,
+      });
+    }
+  }
+
+  return found.sort((a, b) => {
+    const aPreferred =
+      preferPrinterName(a.name) ||
+      normalizePrinterName(a.name).includes(normalizePrinterName(preferred));
+    const bPreferred =
+      preferPrinterName(b.name) ||
+      normalizePrinterName(b.name).includes(normalizePrinterName(preferred));
+    return (
+      Number(bPreferred) - Number(aPreferred) || a.name.localeCompare(b.name)
+    );
+  });
+}
+
+/** Transports with no connection to establish — every job stands alone. */
+export function isLinkless(kind: PrintTransport): boolean {
+  return kind === "rawbt" || kind === "system";
 }
 
 // ── WebUSB ───────────────────────────────────────────────────────────────────
@@ -316,7 +397,11 @@ function describeUsb(device: USBDevice): string {
  * "Printing 0%" with no way to tell whether it was slow or dead. A bounded wait
  * turns that into an error the host can act on.
  */
-function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+function withTimeout<T>(
+  work: Promise<T>,
+  ms: number,
+  what: string,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(
       () =>
@@ -682,12 +767,14 @@ async function findWriteChar(gatt: BluetoothRemoteGATTServer): Promise<{
   // breaking ties towards the faster write mode.
   const ranked = [...writable].sort(
     (a, z) =>
-      channelRank(a.service, a.char.uuid) - channelRank(z.service, z.char.uuid) ||
+      channelRank(a.service, a.char.uuid) -
+        channelRank(z.service, z.char.uuid) ||
       Number(z.char.properties.writeWithoutResponse) -
         Number(a.char.properties.writeWithoutResponse),
   );
   const chosen =
-    (wantChar && writable.find((w) => w.char.uuid.toLowerCase() === wantChar)) ||
+    (wantChar &&
+      writable.find((w) => w.char.uuid.toLowerCase() === wantChar)) ||
     ranked[0];
 
   /**
@@ -772,7 +859,12 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
   if (!gatt) throw new Error("That Bluetooth device exposes no GATT server");
 
   await gatt.connect();
-  const { char, detail, all: writable, service: chosenService } = await findWriteChar(gatt);
+  const {
+    char,
+    detail,
+    all: writable,
+    service: chosenService,
+  } = await findWriteChar(gatt);
   void chosenService;
 
   let open = true;
@@ -782,7 +874,6 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
 
   useSettings.getState().set("btDeviceId", device.id);
 
-
   /**
    * Picks the write call for a characteristic.
    *
@@ -791,7 +882,10 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
    * appears as a timeout, not an error, and is exactly what the RW403B did on
    * ae30/ae01. Hence a host override rather than always trusting the property.
    */
-  const writerFor = (c: BluetoothRemoteGATTCharacteristic, mode: BtWriteMode) => {
+  const writerFor = (
+    c: BluetoothRemoteGATTCharacteristic,
+    mode: BtWriteMode,
+  ) => {
     const noResp = c.writeValueWithoutResponse?.bind(c);
     const resp = c.writeValueWithResponse?.bind(c) ?? c.writeValue.bind(c);
     if (mode === "response") return resp;
@@ -842,7 +936,10 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
       // without-response write for ever looks identical to the wrong
       // characteristic, so both have to be varied to tell them apart.
       const combos = order.flatMap((w) =>
-        (["response", "noResponse"] as BtWriteMode[]).map((mode) => ({ w, mode })),
+        (["response", "noResponse"] as BtWriteMode[]).map((mode) => ({
+          w,
+          mode,
+        })),
       );
 
       for (let n = 0; n < combos.length; n++) {
@@ -867,11 +964,18 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
           const fresh = await svc.getCharacteristic(w.char.uuid);
           const put = writerFor(fresh, mode);
           // Probes are tiny, but BLE still caps a single write at the MTU.
-          const chunk = Math.max(20, Math.min(512, useSettings.getState().btChunkSize));
+          const chunk = Math.max(
+            20,
+            Math.min(512, useSettings.getState().btChunkSize),
+          );
           for (let i = 0; i < payload.length; i += chunk)
             // Short timeout: a dead combination has to fail fast, or a full sweep
             // takes minutes.
-            await withTimeout(put(payload.slice(i, i + chunk)), 2500, `Sweep write to ${label}`);
+            await withTimeout(
+              put(payload.slice(i, i + chunk)),
+              2500,
+              `Sweep write to ${label}`,
+            );
           tried.push(`${n + 1}. ${label} — accepted`);
         } catch (e) {
           tried.push(`${n + 1}. ${label} — failed (${errText(e)})`);
@@ -893,6 +997,37 @@ async function openBleLink(device: BluetoothDevice): Promise<PrinterLink> {
       } catch {
         // Already disconnected.
       }
+    },
+  };
+}
+
+// ── RawBT bridge ─────────────────────────────────────────────────────────────
+
+/**
+ * A link that isn't one.
+ *
+ * RawBT takes a whole job in a single hand-off, so there's nothing to open, hold
+ * or close, and no acknowledgement to wait for. It fits `PrinterLink` because the
+ * payload is still bytes — which means the TSPL encoder, the probes and the
+ * language switch all work through it unchanged.
+ *
+ * `connected()` reports true unconditionally: there is genuinely nothing to
+ * check, and pretending otherwise would just block jobs that might work.
+ */
+function rawbtLink(): PrinterLink {
+  return {
+    kind: "rawbt",
+    name: "RawBT bridge",
+    detail:
+      "handing jobs to the RawBT app via a rawbt: URL — no acknowledgement is " +
+      "possible, so “sent” means handed to Android, not printed",
+    connected: () => true,
+    async write(bytes, onProgress) {
+      sendToRawBt(bytes, useSettings.getState().rawbtFormat);
+      onProgress?.(1);
+    },
+    async close() {
+      // Nothing held.
     },
   };
 }
@@ -1077,7 +1212,9 @@ interface PrinterState {
    * Asks the printer a question over the USB control pipe, which it is obliged to
    * answer regardless of what the data endpoint is doing.
    */
-  askPrinter: (kind: "portStatus" | "deviceId" | "softReset") => Promise<string>;
+  askPrinter: (
+    kind: "portStatus" | "deviceId" | "softReset",
+  ) => Promise<string>;
 }
 
 let link: PrinterLink | null = null;
@@ -1109,7 +1246,43 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
   sweepStep: "",
 
   connect: async () => {
-    const kind = useSettings.getState().printTransport;
+    const s = useSettings.getState();
+    const kind = s.printTransport;
+
+    const available = await listAvailablePrinters();
+    const preferred =
+      available.find((p) => p.id === s.printerSelectionId) ??
+      available.find(
+        (p) =>
+          normalizePrinterName(p.name).includes(
+            normalizePrinterName(s.printerDeviceName || "EPSON7EDE1F"),
+          ) || preferPrinterName(p.name),
+      ) ??
+      available[0];
+
+    if (preferred) {
+      useSettings.getState().set("printerSelectionId", preferred.id);
+      useSettings.getState().set("printerDeviceName", preferred.name);
+    }
+
+    // Nothing to pair: RawBT and the system route are per-job hand-offs. Report
+    // ready so the rest of the UI behaves normally.
+    if (isLinkless(kind)) {
+      if (link) await link.close();
+      link = kind === "rawbt" ? rawbtLink() : null;
+      set({
+        status: "ready",
+        deviceName: kind === "rawbt" ? "RawBT bridge" : "System print dialog",
+        detail:
+          link?.detail ??
+          "handing the composite to the OS print dialog — the driver or print " +
+            "service does the rest",
+        warning: "",
+        lastError: "",
+      });
+      return true;
+    }
+
     if (!transportSupported(kind)) {
       set({
         status: "error",
@@ -1127,10 +1300,29 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       link = null;
 
       if (kind === "usb") {
-        const filters = useSettings.getState().usbAnyDevice
-          ? []
-          : [{ classCode: USB_PRINTER_CLASS }];
-        const device = await navigator.usb!.requestDevice({ filters });
+        const devices = await navigator.usb!.getDevices();
+        const selected =
+          devices.find((d) => {
+            const name =
+              [d.manufacturerName, d.productName].filter(Boolean).join(" ") ||
+              `USB ${hex4(d.vendorId)}:${hex4(d.productId)}`;
+            return (
+              s.printerSelectionId === `usb:${d.vendorId}:${d.productId}` ||
+              normalizePrinterName(name).includes(
+                normalizePrinterName(s.printerDeviceName || "EPSON7EDE1F"),
+              ) ||
+              normalizePrinterName(name).includes("epson7ede1f") ||
+              normalizePrinterName(name).includes("l15150")
+            );
+          }) ?? devices[0];
+
+        const device =
+          selected ??
+          (await navigator.usb!.requestDevice({
+            filters: useSettings.getState().usbAnyDevice
+              ? []
+              : [{ classCode: USB_PRINTER_CLASS }],
+          }));
         link = await openUsbLink(device);
       } else {
         const device = await navigator.bluetooth!.requestDevice({
@@ -1172,6 +1364,10 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
     const s = useSettings.getState();
     if (!s.printEnabled) return false;
     const kind = s.printTransport;
+
+    // Linkless transports are always "available" — there is no grant to restore.
+    if (isLinkless(kind)) return get().connect();
+
     if (!transportSupported(kind)) return false;
 
     try {
@@ -1191,8 +1387,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         const bt = navigator.bluetooth;
         if (!bt?.getDevices) return false;
         const devices = await bt.getDevices();
-        const match =
-          devices.find((d) => d.id === s.btDeviceId) ?? devices[0];
+        const match = devices.find((d) => d.id === s.btDeviceId) ?? devices[0];
         if (!match) return false;
         link = await openBleLink(match);
       }
@@ -1246,6 +1441,26 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       }
 
       set({ status: "printing", progress: 0, lastError: "" });
+
+      // The OS print path wants a picture, not a command stream — the driver or
+      // print service owns the halftoning and the printer's language.
+      if (useSettings.getState().printTransport === "system") {
+        try {
+          await systemPrintImage(dataUrl, currentStock());
+          set({
+            status: "ready",
+            progress: 1,
+            lastPrintedSource: dataUrl,
+            lastRaster: "(via OS)",
+            lastJobBytes: 0,
+          });
+          return true;
+        } catch (e) {
+          set({ status: "error", lastError: errText(e), progress: 0 });
+          return false;
+        }
+      }
+
       try {
         const bitmap = await rasterFor(dataUrl);
         const job = currentJob();
@@ -1389,6 +1604,27 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
 
       const s = useSettings.getState();
       set({ status: "printing", progress: 0, lastError: "" });
+
+      // The OS route can't take a command stream, so its test is a picture.
+      if (s.printTransport === "system") {
+        try {
+          await systemPrintImage(
+            systemTestImage(currentStock()),
+            currentStock(),
+          );
+          set({
+            status: "ready",
+            progress: 1,
+            lastRaster: "",
+            lastJobBytes: 0,
+          });
+          return true;
+        } catch (e) {
+          set({ status: "error", lastError: errText(e), progress: 0 });
+          return false;
+        }
+      }
+
       try {
         const bytes = (
           useSettings.getState().printerLanguage === "zpl"
