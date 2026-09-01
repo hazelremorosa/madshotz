@@ -346,6 +346,10 @@ export interface SettingsState {
    */
   printEnabled: boolean;
   printTransport: PrintTransport;
+  /** Human label for the currently selected or preferred printer. */
+  printerDeviceName: string;
+  /** Stable id for the chosen printer in the current browser session. */
+  printerSelectionId: string;
   /** TSPL or ZPL — this printer accepts either. See `PrinterLanguage`. */
   printerLanguage: PrinterLanguage;
   /** Print without anyone tapping anything, as soon as the composite exists. */
@@ -488,6 +492,8 @@ const DEFAULTS = {
   // as it did before this feature existed.
   printEnabled: false,
   printTransport: "usb" as PrintTransport,
+  printerDeviceName: "",
+  printerSelectionId: "",
   printerLanguage: "tspl" as PrinterLanguage,
   autoPrint: true,
   printCopies: 1,
@@ -552,9 +558,7 @@ function uploadId(prefix: string): string {
 
 /** Flips a member of a "must keep at least one" list. */
 function toggleIn(list: string[], id: string, all: string[]): string[] {
-  const next = list.includes(id)
-    ? list.filter((x) => x !== id)
-    : [...list, id];
+  const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   if (!next.length) return list; // never let the host disable everything
   // Keep the canonical data order so the UI stays stable.
   return all.filter((x) => next.includes(x));
@@ -704,23 +708,28 @@ export const useSettings = create<SettingsState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<SettingsState>;
         // Drop ids that no longer exist in the data files (e.g. after an update).
-        const layouts = (saved.enabledLayoutIds ?? DEFAULTS.enabledLayoutIds).filter(
-          (id) => LAYOUTS.some((l) => l.id === id),
-        );
-        const filters = (saved.enabledFilterIds ?? DEFAULTS.enabledFilterIds).filter(
-          (id) => FILTERS.some((f) => f.id === id),
-        );
+        const layouts = (
+          saved.enabledLayoutIds ?? DEFAULTS.enabledLayoutIds
+        ).filter((id) => LAYOUTS.some((l) => l.id === id));
+        const filters = (
+          saved.enabledFilterIds ?? DEFAULTS.enabledFilterIds
+        ).filter((id) => FILTERS.some((f) => f.id === id));
         // The forced overlay must still resolve to a real built-in or upload.
         const frames = saved.customFrames ?? DEFAULTS.customFrames;
-        const savedDefaultOverlay = saved.defaultOverlayId ?? DEFAULTS.defaultOverlayId;
+        const savedDefaultOverlay =
+          saved.defaultOverlayId ?? DEFAULTS.defaultOverlayId;
         const defaultOverlayId = isKnownOverlay(savedDefaultOverlay, frames)
           ? savedDefaultOverlay
           : "none";
         return {
           ...current,
           ...saved,
-          enabledLayoutIds: layouts.length ? layouts : DEFAULTS.enabledLayoutIds,
-          enabledFilterIds: filters.length ? filters : DEFAULTS.enabledFilterIds,
+          enabledLayoutIds: layouts.length
+            ? layouts
+            : DEFAULTS.enabledLayoutIds,
+          enabledFilterIds: filters.length
+            ? filters
+            : DEFAULTS.enabledFilterIds,
           defaultOverlayId,
           adminOpen: false,
         };
