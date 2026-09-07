@@ -39,7 +39,7 @@ import {
 import { composeTemplate } from "@/lib/composeTemplate";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
-import { PrinterSection } from "@/components/admin/PrinterSection";
+import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
 import { PREVIEW_PHOTO } from "@/lib/previewComposite";
 import type { EventTemplate } from "@/types";
 import {
@@ -319,7 +319,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
 
               <KioskSection onToast={toast} />
 
-              <PrinterSection onToast={toast} />
+              <PrinterSetupSection onToast={toast} />
 
           <Section
             emoji="🔐"

@@ -27,6 +27,10 @@ import {
   type PrintRotationSetting,
   type PrintTransport,
 } from "@/store/settings";
+import {
+  loadPrinterConfig,
+  printerDimensions,
+} from "@/lib/printerConfig";
 
 /**
  * Talking to the Munbyn RW403B from the browser.
@@ -1036,21 +1040,24 @@ function rawbtLink(): PrinterLink {
 
 /** The stock currently loaded, in the shape the TSPL layer wants. */
 export function currentStock(): LabelStock {
+  const config = loadPrinterConfig();
+  const dimensions = printerDimensions(config);
   const s = useSettings.getState();
   return {
-    widthMm: s.labelWidthMm,
-    heightMm: s.labelHeightMm,
+    widthMm: dimensions.widthMm,
+    heightMm: dimensions.heightMm,
     gapMm: s.labelGapMm,
   };
 }
 
 export function currentJob(): JobOpts {
   const s = useSettings.getState();
+  const config = loadPrinterConfig();
   return {
     stock: currentStock(),
     density: s.printDensity,
     speed: s.printSpeed,
-    copies: s.printCopies,
+    copies: config.copies,
     invertRaster: s.printInvertRaster,
   };
 }
@@ -1075,8 +1082,9 @@ export async function rasterFor(dataUrl: string): Promise<Bitmap1> {
   const s = useSettings.getState();
   const stock = currentStock();
   const base = currentDither();
-  const maxW = rasterWidthForStock(stock, s.printMarginMm);
-  const maxH = rasterHeightForStock(stock, s.printMarginMm);
+  const marginMm = 0;
+  const maxW = rasterWidthForStock(stock, marginMm);
+  const maxH = rasterHeightForStock(stock, marginMm);
   const { width: sw, height: sh } = await imageSize(dataUrl);
   const rotate = resolveRotation(s.printRotate, sw, sh, maxW, maxH, s.printFit);
   // Everything downstream reasons about the design as it will be printed.
@@ -1225,6 +1233,7 @@ let link: PrinterLink | null = null;
  * Bluetooth job is still streaming.
  */
 let chain: Promise<unknown> = Promise.resolve();
+let systemPrintInFlight = false;
 function queue<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
   chain = run.catch(() => undefined);
@@ -1422,8 +1431,14 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
     });
   },
 
-  printImage: (dataUrl) =>
-    queue(async () => {
+  printImage: (dataUrl) => {
+    const isSystemPrint = useSettings.getState().printTransport === "system";
+    if (isSystemPrint) {
+      if (systemPrintInFlight) return Promise.resolve(false);
+      systemPrintInFlight = true;
+    }
+
+    const job = queue(async () => {
       if (!useSettings.getState().printEnabled) return false;
       if (!dataUrl) return false;
 
@@ -1446,7 +1461,13 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
       // print service owns the halftoning and the printer's language.
       if (useSettings.getState().printTransport === "system") {
         try {
-          await systemPrintImage(dataUrl, currentStock());
+          const config = loadPrinterConfig();
+          await systemPrintImage(
+            dataUrl,
+            currentStock(),
+            0,
+            config.copies,
+          );
           set({
             status: "ready",
             progress: 1,
@@ -1482,7 +1503,13 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
         set({ status: "error", lastError: errText(e), progress: 0 });
         return false;
       }
-    }),
+    });
+    return isSystemPrint
+      ? job.finally(() => {
+          systemPrintInFlight = false;
+        })
+      : job;
+  },
 
   askPrinter: (kind) =>
     queue(async () => {
@@ -1611,6 +1638,7 @@ export const usePrinter = create<PrinterState>()((set, get) => ({
           await systemPrintImage(
             systemTestImage(currentStock()),
             currentStock(),
+            0,
           );
           set({
             status: "ready",

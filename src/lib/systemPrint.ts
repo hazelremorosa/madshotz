@@ -1,5 +1,22 @@
 import type { LabelStock } from "@/lib/tspl";
 
+export function injectPrintStyles(widthMm: number, heightMm: number): void {
+  let style = document.getElementById("dynamic-booth-print-style");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "dynamic-booth-print-style";
+    document.head.appendChild(style);
+  }
+  style.textContent = `
+    @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #printable-receipt, #printable-receipt * { visibility: visible !important; }
+      #printable-receipt { position: fixed !important; left: 0 !important; top: 0 !important; width: ${widthMm}mm !important; height: ${heightMm}mm !important; margin: 0 !important; padding: 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; box-shadow: none !important; }
+    }
+  `;
+}
+
 /**
  * Printing through the operating system's own print path.
  *
@@ -31,20 +48,79 @@ import type { LabelStock } from "@/lib/tspl";
 export function systemPrintImage(
   dataUrl: string,
   stock: LabelStock,
+  marginMm = 0,
+  copies = 1,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  if (activePrint) return activePrint;
+
+  const printPromise = new Promise<void>((resolve, reject) => {
     if (!dataUrl) {
       reject(new Error("Nothing to print"));
       return;
     }
 
+    document
+      .querySelectorAll<HTMLIFrameElement>(
+        'iframe[data-mad-shots-print="true"]',
+      )
+      .forEach((existing) => existing.remove());
+
     const frame = document.createElement("iframe");
     // Off-screen rather than display:none — a hidden iframe doesn't always lay
     // out, and an image with no layout can print blank.
     frame.setAttribute("aria-hidden", "true");
+    frame.dataset.madShotsPrint = "true";
     frame.style.cssText =
       "position:fixed;left:-10000px;top:0;width:400px;height:600px;border:0;";
     document.body.appendChild(frame);
+
+    let printed = false;
+    const fire = async () => {
+      if (printed) return;
+      try {
+        const printDocument = frame.contentDocument;
+        const printWindow = frame.contentWindow;
+        if (!printDocument || !printWindow) {
+          throw new Error("The system print frame is unavailable");
+        }
+
+        await Promise.all(
+          Array.from(printDocument.images).map(
+            (image) =>
+              new Promise<void>((resolve, reject) => {
+                if (image.complete && image.naturalWidth > 0) {
+                  resolve();
+                  return;
+                }
+                image.addEventListener("load", () => resolve(), { once: true });
+                image.addEventListener(
+                  "error",
+                  () => reject(new Error("The print image failed to load")),
+                  { once: true },
+                );
+              }).then(async () => {
+                if (image.decode) await image.decode();
+              }),
+          ),
+        );
+
+        printed = true;
+        printWindow.focus();
+        printWindow.print();
+        cleanup();
+        resolve();
+      } catch (e) {
+        frame.remove();
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+
+    // Wait for the isolated document, including its image, to finish loading.
+    frame.onload = fire;
+    frame.onerror = () => {
+      frame.remove();
+      reject(new Error("The composite failed to load for printing"));
+    };
 
     const cleanup = () => {
       // Deferred: removing the frame while the print dialog still references its
@@ -59,6 +135,8 @@ export function systemPrintImage(
       return;
     }
 
+    const safeCopies = Math.max(1, Math.min(5, Math.round(copies)));
+
     // @page carries the real label size, so the driver picks the right media
     // instead of defaulting to A4 and scaling the label into a corner.
     doc.open();
@@ -70,49 +148,44 @@ export function systemPrintImage(
 <style>
   @page { size: ${stock.widthMm}mm ${stock.heightMm}mm; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
+  #printable-receipt { display: block; width: ${stock.widthMm}mm; height: ${stock.heightMm}mm; visibility: visible; }
+  @media print {
+    @page { size: ${stock.widthMm}mm ${stock.heightMm}mm; margin: 0; }
+    html, body {
+      width: ${stock.widthMm}mm;
+      height: ${stock.heightMm}mm;
+      visibility: visible !important;
+    }
+    #printable-receipt, #printable-receipt * { visibility: visible !important; }
+    #printable-receipt { position: fixed !important; left: 0 !important; top: 0 !important; display: block !important; }
+  }
   /* Contain rather than stretch: the composite's aspect is deliberate. */
   img {
     display: block;
-    width: ${stock.widthMm}mm;
-    height: ${stock.heightMm}mm;
+    width: calc(${stock.widthMm}mm - ${marginMm * 2}mm);
+    height: calc(${stock.heightMm}mm - ${marginMm * 2}mm);
+    margin: ${marginMm}mm;
+    visibility: visible !important;
     object-fit: contain;
     image-rendering: auto;
   }
 </style>
 </head>
-<body><img src="${dataUrl}" alt=""></body>
+<body><div id="printable-receipt">${Array.from({ length: safeCopies }, () => `<img src="${dataUrl}" alt="">`).join("")}</div></body>
 </html>`);
     doc.close();
-
-    const img = doc.images[0];
-    const fire = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-        cleanup();
-        resolve();
-      } catch (e) {
-        frame.remove();
-        reject(e instanceof Error ? e : new Error(String(e)));
-      }
-    };
-
-    // Printing before the image has decoded produces a blank label.
-    if (img && !img.complete) {
-      img.onload = fire;
-      img.onerror = () => {
-        frame.remove();
-        reject(new Error("The composite failed to load for printing"));
-      };
-      // Don't hang for ever if neither event arrives.
-      window.setTimeout(() => {
-        if (frame.parentNode) fire();
-      }, 4000);
-    } else {
-      fire();
-    }
+  }).catch((error) => {
+    console.error("MAD SHOTS system print failed", error);
+    throw error;
+  }).finally(() => {
+    activePrint = null;
   });
+
+  activePrint = printPromise;
+  return printPromise;
 }
+
+let activePrint: Promise<void> | null = null;
 
 /**
  * A small test image for the OS print path.

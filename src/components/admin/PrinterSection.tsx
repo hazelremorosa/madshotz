@@ -208,8 +208,8 @@ export function PrinterSection({
   return (
     <Section
       emoji="🖨️"
-      title="Printing"
-      note="Thermal label printer — connect to whatever printer is available. Prints are black-and-white halftone; the colour copy goes out by QR."
+      title="Printer & Output Settings"
+      note="Choose the printer, paper, copies, and whether approved photos print automatically. Settings persist on this booth. Prints are black-and-white halftone; the colour copy goes out by QR."
     >
       <Row
         label="Print physical copies"

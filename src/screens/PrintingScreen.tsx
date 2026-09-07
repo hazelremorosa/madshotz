@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { overlayOpts, useSettings } from "@/store/settings";
@@ -10,11 +10,13 @@ import { Receipt } from "@/components/Receipt";
 import { TemplateComposite } from "@/components/TemplateComposite";
 import { staticItems } from "@/components/StaticItems";
 import { PrintStatus } from "@/components/PrintStatus";
-import { usePrinter } from "@/lib/printer";
 import { composeReceipt } from "@/lib/compose";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
+import { loadPrinterConfig, printerDimensions } from "@/lib/printerConfig";
+import { injectPrintStyles } from "@/lib/systemPrint";
+import { usePrinter } from "@/lib/printer";
 
 const CAPTIONS = [
   "Warming up the paper…",
@@ -41,9 +43,16 @@ export function PrintingScreen() {
   const setComposite = useSession((s) => s.setComposite);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
+  const printImage = usePrinter((s) => s.printImage);
+  const isPrintedSession = useRef(false);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameStyle = FRAME_STYLE_BY_ID(frameStyleId);
-  const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
+  const frameOverlay = resolveOverlaySrc(
+    overlayId,
+    layout.paperAspect,
+    customFrames,
+    overlayOpts(),
+  );
   const template = activeTemplate();
 
   const [caption, setCaption] = useState(0);
@@ -73,17 +82,28 @@ export function PrintingScreen() {
       .then((url) => {
         if (!alive) return;
         setComposite(url);
-
-        // Fire the real print, but deliberately do NOT await it before advancing
-        // to the QR screen. A Bluetooth job streams for 5–20 seconds, and making
-        // the guest watch a spinner for that would be worse than the animation
-        // this screen already shows. `printImage` resolves false instead of
-        // throwing, and the printer store serialises jobs, so a slow print can
-        // never stall or interleave with the next guest.
-        const st = useSettings.getState();
-        if (st.printEnabled && st.autoPrint) {
-          void usePrinter.getState().printImage(url);
+        const config = loadPrinterConfig();
+        const dimensions = printerDimensions(config);
+        injectPrintStyles(dimensions.widthMm, dimensions.heightMm);
+        if (!isPrintedSession.current) {
+          isPrintedSession.current = true;
+          const settings = useSettings.getState();
+          settings.set("printerDeviceName", config.targetPrinterName);
+          // The final-screen Print action is an explicit print request. Keep
+          // the existing transport, but do not let its legacy enable gate
+          // silently discard this request.
+          settings.set("printEnabled", true);
+          window.requestAnimationFrame(() => {
+            if (!alive) return;
+            window.setTimeout(() => {
+              if (!alive) return;
+              void printImage(url).catch((error: unknown) => {
+                console.error("[Print Failure]:", error);
+              });
+            }, 500);
+          });
         }
+
       })
       .catch(() => undefined);
 
