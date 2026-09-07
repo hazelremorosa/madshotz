@@ -27,25 +27,54 @@ reach a printer in the room. Bytes leave the tablet directly, two ways:
 | **Web Bluetooth**    | Charging port must stay free | Slower — budget 5–20 s for a 4×6. Pick the printer's **`-BLE`** name; a `-SPP`/`-COM` entry is Bluetooth Classic and unreachable from any browser.                   |
 
 The **System** transport is also available when the printer is installed in the
-host operating system. For silent auto-printing, close existing Chrome or Brave
-windows and launch the booth with kiosk printing enabled:
+host operating system — that's the route for an ordinary inkjet or dye-sub, which
+speaks no TSPL. It hands an image to the OS driver instead of bytes to the
+printer.
 
-```text
-"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk --kiosk-printing http://localhost:5173/
-```
+#### Silent printing on a Windows kiosk
 
-For Brave, use:
+A web page can never suppress the print dialog or choose a printer — both are
+browser security boundaries. Chrome's `--kiosk-printing` flag lifts the first
+one: `window.print()` then goes straight to the **Windows default printer** with
+no dialog at all. The printer choice therefore lives in Windows, not in Admin.
 
-```text
-"C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe" --kiosk --kiosk-printing http://localhost:5173/
-```
+Double-click **`scripts/start-kiosk.bat`**. It finds Chrome, Brave or Edge and
+launches the booth full-screen with kiosk printing on. With no argument it opens
+the hosted app (`https://madshotz.vercel.app/`); pass a URL to point it elsewhere
+(`start-kiosk.bat http://localhost:5173/`), or edit the `BOOTH_URL` line in the
+script to change what a double-click loads on that machine.
 
-In Admin → **Printer & Output Settings**, choose **System**, enable physical
-printing and **Auto print**, and select the installed printer, such as
-`EPSON7EFDF8 / L15150 Series`. The isolated print document contains only the
-photo card and uses the selected paper dimensions, including `80mm × 150mm`.
-Browser-generated headers and footer URLs cannot be disabled by web CSS; use the
-browser's print policy/settings to keep them off.
+The script uses a dedicated profile at `%LOCALAPPDATA%\MadShotz\KioskProfile`.
+That matters: `--kiosk-printing` is only honoured by a *fresh* browser process,
+so launching into a separate profile makes the flag work even when the operator
+already has normal browsing windows open. The side effect is that the kiosk
+profile has its own storage — **do the Admin setup inside the kiosk window**, not
+in a regular browser, or the settings won't be the ones the booth reads. To leave
+kiosk mode, press `Alt`+`F4`.
+
+Commissioning checklist:
+
+1. **Windows → Settings → Bluetooth & devices → Printers** — set the booth
+   printer as the default, and set its paper size there (`80 × 150 mm`, 4R, …).
+   Turn off "Let Windows manage my default printer", or Windows will re-point the
+   default at whatever was last used.
+2. Only if running the booth locally: start the app with `npm run dev` (or
+   `npm run build && npm run preview`). Against the hosted URL there is nothing
+   to start.
+3. Launch `scripts/start-kiosk.bat`.
+4. In Admin → **Printer & Output Settings**, choose the **System** transport,
+   enable physical printing and **Auto print**, then set the paper size,
+   orientation and copies — those still come from Admin, because they are written
+   into the print document's `@page` rules.
+5. Use **Test Print** in Admin. If a dialog appears, the flag didn't take: the
+   browser was launched without the script, or a browser is running that already
+   owns the kiosk profile.
+
+The isolated print document contains only the photo card. The **Target Printer
+Name** field in Admin is a label for the operator — on this route the printer
+comes from the Windows default, and no web API can override it. Browser-generated
+headers and footer URLs cannot be disabled by web CSS; use the browser's print
+policy or its print settings to keep them off.
 
 Both need HTTPS and one user gesture to pair; after that `getDevices()` lets the
 kiosk reconnect unattended on boot (`App.tsx`). **Chrome on Android or desktop
@@ -57,6 +86,7 @@ only — Safari and iOS implement neither API, so an iPad cannot print.**
 | `lib/tspl.ts`                         | TSPL job encoding (`SIZE`/`GAP`/`DENSITY`/`BITMAP`/`PRINT`), stock presets, dot maths. |
 | `lib/printer.ts`                      | Transports, silent reconnect, job serialisation, `usePrinter` store.                   |
 | `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics.                                 |
+| `scripts/start-kiosk.bat`             | Windows launcher: kiosk + `--kiosk-printing` in a dedicated profile.                  |
 
 **Fitting to the stock.** "Fit the label" scales any composite to sit inside the
 selected stock with its aspect intact — it letterboxes, never crops or stretches
