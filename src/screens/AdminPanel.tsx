@@ -39,6 +39,11 @@ import {
 import { composeTemplate } from "@/lib/composeTemplate";
 import { useFlowSteps } from "@/lib/flow";
 import { AUTO_DOWNLOAD_SETUP, compositeFilename } from "@/lib/download";
+import {
+  clearWelcomeMedia,
+  saveWelcomeMedia,
+  useWelcome,
+} from "@/store/welcome";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
 import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
@@ -320,6 +325,8 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               </Section>
 
               <ReceiptBrandingSection />
+
+              <WelcomeScreenSection onToast={toast} />
             </>
           )}
 
@@ -950,6 +957,139 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
 }
 
 // ── Custom stickers ─────────────────────────────────────────────────────────
+
+/**
+ * The host's own artwork on the attract screen.
+ *
+ * "Use it" is kept separate from "upload it" on purpose: a host running two
+ * events off one kiosk switches back to the Mad Shots screen without throwing
+ * away artwork they'll want again next weekend.
+ */
+/**
+ * Past this, warn but don't block. There's no storage reason to refuse a big
+ * file — IndexedDB has the room — but decoding a huge GIF every loop is real
+ * work for a cheap kiosk tablet, and that's the host's call to make with their
+ * own hardware in front of them.
+ */
+const LARGE_ARTWORK_BYTES = 8_000_000;
+
+function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
+  const welcomeCustom = useSettings((st) => st.welcomeCustom);
+  const welcomePrompt = useSettings((st) => st.welcomePrompt);
+  const set = useSettings((st) => st.set);
+  const media = useWelcome((st) => st.media);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const saved = await saveWelcomeMedia(file);
+      // Uploading is the host saying they want it — switching it on for them
+      // saves the "why isn't it showing?" round trip.
+      set("welcomeCustom", true);
+      onToast(`${saved.kind === "gif" ? "GIF" : "Image"} set as the home page`);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : "Couldn't save that file");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <Section
+      emoji="🏠"
+      title="Home page"
+      note="Replace the Mad Shots welcome screen with your own image or GIF. Nothing else in the booth changes."
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/gif,image/png,image/jpeg,image/webp,image/*"
+        hidden
+        onChange={(e) => onFile(e.target.files)}
+      />
+
+      <Row label="Home page" stacked>
+        <Segmented
+          value={welcomeCustom ? "custom" : "default"}
+          onChange={(v) => {
+            if (v === "custom" && !media) {
+              onToast("Upload an image or GIF first");
+              return;
+            }
+            set("welcomeCustom", v === "custom");
+          }}
+          options={[
+            { value: "default", label: "Mad Shots" },
+            { value: "custom", label: "My artwork" },
+          ]}
+        />
+      </Row>
+
+      {media ? (
+        <div className="flex items-center gap-3">
+          <div className="h-24 w-[68px] shrink-0 overflow-hidden rounded-xl border border-cocoa/10 bg-cocoa/5">
+            <img src={media.url} alt="" className="h-full w-full object-cover" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-cocoa">
+              {media.name}
+            </div>
+            <div className="text-xs text-cocoa/50">
+              {media.kind === "gif" ? "GIF" : "Image"} ·{" "}
+              {(media.bytes / 1_000_000).toFixed(1)} MB
+            </div>
+            {media.bytes > LARGE_ARTWORK_BYTES && (
+              <p className="mt-1 text-xs leading-snug text-amber-700">
+                Large files can stutter on a slower tablet — worth watching it
+                loop once before the event.
+              </p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <SmallButton onClick={() => inputRef.current?.click()}>
+                {busy ? "Saving…" : "Replace"}
+              </SmallButton>
+              <SmallButton
+                tone="danger"
+                onClick={async () => {
+                  await clearWelcomeMedia();
+                  set("welcomeCustom", false);
+                  onToast("Artwork removed");
+                }}
+              >
+                Remove
+              </SmallButton>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Row
+          label="No artwork uploaded"
+          hint="Portrait works best — 1080 × 1560. Anything else is centre-cropped to fill."
+        >
+          <SmallButton tone="brand" onClick={() => inputRef.current?.click()}>
+            {busy ? "Saving…" : "Upload"}
+          </SmallButton>
+        </Row>
+      )}
+
+      <Row
+        label="Keep the “touch to begin” prompt"
+        hint="Turn off only if your artwork already tells guests to tap."
+      >
+        <Toggle
+          label="Keep the touch to begin prompt"
+          checked={welcomePrompt}
+          onChange={(v) => set("welcomePrompt", v)}
+        />
+      </Row>
+    </Section>
+  );
+}
 
 /**
  * Which of the guest's own choices this booth offers.

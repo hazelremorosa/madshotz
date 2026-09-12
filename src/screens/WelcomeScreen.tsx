@@ -2,12 +2,22 @@ import { motion } from "framer-motion";
 import { LogoMark } from "@/components/Logo";
 import { InstantCameraIcon, ReceiptPrinterIcon } from "@/components/BrandIcons";
 import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
+import { useWelcome } from "@/store/welcome";
 import { ensureCameraStream } from "@/lib/camera";
 import { activeTemplate, templateLayout } from "@/store/templates";
 import { reconcileDesignMode } from "@/store/events";
 
 export function WelcomeScreen() {
   const go = useSession((s) => s.go);
+  // Host artwork replaces this screen, and only this screen. It falls back to
+  // the Mad Shots attract screen whenever there's nothing to show — an upload
+  // that was deleted, or a kiosk with no IndexedDB — so the booth is never
+  // blank.
+  const welcomeCustom = useSettings((s) => s.welcomeCustom);
+  const welcomePrompt = useSettings((s) => s.welcomePrompt);
+  const media = useWelcome((s) => s.media);
+  const artwork = welcomeCustom ? media : null;
 
   const begin = () => {
     // Warm the camera on the first user gesture so Capture is instant.
@@ -25,6 +35,44 @@ export function WelcomeScreen() {
       go("layout", 1);
     }
   };
+
+  if (artwork) {
+    return (
+      <button
+        type="button"
+        onClick={begin}
+        aria-label="Touch to begin"
+        className="relative block h-full w-full overflow-hidden bg-cocoa/5"
+      >
+        {/* Cover, not contain: the design box is portrait (~540×780) and the
+            host's file may be any shape. Cropping beats letterboxing on an
+            attract screen. */}
+        <img
+          src={artwork.url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+
+        {welcomePrompt && (
+          <>
+            {/* Scrim only behind the prompt — enough to keep it readable over a
+                bright frame without dimming the artwork itself. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/55 to-transparent" />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="absolute inset-x-0 bottom-[max(3rem,env(safe-area-inset-bottom))] flex justify-center"
+            >
+              <span className="animate-breathe rounded-full bg-white/85 px-7 py-3 text-sm font-semibold tracking-widest text-cocoa shadow-glass backdrop-blur">
+                TOUCH ANYWHERE TO BEGIN
+              </span>
+            </motion.div>
+          </>
+        )}
+      </button>
+    );
+  }
 
   return (
     <button

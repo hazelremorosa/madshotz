@@ -440,6 +440,28 @@ export interface SettingsState {
   /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
   rawbtFormat: RawBtFormat;
 
+  // ── Welcome screen ────────────────────────────────────────────────────────
+  /**
+   * Show the host's uploaded artwork instead of the Mad Shots attract screen.
+   *
+   * Separate from whether artwork *exists* (that lives in IndexedDB — see
+   * `store/welcome.ts`) so the host can switch back to the default home page
+   * without deleting an upload they'll want again next event.
+   *
+   * Device-scoped, and so absent from `BoothConfig`: the artwork itself can't
+   * travel inside a saved event, so an event that turned this on would land on
+   * another kiosk pointing at a picture that isn't there.
+   */
+  welcomeCustom: boolean;
+  /**
+   * Keep "TOUCH ANYWHERE TO BEGIN" over the artwork.
+   *
+   * On by default — full-bleed artwork with no prompt and guests stand there
+   * watching it loop. Hosts who drew their own "tap to start" into the artwork
+   * switch it off so there aren't two.
+   */
+  welcomePrompt: boolean;
+
   // ── Local archive ─────────────────────────────────────────────────────────
   /**
    * Save every finished composite to this device's Downloads folder.
@@ -581,6 +603,11 @@ const DEFAULTS = {
   btCharUuid: "",
   btWriteMode: "auto" as BtWriteMode,
   rawbtFormat: "base64Prefix" as RawBtFormat,
+
+  // Off until the host actually uploads something — turning it on with nothing
+  // stored would blank the attract screen.
+  welcomeCustom: false,
+  welcomePrompt: true,
 
   // On by default: losing an event's photos is unrecoverable, and the booth's own
   // copy is the only one that survives a dead QR link or a venue with no wifi. It
