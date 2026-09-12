@@ -188,6 +188,10 @@ export interface BoothConfig {
   enabledLayoutIds: string[];
   defaultLayoutId: string;
   enabledFilterIds: string[];
+  filtersEnabled: boolean;
+  photoShapeEnabled: boolean;
+  frameStyleEnabled: boolean;
+  stickersEnabled: boolean;
   defaultOverlayId: string;
   guestCanChangeOverlay: boolean;
   customFrames: CustomFrame[];
@@ -294,6 +298,24 @@ export interface SettingsState {
   enabledLayoutIds: string[];
   enabledFilterIds: string[];
   defaultLayoutId: string;
+
+  /**
+   * Guest-facing steps the host can switch off, one by one.
+   *
+   * These hide a *choice*, never the thing itself: with the shape picker off
+   * every receipt still has a photo shape, it's just the built-in default that
+   * nobody can change. When switching one off empties a whole screen, the flow
+   * skips that screen — see `lib/flow.ts`, the single place that decides which
+   * steps a session actually visits.
+   */
+  /** "Set the mood" — the filter reel, intensity and smooth-skin controls. */
+  filtersEnabled: boolean;
+  /** The photo-shape row on the Frames screen. */
+  photoShapeEnabled: boolean;
+  /** The frame colour/pattern row on the Frames screen. */
+  frameStyleEnabled: boolean;
+  /** "Decorate" — the sticker and text editor. */
+  stickersEnabled: boolean;
 
   // ── Frame overlay ─────────────────────────────────────────────────────────
   /** Host-uploaded PNG frame overlays, offered alongside the built-in ones. */
@@ -418,6 +440,39 @@ export interface SettingsState {
   /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
   rawbtFormat: RawBtFormat;
 
+  // ── Welcome screen ────────────────────────────────────────────────────────
+  /**
+   * Show the host's uploaded artwork instead of the Mad Shots attract screen.
+   *
+   * Separate from whether artwork *exists* (that lives in IndexedDB — see
+   * `store/welcome.ts`) so the host can switch back to the default home page
+   * without deleting an upload they'll want again next event.
+   *
+   * Device-scoped, and so absent from `BoothConfig`: the artwork itself can't
+   * travel inside a saved event, so an event that turned this on would land on
+   * another kiosk pointing at a picture that isn't there.
+   */
+  welcomeCustom: boolean;
+  /**
+   * Keep "TOUCH ANYWHERE TO BEGIN" over the artwork.
+   *
+   * On by default — full-bleed artwork with no prompt and guests stand there
+   * watching it loop. Hosts who drew their own "tap to start" into the artwork
+   * switch it off so there aren't two.
+   */
+  welcomePrompt: boolean;
+
+  // ── Local archive ─────────────────────────────────────────────────────────
+  /**
+   * Save every finished composite to this device's Downloads folder.
+   *
+   * Device-scoped on purpose, and so deliberately absent from `BoothConfig`:
+   * loading somebody else's saved event must never start writing files to this
+   * kiosk's disk. Independent of `cloudUploadEnabled` — this is the host's local
+   * copy, that one is the guest's.
+   */
+  autoDownload: boolean;
+
   // ── Development ───────────────────────────────────────────────────────────
   /**
    * Uploads the finished composite to Cloudflare. Off is a **development**
@@ -464,6 +519,13 @@ const DEFAULTS = {
   enabledLayoutIds: LAYOUTS.map((l) => l.id),
   enabledFilterIds: FILTERS.map((f) => f.id),
   defaultLayoutId: DEFAULT_LAYOUT.id,
+
+  // Every guest step starts ON — a fresh booth offers the whole flow, and a
+  // host only ever takes things away deliberately.
+  filtersEnabled: true,
+  photoShapeEnabled: true,
+  frameStyleEnabled: true,
+  stickersEnabled: true,
 
   customFrames: [] as CustomFrame[],
   defaultOverlayId: "none",
@@ -541,6 +603,17 @@ const DEFAULTS = {
   btCharUuid: "",
   btWriteMode: "auto" as BtWriteMode,
   rawbtFormat: "base64Prefix" as RawBtFormat,
+
+  // Off until the host actually uploads something — turning it on with nothing
+  // stored would blank the attract screen.
+  welcomeCustom: false,
+  welcomePrompt: true,
+
+  // On by default: losing an event's photos is unrecoverable, and the booth's own
+  // copy is the only one that survives a dead QR link or a venue with no wifi. It
+  // needs Chrome's automatic-download permission to actually write (see
+  // lib/download.ts) — Admin shows that setup note whenever this is on.
+  autoDownload: true,
 
   // On by default: a booth that quietly stops delivering photos is the worst
   // possible failure, so this only ever goes off by an explicit decision.
@@ -640,6 +713,10 @@ export const useSettings = create<SettingsState>()(
           "countdownLength",
           "guestCanSetCountdown",
           "flashFill",
+          "filtersEnabled",
+          "photoShapeEnabled",
+          "frameStyleEnabled",
+          "stickersEnabled",
           "guestCanChangeOverlay",
           "soundOn",
           "idleTimeoutSec",
@@ -802,6 +879,10 @@ export function snapshotConfig(): BoothConfig {
     enabledLayoutIds: [...s.enabledLayoutIds],
     defaultLayoutId: s.defaultLayoutId,
     enabledFilterIds: [...s.enabledFilterIds],
+    filtersEnabled: s.filtersEnabled,
+    photoShapeEnabled: s.photoShapeEnabled,
+    frameStyleEnabled: s.frameStyleEnabled,
+    stickersEnabled: s.stickersEnabled,
     defaultOverlayId: s.defaultOverlayId,
     guestCanChangeOverlay: s.guestCanChangeOverlay,
     customFrames: s.customFrames.map((f) => ({ ...f })),

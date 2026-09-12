@@ -137,3 +137,20 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media print {
+  @page {
+    size: 80mm 150mm;
+    margin: 0;
+  }
+
+  html,
+  body,
+  #root {
+    width: 80mm;
+    height: 150mm;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/store/session";
+import { nextScreen, prevScreen } from "@/lib/flow";
 import { overlayOpts, useSettings } from "@/store/settings";
 import { activeFilterCss } from "@/data/filters";
 import { STICKER_PACKS } from "@/data/stickers";
@@ -258,11 +259,11 @@ export function EditorScreen() {
       </div>
 
       <ActionBar
-        onBack={() => go("filter", -1)}
+        onBack={() => go(prevScreen("editor"), -1)}
         primaryLabel="Preview"
         onPrimary={() => {
           selectItem(null);
-          go("preview", 1);
+          go(nextScreen("editor"), 1);
         }}
       />
 

@@ -37,9 +37,16 @@ import {
   type EventRecord,
 } from "@/store/events";
 import { composeTemplate } from "@/lib/composeTemplate";
+import { useFlowSteps } from "@/lib/flow";
+import { AUTO_DOWNLOAD_SETUP, compositeFilename } from "@/lib/download";
+import {
+  clearWelcomeMedia,
+  saveWelcomeMedia,
+  useWelcome,
+} from "@/store/welcome";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
-import { PrinterSection } from "@/components/admin/PrinterSection";
+import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
 import { PREVIEW_PHOTO } from "@/lib/previewComposite";
 import type { EventTemplate } from "@/types";
 import {
@@ -258,7 +265,15 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </Row>
           </Section>
 
+          <GuestStepsSection />
+
           <Section emoji="🎨" title="Filters" note="Which looks guests can choose from.">
+            {!s.filtersEnabled && (
+              <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+                The filter step is switched off in Guest steps, so guests never see
+                this reel — every photo prints in {FILTERS[0].name.toLowerCase()}.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {FILTERS.map((f) => (
                 <Chip
@@ -310,6 +325,8 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               </Section>
 
               <ReceiptBrandingSection />
+
+              <WelcomeScreenSection onToast={toast} />
             </>
           )}
 
@@ -319,7 +336,43 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
 
               <KioskSection onToast={toast} />
 
-              <PrinterSection onToast={toast} />
+              <PrinterSetupSection onToast={toast} />
+
+          <Section
+            emoji="💾"
+            title="Save to this device"
+            note="Keeps the booth's own copy of every finished photo, separate from the guest's QR link."
+          >
+            <Row
+              label="Auto-save each photo"
+              hint={
+                s.autoDownload
+                  ? "On — every finished photo is written to this device's Downloads folder."
+                  : "Off — nothing is written to this device. Guests still get their photo by QR or Share."
+              }
+            >
+              <Toggle
+                label="Auto-save each photo"
+                checked={s.autoDownload}
+                onChange={(v) => {
+                  set("autoDownload", v);
+                  toast(v ? "Auto-save on" : "Auto-save off");
+                }}
+              />
+            </Row>
+            {s.autoDownload && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                ⚠️ {AUTO_DOWNLOAD_SETUP}
+              </p>
+            )}
+            <p className="text-xs leading-snug text-cocoa/50">
+              Files are named{" "}
+              <span className="font-mono text-[11px] text-cocoa/70">
+                {compositeFilename("AB12CD")}
+              </span>{" "}
+              — newest last when sorted by name.
+            </p>
+          </Section>
 
           <Section
             emoji="🔐"
@@ -905,8 +958,224 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
 
 // ── Custom stickers ─────────────────────────────────────────────────────────
 
+/**
+ * The host's own artwork on the attract screen.
+ *
+ * "Use it" is kept separate from "upload it" on purpose: a host running two
+ * events off one kiosk switches back to the Mad Shots screen without throwing
+ * away artwork they'll want again next weekend.
+ */
+/**
+ * Past this, warn but don't block. There's no storage reason to refuse a big
+ * file — IndexedDB has the room — but decoding a huge GIF every loop is real
+ * work for a cheap kiosk tablet, and that's the host's call to make with their
+ * own hardware in front of them.
+ */
+const LARGE_ARTWORK_BYTES = 8_000_000;
+
+function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
+  const welcomeCustom = useSettings((st) => st.welcomeCustom);
+  const welcomePrompt = useSettings((st) => st.welcomePrompt);
+  const set = useSettings((st) => st.set);
+  const media = useWelcome((st) => st.media);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const saved = await saveWelcomeMedia(file);
+      // Uploading is the host saying they want it — switching it on for them
+      // saves the "why isn't it showing?" round trip.
+      set("welcomeCustom", true);
+      onToast(`${saved.kind === "gif" ? "GIF" : "Image"} set as the home page`);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : "Couldn't save that file");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <Section
+      emoji="🏠"
+      title="Home page"
+      note="Replace the Mad Shots welcome screen with your own image or GIF. Nothing else in the booth changes."
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/gif,image/png,image/jpeg,image/webp,image/*"
+        hidden
+        onChange={(e) => onFile(e.target.files)}
+      />
+
+      <Row
+        label="Use my artwork"
+        hint={
+          !media
+            ? "Upload an image or GIF below, then switch this on."
+            : welcomeCustom
+              ? "On — guests see your artwork instead of the Mad Shots screen."
+              : "Off — guests see the Mad Shots home page. Your upload is kept."
+        }
+      >
+        <Toggle
+          label="Use my artwork"
+          checked={welcomeCustom}
+          onChange={(v) => {
+            // Nothing to switch to: refuse rather than blank the attract screen.
+            if (v && !media) {
+              onToast("Upload an image or GIF first");
+              return;
+            }
+            set("welcomeCustom", v);
+          }}
+        />
+      </Row>
+
+      {media ? (
+        <div className="flex items-center gap-3">
+          <div className="h-24 w-[68px] shrink-0 overflow-hidden rounded-xl border border-cocoa/10 bg-cocoa/5">
+            <img src={media.url} alt="" className="h-full w-full object-cover" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-cocoa">
+              {media.name}
+            </div>
+            <div className="text-xs text-cocoa/50">
+              {media.kind === "gif" ? "GIF" : "Image"} ·{" "}
+              {(media.bytes / 1_000_000).toFixed(1)} MB
+            </div>
+            {media.bytes > LARGE_ARTWORK_BYTES && (
+              <p className="mt-1 text-xs leading-snug text-amber-700">
+                Large files can stutter on a slower tablet — worth watching it
+                loop once before the event.
+              </p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <SmallButton onClick={() => inputRef.current?.click()}>
+                {busy ? "Saving…" : "Replace"}
+              </SmallButton>
+              <SmallButton
+                tone="danger"
+                onClick={async () => {
+                  await clearWelcomeMedia();
+                  set("welcomeCustom", false);
+                  onToast("Artwork removed");
+                }}
+              >
+                Remove
+              </SmallButton>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Row
+          label="No artwork uploaded"
+          hint="Portrait works best — 1080 × 1560. Anything else is centre-cropped to fill."
+        >
+          <SmallButton tone="brand" onClick={() => inputRef.current?.click()}>
+            {busy ? "Saving…" : "Upload"}
+          </SmallButton>
+        </Row>
+      )}
+
+      <Row
+        label="Keep the “touch to begin” prompt"
+        hint="Turn off only if your artwork already tells guests to tap."
+      >
+        <Toggle
+          label="Keep the touch to begin prompt"
+          checked={welcomePrompt}
+          onChange={(v) => set("welcomePrompt", v)}
+        />
+      </Row>
+    </Section>
+  );
+}
+
+/**
+ * Which of the guest's own choices this booth offers.
+ *
+ * Every switch here hides a *choice*, never the result: with the shape picker
+ * off the receipt still has a photo shape, it's just the built-in default. When
+ * switching one off leaves a screen with nothing on it, the flow skips that
+ * screen — which is why the summary line below is worth showing: it's the only
+ * place the host can see what's actually left.
+ */
+function GuestStepsSection() {
+  const s = useSettings();
+  const set = useSettings((st) => st.set);
+  const steps = useFlowSteps();
+
+  return (
+    <Section
+      emoji="🎛️"
+      title="Guest steps"
+      note="Turn one off and guests skip it — they get the booth's default instead of a choice."
+    >
+      <Row
+        label="Photo shape"
+        hint="The rounded / circle / heart row on the Frames screen."
+      >
+        <Toggle
+          label="Photo shape"
+          checked={s.photoShapeEnabled}
+          onChange={(v) => set("photoShapeEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Frame design"
+        hint="The colour and pattern swatches on the Frames screen."
+      >
+        <Toggle
+          label="Frame design"
+          checked={s.frameStyleEnabled}
+          onChange={(v) => set("frameStyleEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Filters"
+        hint="The whole “Set the mood” screen — reel, intensity and smooth skin."
+      >
+        <Toggle
+          label="Filters"
+          checked={s.filtersEnabled}
+          onChange={(v) => set("filtersEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Stickers"
+        hint="The “Decorate” screen, where guests add stickers and text."
+      >
+        <Toggle
+          label="Stickers"
+          checked={s.stickersEnabled}
+          onChange={(v) => set("stickersEnabled", v)}
+        />
+      </Row>
+
+      <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+        Guests now see:{" "}
+        <span className="font-semibold text-cocoa">
+          {steps.map((st) => st.label).join(" → ")}
+        </span>
+      </p>
+      <p className="text-xs leading-snug text-cocoa/50">
+        The frame-overlay picker has its own switch in the event's design, under
+        Events.
+      </p>
+    </Section>
+  );
+}
+
 function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) {
   const stickers = useSettings((st) => st.customStickers);
+  const stickersEnabled = useSettings((st) => st.stickersEnabled);
   const addCustomStickers = useSettings((st) => st.addCustomStickers);
   const removeCustomSticker = useSettings((st) => st.removeCustomSticker);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -955,6 +1224,13 @@ function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) 
         hidden
         onChange={(e) => onFiles(e.target.files)}
       />
+
+      {!stickersEnabled && (
+        <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+          The Decorate step is switched off in Guest steps, so nobody sees these
+          yet. Uploads are kept — turn stickers back on to offer them.
+        </p>
+      )}
 
       {stickers.length > 0 && (
         <div className="flex flex-wrap gap-2">

@@ -4,6 +4,7 @@ import { useSession } from "@/store/session";
 import { applyPalette } from "@/store/settings";
 import { hydrateEvents } from "@/store/events";
 import { hydrateTemplates } from "@/store/templates";
+import { hydrateWelcome } from "@/store/welcome";
 import { startUploadRetry } from "@/lib/delivery";
 import { usePrinter } from "@/lib/printer";
 import { useUploadQueue } from "@/lib/uploadQueue";
@@ -85,6 +86,12 @@ export default function App() {
   useEffect(() => {
     void hydrateEvents();
     void hydrateTemplates();
+  }, []);
+
+  // Read the host's welcome artwork out of IndexedDB. Boot holds for 1.9s
+  // before Welcome, so this lands well before anyone sees the attract screen.
+  useEffect(() => {
+    void hydrateWelcome();
   }, []);
 
   // Retry any photos that couldn't upload (wifi dropped) — on boot, on

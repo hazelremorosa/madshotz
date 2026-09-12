@@ -14,34 +14,55 @@ receipt print → scan the QR to take your memories home.
 
 ### Printing (Munbyn RealWriter 403B)
 
-Direct thermal, 203 dpi, TSPL command language — *not* ESC/POS, so the usual
+Direct thermal, 203 dpi, TSPL command language — _not_ ESC/POS, so the usual
 web-thermal-printing snippets don't apply. Every dot is burned or bare paper, so
 photos are halftoned to 1-bit; the full-colour version goes out via the QR.
 
 There is no server in this path and there cannot be — a Vercel-hosted page can't
 reach a printer in the room. Bytes leave the tablet directly, two ways:
 
-| Transport | Use when | Notes |
-|---|---|---|
-| **WebUSB** (USB-OTG) | Preferred | ~120 KB raster in well under a second. Android has no vendor driver competing for the device. Needs a USB-C hub with PD pass-through if the tablet must also charge. |
-| **Web Bluetooth** | Charging port must stay free | Slower — budget 5–20 s for a 4×6. Pick the printer's **`-BLE`** name; a `-SPP`/`-COM` entry is Bluetooth Classic and unreachable from any browser. |
+| Transport            | Use when                     | Notes                                                                                                                                                                |
+| -------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WebUSB** (USB-OTG) | Preferred                    | ~120 KB raster in well under a second. Android has no vendor driver competing for the device. Needs a USB-C hub with PD pass-through if the tablet must also charge. |
+| **Web Bluetooth**    | Charging port must stay free | Slower — budget 5–20 s for a 4×6. Pick the printer's **`-BLE`** name; a `-SPP`/`-COM` entry is Bluetooth Classic and unreachable from any browser.                   |
+
+The **System** transport is also available when the printer is installed in the
+host operating system. For silent auto-printing, close existing Chrome or Brave
+windows and launch the booth with kiosk printing enabled:
+
+```text
+"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk --kiosk-printing http://localhost:5173/
+```
+
+For Brave, use:
+
+```text
+"C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe" --kiosk --kiosk-printing http://localhost:5173/
+```
+
+In Admin → **Printer & Output Settings**, choose **System**, enable physical
+printing and **Auto print**, and select the installed printer, such as
+`EPSON7EFDF8 / L15150 Series`. The isolated print document contains only the
+photo card and uses the selected paper dimensions, including `80mm × 150mm`.
+Browser-generated headers and footer URLs cannot be disabled by web CSS; use the
+browser's print policy/settings to keep them off.
 
 Both need HTTPS and one user gesture to pair; after that `getDevices()` lets the
 kiosk reconnect unattended on boot (`App.tsx`). **Chrome on Android or desktop
 only — Safari and iOS implement neither API, so an iPad cannot print.**
 
-| File | Role |
-|---|---|
-| `lib/dither.ts` | Composite → 1-bit bitmap. Floyd–Steinberg / ordered Bayer / hard threshold. |
-| `lib/tspl.ts` | TSPL job encoding (`SIZE`/`GAP`/`DENSITY`/`BITMAP`/`PRINT`), stock presets, dot maths. |
-| `lib/printer.ts` | Transports, silent reconnect, job serialisation, `usePrinter` store. |
-| `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics. |
+| File                                  | Role                                                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `lib/dither.ts`                       | Composite → 1-bit bitmap. Floyd–Steinberg / ordered Bayer / hard threshold.            |
+| `lib/tspl.ts`                         | TSPL job encoding (`SIZE`/`GAP`/`DENSITY`/`BITMAP`/`PRINT`), stock presets, dot maths. |
+| `lib/printer.ts`                      | Transports, silent reconnect, job serialisation, `usePrinter` store.                   |
+| `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics.                                 |
 
 **Fitting to the stock.** "Fit the label" scales any composite to sit inside the
 selected stock with its aspect intact — it letterboxes, never crops or stretches
 — and centres it in both axes (a raster taller than the label pins to the top so
 it loses its tail rather than both ends). Because it letterboxes, an aspect
-mismatch just wastes paper, so **Rotation** defaults to *Auto* and turns a design
+mismatch just wastes paper, so **Rotation** defaults to _Auto_ and turns a design
 a quarter-turn when that uses more of the label: a 3:2 landscape event template
 on 4×6 stock goes from **40% to 91%** of the label. Upright receipts and strips
 are left alone. Matching stock to content still helps most — the `quad` layout is
@@ -53,9 +74,9 @@ rather than constants — commissioning needs no code change:
 - **BLE service/characteristic UUIDs.** Pairing walks the GATT tree for any
   writable characteristic and reports what it found in the diagnostics readout.
   Web Bluetooth only exposes services declared up front, so if the real one isn't
-  in `BLE_SERVICE_CANDIDATES`, paste it into Admin's *Service UUID* field.
-- **Raster bit polarity.** TSPL's `BITMAP` treats a *clear* bit as a dot to burn.
-  If the first test print comes out as a negative, flip *Negative image*.
+  in `BLE_SERVICE_CANDIDATES`, paste it into Admin's _Service UUID_ field.
+- **Raster bit polarity.** TSPL's `BITMAP` treats a _clear_ bit as a dot to burn.
+  If the first test print comes out as a negative, flip _Negative image_.
 
 Start with **Print test** (a few hundred bytes: border, text, density ladder) to
 prove the link and the stock geometry before sending a photo.
@@ -84,15 +105,15 @@ React 18 · TypeScript · Vite · TailwindCSS · Framer Motion · Zustand · vit
 
 ## Design System (tokens in `tailwind.config.ts` + `src/index.css`)
 
-| Token group | What it holds |
-|---|---|
-| **Color** | `ink` (near-black stage), `paper` (warm receipt stock), `brand.a/b/c` |
-| **Brand hues** | CSS variables `--brand-a/b/c` — a selected **Theme recolors the whole room** at runtime |
-| **Type** | `font-display` / `font-sans` (system stacks, offline-safe) + `font-mono` for ticket chrome |
-| **Radius** | `xl2` `xl3` `xl4` for floating cards |
-| **Elevation** | `shadow-glass`, `shadow-float`, `shadow-paper`, `shadow-bloom` (neon glow) |
-| **Motion** | spring/smooth easings + ambient keyframes (`drift`, `floaty`, `breathe`, `shimmer`) |
-| **Surfaces** | `.glass` / `.glass-strong` (frosted), `.paper` (thermal texture), `.brand-text` / `.brand-fill` |
+| Token group    | What it holds                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| **Color**      | `ink` (near-black stage), `paper` (warm receipt stock), `brand.a/b/c`                           |
+| **Brand hues** | CSS variables `--brand-a/b/c` — a selected **Theme recolors the whole room** at runtime         |
+| **Type**       | `font-display` / `font-sans` (system stacks, offline-safe) + `font-mono` for ticket chrome      |
+| **Radius**     | `xl2` `xl3` `xl4` for floating cards                                                            |
+| **Elevation**  | `shadow-glass`, `shadow-float`, `shadow-paper`, `shadow-bloom` (neon glow)                      |
+| **Motion**     | spring/smooth easings + ambient keyframes (`drift`, `floaty`, `breathe`, `shimmer`)             |
+| **Surfaces**   | `.glass` / `.glass-strong` (frosted), `.paper` (thermal texture), `.brand-text` / `.brand-fill` |
 
 **Motion language:** nothing appears instantly. Screens slide+scale+blur between
 steps (spring 260/30); selections "pop"; draggables lag the finger; signature
@@ -164,17 +185,17 @@ Two shortcuts for setup on a laptop, where a fullscreen kiosk gives you no addre
 
 Everything saves the moment you change it, and survives reloads:
 
-| Section | What the host controls |
-|---|---|
-| **Camera** | Which video input to shoot with (live preview), mirror on/off |
-| **Capture** | Countdown 3/5/10s, whether guests may change it, screen flash fill light |
-| **Layouts** | Which layouts are offered, and which one a session starts on |
-| **Filters** | Which looks appear in the filter reel |
-| **Event branding** | Receipt header + footer line + brand palette — baked into the exported photo too |
-| **Sound & timing** | Default sound state, idle reset (45s–5m), QR auto-restart (15–90s) |
-| **Kiosk lockdown** | Kiosk mode, keep-screen-awake, enter fullscreen now |
-| **Security** | Change the PIN |
-| **Status / Danger** | Delivery + wake-lock support, restart session, factory reset |
+| Section             | What the host controls                                                           |
+| ------------------- | -------------------------------------------------------------------------------- |
+| **Camera**          | Which video input to shoot with (live preview), mirror on/off                    |
+| **Capture**         | Countdown 3/5/10s, whether guests may change it, screen flash fill light         |
+| **Layouts**         | Which layouts are offered, and which one a session starts on                     |
+| **Filters**         | Which looks appear in the filter reel                                            |
+| **Event branding**  | Receipt header + footer line + brand palette — baked into the exported photo too |
+| **Sound & timing**  | Default sound state, idle reset (45s–5m), QR auto-restart (15–90s)               |
+| **Kiosk lockdown**  | Kiosk mode, keep-screen-awake, enter fullscreen now                              |
+| **Security**        | Change the PIN                                                                   |
+| **Status / Danger** | Delivery + wake-lock support, restart session, factory reset                     |
 
 **Kiosk mode** locks the booth to the app: it re-enters fullscreen on the next tap
 whenever the browser drops out, and blocks the context menu, pinch-zoom, text
@@ -190,7 +211,7 @@ open** so the host can type normally. **Keep the screen awake** holds a Wake Loc
 
 ## Photo delivery (cloud, 24h expiry)
 
-By default the QR is a **placeholder** — the app is fully usable (Download/Share work),
+By default the QR is a **placeholder** — the app is fully usable (Share works),
 but scanning the QR won't show a photo until you connect cloud storage. It uses
 **Cloudflare R2 + a Worker** (free tier is plenty).
 
@@ -215,7 +236,8 @@ Rebuild/restart (`npm run dev` or `npm run build`) — Vite reads env at build t
 Now finishing a session uploads the photo, and the QR (both the on-screen one and the
 small one on the receipt) opens a branded page showing the image with a **Save** button.
 The Worker refuses to serve anything older than **24h**, so links expire after a day.
-Guests who tapped **Download/Share** keep their copy regardless.
+Guests who tapped **Share** keep their copy regardless, as does the booth itself
+when **Admin → System → Save to this device** is on.
 
 > **Note:** uploads are open (no auth) so the browser kiosk can post directly; the
 > Worker's 8 MB cap + 24h expiry keep abuse cheap. Add a shared-secret header or
@@ -223,4 +245,4 @@ Guests who tapped **Download/Share** keep their copy regardless.
 
 ---
 
-*Prototype analysis and full experience design live in `docs/`.*
+_Prototype analysis and full experience design live in `docs/`._

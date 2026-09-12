@@ -8,7 +8,7 @@ import type {
   Theme,
 } from "@/types";
 import { DEFAULT_THEME } from "@/data/themes";
-import { DEFAULT_FRAME_STYLE } from "@/data/frames";
+import { DEFAULT_FRAME_STYLE, DEFAULT_PHOTO_SHAPE } from "@/data/frames";
 import {
   applyPalette,
   startingLayout,
@@ -98,7 +98,7 @@ export const useSession = create<SessionState>((set, get) => ({
   filterIntensity: 1,
   beautyOn: false,
   frameStyleId: DEFAULT_FRAME_STYLE.id,
-  photoShape: "sharp",
+  photoShape: DEFAULT_PHOTO_SHAPE,
   overlayId: startingOverlay(),
 
   photos: [],
@@ -183,7 +183,7 @@ export const useSession = create<SessionState>((set, get) => ({
       filterIntensity: 1,
       beautyOn: false,
       frameStyleId: DEFAULT_FRAME_STYLE.id,
-      photoShape: "rounded",
+      photoShape: DEFAULT_PHOTO_SHAPE,
       overlayId: startingOverlay(),
       // Host settings (countdown, sound default, timings) live in the settings
       // store and are untouched by a session reset.
@@ -197,14 +197,3 @@ export const useSession = create<SessionState>((set, get) => ({
     });
   },
 }));
-
-/** Ordered steps shown in the progress rail. */
-export const FLOW_STEPS: { id: ScreenId; label: string }[] = [
-  { id: "layout", label: "Layout" },
-  { id: "capture", label: "Capture" },
-  { id: "review", label: "Review" },
-  { id: "frames", label: "Frames" },
-  { id: "filter", label: "Filter" },
-  { id: "editor", label: "Decorate" },
-  { id: "preview", label: "Print" },
-];

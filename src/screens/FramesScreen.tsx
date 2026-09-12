@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { useSettings } from "@/store/settings";
+import { nextScreen, prevScreen } from "@/lib/flow";
 import { FILTER_BY_ID } from "@/data/filters";
 import {
   FRAME_STYLES,
@@ -39,9 +40,13 @@ export function FramesScreen() {
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
 
-  // Host-uploaded frames + whether guests may change the overlay at all.
+  // Host-uploaded frames + which of this screen's rows the host left switched
+  // on. If all three are off the flow skips this screen entirely (lib/flow.ts),
+  // so reaching it means at least one of them is showing.
   const customFrames = useSettings((s) => s.customFrames);
   const guestCanChangeOverlay = useSettings((s) => s.guestCanChangeOverlay);
+  const photoShapeEnabled = useSettings((s) => s.photoShapeEnabled);
+  const frameStyleEnabled = useSettings((s) => s.frameStyleEnabled);
 
   // The active design scopes which overlays the guest can see, and the event
   // photo/name/date feed the "photo template" frames.
@@ -116,7 +121,11 @@ export function FramesScreen() {
         <h2 className="text-3xl font-extrabold tracking-tight text-cocoa">
           Dress it <span className="brand-text">up</span>
         </h2>
-        <p className="mt-1 text-sm text-cocoa/50">Frame & shape</p>
+        <p className="mt-1 text-sm text-cocoa/50">
+          {[frameStyleEnabled && "Frame", photoShapeEnabled && "shape"]
+            .filter(Boolean)
+            .join(" & ") || "Overlay"}
+        </p>
       </div>
 
       {/* Live preview */}
@@ -193,106 +202,114 @@ export function FramesScreen() {
       )}
 
       {/* Shape row */}
-      <div className="mt-3 px-5">
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
-          Photo shape
-        </p>
-        <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
-          {PHOTO_SHAPES.map((s) => {
-            const active = photoShape === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => pick(() => setPhotoShape(s.id))}
-                className={cn(
-                  "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-4 py-2 transition-all",
-                  active
-                    ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
-                    : "glass opacity-65",
-                )}
-              >
-                {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
-                <span className="text-2xl leading-none text-cocoa">{s.emoji}</span>
-                <span
+      {photoShapeEnabled && (
+        <div className="mt-3 px-5">
+          <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+            Photo shape
+          </p>
+          <div className="no-bar flex gap-2.5 overflow-x-auto pb-1">
+            {PHOTO_SHAPES.map((s) => {
+              const active = photoShape === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => pick(() => setPhotoShape(s.id))}
                   className={cn(
-                    "text-[11px] font-medium",
-                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                    "relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-4 py-2 transition-all",
+                    active
+                      ? "glass-strong scale-105 shadow-bloom ring-2 ring-[rgb(var(--brand-a))]"
+                      : "glass opacity-65",
                   )}
                 >
-                  {s.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Frame design */}
-      <div className="mb-28 mt-3 px-5">
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
-            Frame
-          </p>
-          <div className="ml-auto flex gap-1 rounded-full glass p-1">
-            {(["color", "pattern"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
-                  tab === t ? "brand-fill text-white" : "text-cocoa/60",
-                )}
-              >
-                {t === "color" ? "Colors" : "Patterns"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="no-bar flex gap-3 overflow-x-auto pb-1">
-          {styles.map((f) => {
-            const active = frameStyleId === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => pick(() => setFrameStyle(f.id))}
-                className={cn(
-                  "flex shrink-0 flex-col items-center gap-1.5 transition-opacity",
-                  active ? "opacity-100" : "opacity-70",
-                )}
-              >
-                <span className="relative block">
+                  {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+                  <span className="text-2xl leading-none text-cocoa">{s.emoji}</span>
                   <span
                     className={cn(
-                      "block h-14 w-14 rounded-2xl transition-all",
-                      active
-                        ? "scale-110 border-[3px] border-[rgb(var(--brand-a))] shadow-bloom"
-                        : "border-2 border-white/70",
+                      "text-[11px] font-medium",
+                      active ? "font-semibold text-cocoa" : "text-cocoa/60",
                     )}
-                    style={{ background: f.bg }}
-                  />
-                  {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
-                </span>
-                <span
+                  >
+                    {s.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Frame design */}
+      {frameStyleEnabled && (
+        <div className="mb-28 mt-3 px-5">
+          <div className="mb-2 flex items-center gap-2 px-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cocoa/50">
+              Frame
+            </p>
+            <div className="ml-auto flex gap-1 rounded-full glass p-1">
+              {(["color", "pattern"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
                   className={cn(
-                    "text-[11px] font-medium",
-                    active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                    "rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
+                    tab === t ? "brand-fill text-white" : "text-cocoa/60",
                   )}
                 >
-                  {f.name}
-                </span>
-              </button>
-            );
-          })}
+                  {t === "color" ? "Colors" : "Patterns"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="no-bar flex gap-3 overflow-x-auto pb-1">
+            {styles.map((f) => {
+              const active = frameStyleId === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => pick(() => setFrameStyle(f.id))}
+                  className={cn(
+                    "flex shrink-0 flex-col items-center gap-1.5 transition-opacity",
+                    active ? "opacity-100" : "opacity-70",
+                  )}
+                >
+                  <span className="relative block">
+                    <span
+                      className={cn(
+                        "block h-14 w-14 rounded-2xl transition-all",
+                        active
+                          ? "scale-110 border-[3px] border-[rgb(var(--brand-a))] shadow-bloom"
+                          : "border-2 border-white/70",
+                      )}
+                      style={{ background: f.bg }}
+                    />
+                    {active && <CheckBadge small className="-right-1.5 -top-1.5" />}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium",
+                      active ? "font-semibold text-cocoa" : "text-cocoa/60",
+                    )}
+                  >
+                    {f.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Keeps the last row clear of the fixed action bar when the frame row —
+          which carries that bottom margin — is switched off. */}
+      {!frameStyleEnabled && <div className="mb-28" />}
 
       <ActionBar
-        onBack={() => go("review", -1)}
+        onBack={() => go(prevScreen("frames"), -1)}
         primaryLabel="Continue"
-        onPrimary={() => go("filter", 1)}
+        onPrimary={() => go(nextScreen("frames"), 1)}
       />
     </div>
   );
