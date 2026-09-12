@@ -1013,20 +1013,27 @@ function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
         onChange={(e) => onFile(e.target.files)}
       />
 
-      <Row label="Home page" stacked>
-        <Segmented
-          value={welcomeCustom ? "custom" : "default"}
+      <Row
+        label="Use my artwork"
+        hint={
+          !media
+            ? "Upload an image or GIF below, then switch this on."
+            : welcomeCustom
+              ? "On — guests see your artwork instead of the Mad Shots screen."
+              : "Off — guests see the Mad Shots home page. Your upload is kept."
+        }
+      >
+        <Toggle
+          label="Use my artwork"
+          checked={welcomeCustom}
           onChange={(v) => {
-            if (v === "custom" && !media) {
+            // Nothing to switch to: refuse rather than blank the attract screen.
+            if (v && !media) {
               onToast("Upload an image or GIF first");
               return;
             }
-            set("welcomeCustom", v === "custom");
+            set("welcomeCustom", v);
           }}
-          options={[
-            { value: "default", label: "Mad Shots" },
-            { value: "custom", label: "My artwork" },
-          ]}
         />
       </Row>
 
