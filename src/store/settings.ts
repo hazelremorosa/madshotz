@@ -440,6 +440,17 @@ export interface SettingsState {
   /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
   rawbtFormat: RawBtFormat;
 
+  // ── Local archive ─────────────────────────────────────────────────────────
+  /**
+   * Save every finished composite to this device's Downloads folder.
+   *
+   * Device-scoped on purpose, and so deliberately absent from `BoothConfig`:
+   * loading somebody else's saved event must never start writing files to this
+   * kiosk's disk. Independent of `cloudUploadEnabled` — this is the host's local
+   * copy, that one is the guest's.
+   */
+  autoDownload: boolean;
+
   // ── Development ───────────────────────────────────────────────────────────
   /**
    * Uploads the finished composite to Cloudflare. Off is a **development**
@@ -570,6 +581,12 @@ const DEFAULTS = {
   btCharUuid: "",
   btWriteMode: "auto" as BtWriteMode,
   rawbtFormat: "base64Prefix" as RawBtFormat,
+
+  // On by default: losing an event's photos is unrecoverable, and the booth's own
+  // copy is the only one that survives a dead QR link or a venue with no wifi. It
+  // needs Chrome's automatic-download permission to actually write (see
+  // lib/download.ts) — Admin shows that setup note whenever this is on.
+  autoDownload: true,
 
   // On by default: a booth that quietly stops delivering photos is the worst
   // possible failure, so this only ever goes off by an explicit decision.

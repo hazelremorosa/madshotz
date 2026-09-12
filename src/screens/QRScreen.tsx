@@ -7,6 +7,7 @@ import { Confetti } from "@/components/Confetti";
 import { Button } from "@/components/ui/Button";
 import { PrintStatus } from "@/components/PrintStatus";
 import { DeliveryService } from "@/lib/delivery";
+import { compositeFilename, saveToDevice } from "@/lib/download";
 import { qrMatrix } from "@/lib/qr";
 import { sfx } from "@/lib/sound";
 
@@ -18,13 +19,17 @@ export function QRScreen() {
   /** Host setting (Admin → Sound & timing). Read once so it can't shift mid-countdown. */
   const [resetSeconds] = useState(() => useSettings.getState().qrResetSec);
   const uploadsOn = useSettings((st) => st.cloudUploadEnabled);
+  /** Host setting (Admin → System → Save to this device). */
+  const autoDownload = useSettings((st) => st.autoDownload);
 
   const [matrix, setMatrix] = useState<boolean[][] | null>(null);
   const [url, setUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [seconds, setSeconds] = useState(resetSeconds);
   const [toast, setToast] = useState<string | null>(null);
+  const [archived, setArchived] = useState(false);
   const celebrated = useRef(false);
+  const saved = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -44,6 +49,16 @@ export function QRScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  // The host's own copy, written once per session. Runs whatever the upload
+  // does — offline, or with cloud upload switched off, this is the only copy
+  // that exists, so it must not be chained to the publish above.
+  useEffect(() => {
+    if (!autoDownload || !composite || saved.current) return;
+    saved.current = true;
+    setArchived(saveToDevice(composite, compositeFilename(code)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDownload, composite]);
+
   useEffect(() => {
     const iv = window.setInterval(() => {
       setSeconds((s) => {
@@ -57,16 +72,6 @@ export function QRScreen() {
     }, 1000);
     return () => window.clearInterval(iv);
   }, [reset]);
-
-  const download = () => {
-    if (!composite) return;
-    const a = document.createElement("a");
-    a.href = composite;
-    a.download = `mad-shots-${code}.jpg`;
-    a.click();
-    setToast("Saved to your device");
-    window.setTimeout(() => setToast(null), 1800);
-  };
 
   const share = async () => {
     try {
@@ -107,7 +112,7 @@ export function QRScreen() {
           Your memories are <span className="brand-text">ready!</span>
         </h2>
         <p className="mt-1 text-sm text-cocoa/50">
-          {pending ? "Saved ✓ — download it here now" : "Scan to save your photos"}
+          {pending ? "Saved ✓ — tap Share to take it now" : "Scan to save your photos"}
         </p>
       </motion.div>
 
@@ -152,15 +157,14 @@ export function QRScreen() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button variant="paper" onClick={download}>
-          ↓ Download
-        </Button>
         <Button variant="primary" onClick={share}>
           ↗ Share
         </Button>
       </div>
 
-      <div className="h-5 text-sm text-cocoa/70">{toast}</div>
+      <div className="h-5 text-sm text-cocoa/70">
+        {toast ?? (archived ? "Saved to this device ✓" : null)}
+      </div>
 
       {/* Printing runs past this screen's arrival, so the outcome (and a retry)
           surfaces here rather than on the Printing screen alone. */}

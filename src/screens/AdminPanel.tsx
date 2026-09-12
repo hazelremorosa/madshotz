@@ -38,6 +38,7 @@ import {
 } from "@/store/events";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { useFlowSteps } from "@/lib/flow";
+import { AUTO_DOWNLOAD_SETUP, compositeFilename } from "@/lib/download";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
 import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
@@ -329,6 +330,42 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               <KioskSection onToast={toast} />
 
               <PrinterSetupSection onToast={toast} />
+
+          <Section
+            emoji="💾"
+            title="Save to this device"
+            note="Keeps the booth's own copy of every finished photo, separate from the guest's QR link."
+          >
+            <Row
+              label="Auto-save each photo"
+              hint={
+                s.autoDownload
+                  ? "On — every finished photo is written to this device's Downloads folder."
+                  : "Off — nothing is written to this device. Guests still get their photo by QR or Share."
+              }
+            >
+              <Toggle
+                label="Auto-save each photo"
+                checked={s.autoDownload}
+                onChange={(v) => {
+                  set("autoDownload", v);
+                  toast(v ? "Auto-save on" : "Auto-save off");
+                }}
+              />
+            </Row>
+            {s.autoDownload && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+                ⚠️ {AUTO_DOWNLOAD_SETUP}
+              </p>
+            )}
+            <p className="text-xs leading-snug text-cocoa/50">
+              Files are named{" "}
+              <span className="font-mono text-[11px] text-cocoa/70">
+                {compositeFilename("AB12CD")}
+              </span>{" "}
+              — newest last when sorted by name.
+            </p>
+          </Section>
 
           <Section
             emoji="🔐"

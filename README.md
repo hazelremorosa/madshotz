@@ -211,7 +211,7 @@ open** so the host can type normally. **Keep the screen awake** holds a Wake Loc
 
 ## Photo delivery (cloud, 24h expiry)
 
-By default the QR is a **placeholder** — the app is fully usable (Download/Share work),
+By default the QR is a **placeholder** — the app is fully usable (Share works),
 but scanning the QR won't show a photo until you connect cloud storage. It uses
 **Cloudflare R2 + a Worker** (free tier is plenty).
 
@@ -236,7 +236,8 @@ Rebuild/restart (`npm run dev` or `npm run build`) — Vite reads env at build t
 Now finishing a session uploads the photo, and the QR (both the on-screen one and the
 small one on the receipt) opens a branded page showing the image with a **Save** button.
 The Worker refuses to serve anything older than **24h**, so links expire after a day.
-Guests who tapped **Download/Share** keep their copy regardless.
+Guests who tapped **Share** keep their copy regardless, as does the booth itself
+when **Admin → System → Save to this device** is on.
 
 > **Note:** uploads are open (no auth) so the browser kiosk can post directly; the
 > Worker's 8 MB cap + 24h expiry keep abuse cheap. Add a shared-secret header or

@@ -14,7 +14,7 @@ Effort: **S** (hours) · **M** (a day or two) · **L** (bigger project) ·
 Welcome → Layout (Single / 2·3·4 Strip / 4 Grid / Magazine) → **auto-capture** with
 countdown → Review & single-frame retake → **Frames** (6 colors + 5 patterns, 5 photo
 shapes) → Filters (8) → **Sticker/Text editor** (drag/resize/rotate) → Receipt preview
-→ Printing animation → **QR + Download + Share** → auto-reset. Plus: PWA/offline shell,
+→ Printing animation → **QR + Share** → auto-reset. Plus: PWA/offline shell,
 idle reset, sound toggle, **Cloudflare delivery with 24h-expiry links**, JPEG compression,
 and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operations).
 
