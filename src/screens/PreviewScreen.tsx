@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { overlayOpts, useSettings } from "@/store/settings";
+import { prevScreen, stepLabel } from "@/lib/flow";
 import { activeTemplate } from "@/store/templates";
 import { activeFilterCss } from "@/data/filters";
 import { FRAME_STYLE_BY_ID } from "@/data/frames";
@@ -29,6 +30,9 @@ export function PreviewScreen() {
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
   const template = activeTemplate();
+  // Back leads to whichever step actually preceded this one — the flow drops
+  // any the host switched off, so it's never a screen the guest didn't see.
+  const back = prevScreen("preview");
   const fit =
     layout.paperAspect < 1 ? "!w-auto h-full max-w-full" : "w-full max-h-full";
 
@@ -84,8 +88,8 @@ export function PreviewScreen() {
         transition={{ delay: 0.6 }}
         className="flex items-center gap-3"
       >
-        <Button variant="ghost" onClick={() => go(template ? "filter" : "editor", -1)}>
-          ← {template ? "Filter" : "Edit"}
+        <Button variant="ghost" onClick={() => go(back, -1)}>
+          ← {stepLabel(back)}
         </Button>
         <Button variant="primary" onClick={() => go("printing", 1)} className="px-10">
           Print it →

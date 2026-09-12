@@ -5,6 +5,7 @@ import { FRAME_STYLE_BY_ID } from "@/data/frames";
 import { resolveOverlaySrc } from "@/data/overlays";
 import { useSession } from "@/store/session";
 import { overlayOpts, useSettings } from "@/store/settings";
+import { nextScreen, prevScreen } from "@/lib/flow";
 import { activeTemplate } from "@/store/templates";
 import { ActionBar } from "@/components/shell/ActionBar";
 import { Receipt } from "@/components/Receipt";
@@ -200,9 +201,9 @@ export function FilterScreen() {
       </div>
 
       <ActionBar
-        onBack={() => go(template ? "review" : "frames", -1)}
-        primaryLabel={template ? "Preview" : "Add stickers"}
-        onPrimary={() => go(template ? "preview" : "editor", 1)}
+        onBack={() => go(prevScreen("filter"), -1)}
+        primaryLabel={nextScreen("filter") === "editor" ? "Add stickers" : "Preview"}
+        onPrimary={() => go(nextScreen("filter"), 1)}
       />
     </div>
   );

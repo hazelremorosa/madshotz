@@ -1,20 +1,16 @@
 import { motion } from "framer-motion";
-import { FLOW_STEPS, useSession } from "@/store/session";
-import { isTemplateMode } from "@/store/templates";
+import { useSession } from "@/store/session";
+import { useFlowSteps } from "@/lib/flow";
 import { cn } from "@/lib/cn";
-
-/** Steps a designed-template event skips (layout/frames/decorate are predetermined). */
-const TEMPLATE_SKIP = new Set(["layout", "frames", "editor"]);
 
 /** Top step indicator + tap-to-go-back on completed steps. */
 export function ProgressRail() {
   const screen = useSession((s) => s.screen);
   const go = useSession((s) => s.go);
 
-  // In template mode the flow is shorter, so the rail shows only its steps.
-  const steps = isTemplateMode()
-    ? FLOW_STEPS.filter((s) => !TEMPLATE_SKIP.has(s.id))
-    : FLOW_STEPS;
+  // Only the steps this session actually visits — a template event and the
+  // host's Guest steps toggles both shorten the flow.
+  const steps = useFlowSteps();
   const active = steps.findIndex((s) => s.id === screen);
   if (active < 0) return null; // hidden on boot/welcome/printing/qr
 

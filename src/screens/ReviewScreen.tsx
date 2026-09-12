@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { isTemplateMode } from "@/store/templates";
+import { nextScreen, prevScreen } from "@/lib/flow";
 import { activeFilterCss } from "@/data/filters";
 import { ActionBar } from "@/components/shell/ActionBar";
 
@@ -61,9 +61,9 @@ export function ReviewScreen() {
       </div>
 
       <ActionBar
-        onBack={() => go("capture", -1)}
+        onBack={() => go(prevScreen("review"), -1)}
         primaryLabel="Looks great"
-        onPrimary={() => go(isTemplateMode() ? "filter" : "frames", 1)}
+        onPrimary={() => go(nextScreen("review"), 1)}
       />
     </div>
   );

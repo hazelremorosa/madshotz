@@ -37,6 +37,7 @@ import {
   type EventRecord,
 } from "@/store/events";
 import { composeTemplate } from "@/lib/composeTemplate";
+import { useFlowSteps } from "@/lib/flow";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
 import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
@@ -258,7 +259,15 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </Row>
           </Section>
 
+          <GuestStepsSection />
+
           <Section emoji="🎨" title="Filters" note="Which looks guests can choose from.">
+            {!s.filtersEnabled && (
+              <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+                The filter step is switched off in Guest steps, so guests never see
+                this reel — every photo prints in {FILTERS[0].name.toLowerCase()}.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {FILTERS.map((f) => (
                 <Chip
@@ -905,8 +914,84 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
 
 // ── Custom stickers ─────────────────────────────────────────────────────────
 
+/**
+ * Which of the guest's own choices this booth offers.
+ *
+ * Every switch here hides a *choice*, never the result: with the shape picker
+ * off the receipt still has a photo shape, it's just the built-in default. When
+ * switching one off leaves a screen with nothing on it, the flow skips that
+ * screen — which is why the summary line below is worth showing: it's the only
+ * place the host can see what's actually left.
+ */
+function GuestStepsSection() {
+  const s = useSettings();
+  const set = useSettings((st) => st.set);
+  const steps = useFlowSteps();
+
+  return (
+    <Section
+      emoji="🎛️"
+      title="Guest steps"
+      note="Turn one off and guests skip it — they get the booth's default instead of a choice."
+    >
+      <Row
+        label="Photo shape"
+        hint="The rounded / circle / heart row on the Frames screen."
+      >
+        <Toggle
+          label="Photo shape"
+          checked={s.photoShapeEnabled}
+          onChange={(v) => set("photoShapeEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Frame design"
+        hint="The colour and pattern swatches on the Frames screen."
+      >
+        <Toggle
+          label="Frame design"
+          checked={s.frameStyleEnabled}
+          onChange={(v) => set("frameStyleEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Filters"
+        hint="The whole “Set the mood” screen — reel, intensity and smooth skin."
+      >
+        <Toggle
+          label="Filters"
+          checked={s.filtersEnabled}
+          onChange={(v) => set("filtersEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Stickers"
+        hint="The “Decorate” screen, where guests add stickers and text."
+      >
+        <Toggle
+          label="Stickers"
+          checked={s.stickersEnabled}
+          onChange={(v) => set("stickersEnabled", v)}
+        />
+      </Row>
+
+      <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+        Guests now see:{" "}
+        <span className="font-semibold text-cocoa">
+          {steps.map((st) => st.label).join(" → ")}
+        </span>
+      </p>
+      <p className="text-xs leading-snug text-cocoa/50">
+        The frame-overlay picker has its own switch in the event's design, under
+        Events.
+      </p>
+    </Section>
+  );
+}
+
 function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) {
   const stickers = useSettings((st) => st.customStickers);
+  const stickersEnabled = useSettings((st) => st.stickersEnabled);
   const addCustomStickers = useSettings((st) => st.addCustomStickers);
   const removeCustomSticker = useSettings((st) => st.removeCustomSticker);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -955,6 +1040,13 @@ function CustomStickersSection({ onToast }: { onToast: (msg: string) => void }) 
         hidden
         onChange={(e) => onFiles(e.target.files)}
       />
+
+      {!stickersEnabled && (
+        <p className="rounded-xl bg-cocoa/5 px-3 py-2 text-xs leading-snug text-cocoa/60">
+          The Decorate step is switched off in Guest steps, so nobody sees these
+          yet. Uploads are kept — turn stickers back on to offer them.
+        </p>
+      )}
 
       {stickers.length > 0 && (
         <div className="flex flex-wrap gap-2">

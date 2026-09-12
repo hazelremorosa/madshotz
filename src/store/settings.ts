@@ -188,6 +188,10 @@ export interface BoothConfig {
   enabledLayoutIds: string[];
   defaultLayoutId: string;
   enabledFilterIds: string[];
+  filtersEnabled: boolean;
+  photoShapeEnabled: boolean;
+  frameStyleEnabled: boolean;
+  stickersEnabled: boolean;
   defaultOverlayId: string;
   guestCanChangeOverlay: boolean;
   customFrames: CustomFrame[];
@@ -294,6 +298,24 @@ export interface SettingsState {
   enabledLayoutIds: string[];
   enabledFilterIds: string[];
   defaultLayoutId: string;
+
+  /**
+   * Guest-facing steps the host can switch off, one by one.
+   *
+   * These hide a *choice*, never the thing itself: with the shape picker off
+   * every receipt still has a photo shape, it's just the built-in default that
+   * nobody can change. When switching one off empties a whole screen, the flow
+   * skips that screen — see `lib/flow.ts`, the single place that decides which
+   * steps a session actually visits.
+   */
+  /** "Set the mood" — the filter reel, intensity and smooth-skin controls. */
+  filtersEnabled: boolean;
+  /** The photo-shape row on the Frames screen. */
+  photoShapeEnabled: boolean;
+  /** The frame colour/pattern row on the Frames screen. */
+  frameStyleEnabled: boolean;
+  /** "Decorate" — the sticker and text editor. */
+  stickersEnabled: boolean;
 
   // ── Frame overlay ─────────────────────────────────────────────────────────
   /** Host-uploaded PNG frame overlays, offered alongside the built-in ones. */
@@ -464,6 +486,13 @@ const DEFAULTS = {
   enabledLayoutIds: LAYOUTS.map((l) => l.id),
   enabledFilterIds: FILTERS.map((f) => f.id),
   defaultLayoutId: DEFAULT_LAYOUT.id,
+
+  // Every guest step starts ON — a fresh booth offers the whole flow, and a
+  // host only ever takes things away deliberately.
+  filtersEnabled: true,
+  photoShapeEnabled: true,
+  frameStyleEnabled: true,
+  stickersEnabled: true,
 
   customFrames: [] as CustomFrame[],
   defaultOverlayId: "none",
@@ -640,6 +669,10 @@ export const useSettings = create<SettingsState>()(
           "countdownLength",
           "guestCanSetCountdown",
           "flashFill",
+          "filtersEnabled",
+          "photoShapeEnabled",
+          "frameStyleEnabled",
+          "stickersEnabled",
           "guestCanChangeOverlay",
           "soundOn",
           "idleTimeoutSec",
@@ -802,6 +835,10 @@ export function snapshotConfig(): BoothConfig {
     enabledLayoutIds: [...s.enabledLayoutIds],
     defaultLayoutId: s.defaultLayoutId,
     enabledFilterIds: [...s.enabledFilterIds],
+    filtersEnabled: s.filtersEnabled,
+    photoShapeEnabled: s.photoShapeEnabled,
+    frameStyleEnabled: s.frameStyleEnabled,
+    stickersEnabled: s.stickersEnabled,
     defaultOverlayId: s.defaultOverlayId,
     guestCanChangeOverlay: s.guestCanChangeOverlay,
     customFrames: s.customFrames.map((f) => ({ ...f })),
