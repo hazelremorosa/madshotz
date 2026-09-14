@@ -1,7 +1,14 @@
 import { motion } from "framer-motion";
+import { useSettings } from "@/store/settings";
 
 /** Soft pastel gradient wash for the cute/light theme. */
 export function AmbientBackground() {
+  const brandPresetId = useSettings((state) => state.brandPresetId);
+
+  if (brandPresetId === "botanical" || brandPresetId === "bistro") {
+    return <div className="pointer-events-none absolute inset-0 bg-cream" />;
+  }
+
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden bg-cream">
       <motion.div

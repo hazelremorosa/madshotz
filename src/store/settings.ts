@@ -115,8 +115,14 @@ export const BRAND_PRESETS: BrandPreset[] = [
   {
     id: "botanical",
     name: "Botanical",
-    brand: ["52 211 153", "132 204 22", "20 184 166"],
-    stage: ["244 253 246", "227 248 233"],
+    brand: ["111 159 114", "166 198 161", "49 90 63"],
+    stage: ["241 245 239", "228 237 225"],
+  },
+  {
+    id: "bistro",
+    name: "Bistro",
+    brand: ["245 166 35", "220 78 56", "76 104 67"],
+    stage: ["248 244 235", "238 232 219"],
   },
   {
     id: "gold",
