@@ -4,7 +4,17 @@
  * A browser can only *enter* fullscreen from a user gesture, so the guard in
  * `useKioskLockdown` re-requests it on the next tap whenever the booth finds
  * itself windowed again (guest swiped the OS gesture, pressed Esc, etc.).
+ *
+ * In the Android app both primitives are native instead (immersive mode and
+ * FLAG_KEEP_SCREEN_ON) — see `lib/native/kiosk.ts`.
  */
+
+import { isAndroidApp } from "@/lib/native";
+import {
+  nativeIsImmersive,
+  nativeSetImmersive,
+  nativeSetKeepAwake,
+} from "@/lib/native/kiosk";
 
 type FsElement = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void>;
@@ -15,11 +25,13 @@ type FsDocument = Document & {
 };
 
 export function isFullscreen(): boolean {
+  if (isAndroidApp()) return nativeIsImmersive();
   const d = document as FsDocument;
   return Boolean(d.fullscreenElement || d.webkitFullscreenElement);
 }
 
 export async function enterFullscreen(): Promise<boolean> {
+  if (isAndroidApp()) return nativeSetImmersive(true);
   const el = document.documentElement as FsElement;
   try {
     if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: "hide" });
@@ -34,6 +46,10 @@ export async function enterFullscreen(): Promise<boolean> {
 }
 
 export async function exitFullscreen(): Promise<void> {
+  if (isAndroidApp()) {
+    await nativeSetImmersive(false);
+    return;
+  }
   const d = document as FsDocument;
   try {
     if (!isFullscreen()) return;
@@ -58,11 +74,13 @@ type WakeLockNavigator = Navigator & {
 let sentinel: Sentinel | null = null;
 
 export function wakeLockSupported(): boolean {
+  if (isAndroidApp()) return true;
   return Boolean((navigator as WakeLockNavigator).wakeLock);
 }
 
 /** Keeps the tablet's screen on. Safe to call repeatedly. */
 export async function acquireWakeLock(): Promise<boolean> {
+  if (isAndroidApp()) return nativeSetKeepAwake(true);
   const wl = (navigator as WakeLockNavigator).wakeLock;
   if (!wl) return false;
   if (sentinel && !sentinel.released) return true;
@@ -79,6 +97,10 @@ export async function acquireWakeLock(): Promise<boolean> {
 }
 
 export async function releaseWakeLock(): Promise<void> {
+  if (isAndroidApp()) {
+    await nativeSetKeepAwake(false);
+    return;
+  }
   try {
     await sentinel?.release();
   } catch {

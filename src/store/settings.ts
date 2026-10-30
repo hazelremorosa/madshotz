@@ -3,12 +3,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
-import {
-  DITHER_DEFAULTS,
-  type DitherMode,
-  type PrintRotation,
-} from "@/lib/dither";
-import type { RawBtFormat } from "@/lib/rawbt";
+import { DITHER_DEFAULTS, type DitherMode } from "@/lib/dither";
+import type {
+  PrintFit,
+  PrintQuality,
+  PrintRotate,
+  SavedPrinter,
+} from "@/lib/print/types";
 import {
   ACCENT_BY_CATEGORY,
   isKnownOverlay,
@@ -219,60 +220,6 @@ export interface EventPreset {
 /** Cap on saved presets (they can carry uploaded assets, so keep it sane). */
 export const MAX_PRESETS = 8;
 
-/**
- * Which browser API talks to the printer.
- *
- * Declared here rather than in `lib/printer.ts` so the settings store stays a
- * leaf — the printer module reads settings, not the other way round.
- */
-export type PrintTransport = "usb" | "bluetooth" | "rawbt" | "system";
-
-export const PRINT_TRANSPORTS: { value: PrintTransport; label: string }[] = [
-  { value: "usb", label: "USB" },
-  { value: "bluetooth", label: "BLE" },
-  { value: "rawbt", label: "RawBT" },
-  { value: "system", label: "System" },
-];
-
-/**
- * Which command language the printer is listening in.
- *
- * The RW403B's self-test reports `PCL: ZPL or TSPL`, so both are viable and only
- * the hardware can say which actually produces paper — hence a setting rather
- * than a constant.
- */
-export type PrinterLanguage = "tspl" | "zpl";
-
-/**
- * How BLE writes are issued.
- *
- * "Without response" is far faster but only works if the peripheral genuinely
- * honours it — when it doesn't, the write is queued and never completes, which
- * surfaces as a timeout rather than an error. Only the hardware can say which it
- * wants, so this is a setting.
- */
-export type BtWriteMode = "auto" | "response" | "noResponse";
-
-export const BT_WRITE_MODES: { value: BtWriteMode; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "response", label: "With reply" },
-  { value: "noResponse", label: "No reply" },
-];
-
-/**
- * Quarter-turn applied to the design before printing, or "auto" to let the
- * printer layer pick whichever orientation uses more of the label.
- */
-export type PrintRotationSetting = PrintRotation | "auto";
-
-export const PRINT_ROTATIONS: { value: PrintRotationSetting; label: string }[] =
-  [
-    { value: "auto", label: "Auto" },
-    { value: 0, label: "0°" },
-    { value: 90, label: "90°" },
-    { value: 270, label: "270°" },
-  ];
-
 export const COUNTDOWN_OPTIONS = [3, 5, 10];
 export const IDLE_OPTIONS = [45, 90, 180, 300];
 export const QR_RESET_OPTIONS = [15, 25, 45, 90];
@@ -364,81 +311,47 @@ export interface SettingsState {
   /**
    * Printer config lives here, alongside camera and PIN, and is deliberately
    * absent from `BoothConfig`: loading somebody else's saved event must never
-   * repoint this kiosk at hardware or a label size it hasn't got.
+   * repoint this kiosk at hardware or a paper size it hasn't got.
    */
+  /** Print each guest's photo when they tap "Print it". */
   printEnabled: boolean;
-  printTransport: PrintTransport;
-  /** Human label for the currently selected or preferred printer. */
-  printerDeviceName: string;
-  /** Stable id for the chosen printer in the current browser session. */
-  printerSelectionId: string;
-  /** TSPL or ZPL — this printer accepts either. See `PrinterLanguage`. */
-  printerLanguage: PrinterLanguage;
-  /** Print without anyone tapping anything, as soon as the composite exists. */
-  autoPrint: boolean;
+  /** The printer the host picked in Admin (see `lib/print`). */
+  printer: SavedPrinter | null;
   printCopies: number;
-  /** Which `LABEL_PRESETS` entry is selected, or "custom". */
-  labelPresetId: string;
-  labelWidthMm: number;
-  labelHeightMm: number;
-  /** 0 for continuous stock — see `LabelStock.gapMm`. */
-  labelGapMm: number;
-  /** Unprinted border in mm, kept off the edges where feed drift shows. */
+  /** Paper loaded — a PWG media keyword for photo printers, a preset for thermal. */
+  printPaperId: string;
+  /** "fit" letterboxes on white; "fill" covers the sheet and crops. */
+  printFit: PrintFit;
+  printRotate: PrintRotate;
+  /** Two copies side by side — a pair of 2×6 strips on one 4×6 sheet. */
+  printTwoUp: boolean;
+  /** Unprinted border in mm (ignored when printing borderless). */
   printMarginMm: number;
+
+  // Photo (IPP) printers
+  printBorderless: boolean;
+  printQuality: PrintQuality;
+  printColor: boolean;
+  /** IPP media-type keyword (e.g. photographic-glossy), or "" for the printer's default. */
+  printMediaType: string;
+  /** IPP media-source keyword (e.g. photo, main), or "" for the printer's default. */
+  printMediaSource: string;
+
+  // Thermal printers
   /** Burn intensity 0–15. */
   printDensity: number;
   /** Feed speed in ips, 1–6. */
   printSpeed: number;
-  /**
-   * "width" fills the stock width and lets a tall strip run past the label
-   * (right for continuous roll); "label" fits the whole design on one label.
-   */
-  printFit: "width" | "label";
-  /**
-   * Turns the design before printing. Label stock can't be rotated — the width
-   * is fixed across the head — so this is how a landscape event template gets to
-   * use a whole portrait label instead of a band across the top.
-   */
-  printRotate: PrintRotationSetting;
+  /** 0 for continuous stock — see `LabelStock.gapMm`. */
+  labelGapMm: number;
+  /** Cut after each receipt (ESC/POS printers with a cutter). */
+  printCut: boolean;
   ditherMode: DitherMode;
   ditherThreshold: number;
   printBrightness: number;
   printContrast: number;
   /** TSPL's bit polarity. Flip if the first test print comes out as a negative. */
   printInvertRaster: boolean;
-
-  // ── Printer pairing (remembered so the kiosk reconnects unattended) ───────
-  usbVendorId: number | null;
-  usbProductId: number | null;
-  /**
-   * Widen the USB chooser past class 7 — some printers report a vendor class.
-   *
-   * Leave OFF unless the printer genuinely doesn't appear: with the filter gone
-   * the chooser also lists devices that are not printers at all, and those accept
-   * a small write without complaint and never print anything.
-   */
-  usbAnyDevice: boolean;
-  /**
-   * Bytes per USB transfer. An oversized first write is the classic way to wedge
-   * one of these printers — it stalls before anything is acknowledged.
-   */
-  usbChunkSize: number;
-  /** Force a USB interface number, or -1 to auto-pick a printer-class one. */
-  usbInterface: number;
-  /** Force a bulk OUT endpoint number, or -1 to auto-pick. */
-  usbEndpoint: number;
-  btDeviceId: string | null;
-  /** BLE write size. 20 is the safe floor; raise once the real MTU is known. */
-  btChunkSize: number;
-  /** Optional UUID overrides, for when the real hardware reveals its service. */
-  btServiceUuid: string;
-  btCharUuid: string;
-  /** Which BLE write call to use — see `BtWriteMode`. */
-  btWriteMode: BtWriteMode;
-
-  // ── RawBT bridge ──────────────────────────────────────────────────────────
-  /** Which `rawbt:` payload encoding to use — see `RawBtFormat`. */
-  rawbtFormat: RawBtFormat;
 
   // ── Welcome screen ────────────────────────────────────────────────────────
   /**
@@ -550,59 +463,41 @@ const DEFAULTS = {
   idleTimeoutSec: 90,
   qrResetSec: 25,
 
-  // Printing starts OFF: a booth with no printer plugged in must behave exactly
-  // as it did before this feature existed.
+  // Printing starts OFF: a booth with no printer must behave exactly as it
+  // did before printing existed.
   printEnabled: false,
-  printTransport: "usb" as PrintTransport,
-  printerDeviceName: "",
-  printerSelectionId: "",
-  printerLanguage: "tspl" as PrinterLanguage,
-  autoPrint: true,
+  printer: null as SavedPrinter | null,
   printCopies: 1,
-  labelPresetId: "4x6",
-  labelWidthMm: 101.6,
-  labelHeightMm: 152.4,
-  // 1 mm — what the RW403B's own self-test label reports for Munbyn 4x6 stock.
-  labelGapMm: 1,
+  printPaperId: "na_index-4x6_4x6in",
+  printFit: "fit" as PrintFit,
+  // Auto: landscape templates turn a quarter onto portrait paper, nothing else
+  // moves, so this needs no host attention.
+  printRotate: "auto" as PrintRotate,
+  printTwoUp: false,
   printMarginMm: 2,
-  printFit: "label" as "width" | "label",
-  // Auto by default: the landscape event templates want a quarter-turn on
-  // portrait stock and nothing else does, so this needs no host attention.
-  printRotate: "auto" as PrintRotationSetting,
-  printInvertRaster: true,
 
-  // ── Fixed image calibration ───────────────────────────────────────────────
-  // These five drive every print but have NO Admin controls right now
-  // (`SHOW_CALIBRATION = false` in PrinterSection — owner's call, 2026-07-25).
-  // They are the sensible baseline, not placeholders:
-  //   density 8 / speed 4 — the conventional TSPL defaults this class of 203 dpi
-  //     head ships with; safe on any stock and a sane starting point for tuning.
-  //   Floyd–Steinberg — smoothest halftone for faces, which is what a photobooth
-  //     prints; measured ~3.9% ink on the standard receipt, a healthy figure for
-  //     mostly-bare paper.
-  //   exposure 128 — the neutral cut point.
-  //   brightness 0 — deliberately not positive; see DitherOpts.brightness, a
-  //     positive bias here prints blank labels.
-  // Restoring the controls needs only the flag flip; nothing here changes.
+  // Borderless is what guests expect from a photo print; it's only applied
+  // when the printer reports it can do it.
+  printBorderless: true,
+  printQuality: "high" as PrintQuality,
+  printColor: true,
+  printMediaType: "",
+  printMediaSource: "",
+
+  // Thermal baseline: density 8 / speed 4 are the conventional defaults for a
+  // 203 dpi head; Floyd–Steinberg is the smoothest halftone for faces;
+  // brightness stays 0 — a positive bias prints blank labels (see
+  // DitherOpts.brightness).
   printDensity: 8,
   printSpeed: 4,
+  // 1 mm — what Munbyn's own 4×6 stock reports on its self-test label.
+  labelGapMm: 1,
+  printCut: true,
   ditherMode: DITHER_DEFAULTS.mode,
   ditherThreshold: DITHER_DEFAULTS.threshold,
   printBrightness: DITHER_DEFAULTS.brightness,
   printContrast: DITHER_DEFAULTS.contrast,
-
-  usbVendorId: null as number | null,
-  usbProductId: null as number | null,
-  usbAnyDevice: false,
-  usbChunkSize: 4096,
-  usbInterface: -1,
-  usbEndpoint: -1,
-  btDeviceId: null as string | null,
-  btChunkSize: 20,
-  btServiceUuid: "",
-  btCharUuid: "",
-  btWriteMode: "auto" as BtWriteMode,
-  rawbtFormat: "base64Prefix" as RawBtFormat,
+  printInvertRaster: true,
 
   // Off until the host actually uploads something — turning it on with nothing
   // stored would blank the attract screen.
@@ -800,7 +695,7 @@ export const useSettings = create<SettingsState>()(
           : "none";
         return {
           ...current,
-          ...saved,
+          ...withoutLegacyPrinting(saved),
           enabledLayoutIds: layouts.length
             ? layouts
             : DEFAULTS.enabledLayoutIds,
@@ -814,6 +709,33 @@ export const useSettings = create<SettingsState>()(
     },
   ),
 );
+
+/**
+ * Settings from the WebUSB/Web Bluetooth printer stack, replaced by
+ * `lib/print`. Dropped on load so they don't linger in storage for ever.
+ */
+const LEGACY_PRINT_KEYS = [
+  "printTransport", "printerDeviceName", "printerSelectionId", "printerLanguage",
+  "autoPrint", "labelPresetId", "labelWidthMm", "labelHeightMm", "usbVendorId",
+  "usbProductId", "usbAnyDevice", "usbChunkSize", "usbInterface", "usbEndpoint",
+  "btDeviceId", "btChunkSize", "btServiceUuid", "btCharUuid", "btWriteMode",
+  "rawbtFormat",
+];
+
+function withoutLegacyPrinting(saved: Partial<SettingsState>): Partial<SettingsState> {
+  const out = { ...saved } as Record<string, unknown>;
+  for (const k of LEGACY_PRINT_KEYS) delete out[k];
+  // The old fit values were "width" | "label"; both map to letterboxing.
+  if (out.printFit !== "fit" && out.printFit !== "fill") delete out.printFit;
+  if (out.printRotate !== "auto" && out.printRotate !== 0 && out.printRotate !== 90)
+    delete out.printRotate;
+  try {
+    localStorage.removeItem("booth_printer_config");
+  } catch {
+    /* storage unavailable — nothing to clean */
+  }
+  return out as Partial<SettingsState>;
+}
 
 // ── Derived helpers (safe to call outside React) ─────────────────────────────
 

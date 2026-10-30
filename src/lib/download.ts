@@ -13,12 +13,25 @@
  *   - Site settings → Automatic downloads → Allow, because the page is a
  *     long-lived SPA and Chrome prompts from the second unattended download on.
  * `AUTO_DOWNLOAD_SETUP` is that guidance, shown to the host in Admin.
+ *
+ * The Android app has no downloads at all — the WebView ignores `<a download>` —
+ * so there the file goes straight into the gallery through `BoothPlugin.kt`,
+ * with no browser settings involved and no guidance needed.
  */
 
-export const AUTO_DOWNLOAD_SETUP =
-  "In Chrome, set Downloads → “Ask where to save each file” OFF and allow " +
-  "Automatic downloads for this site — otherwise a save dialog blocks the " +
-  "next guest.";
+import { isAndroidApp } from "@/lib/native";
+import { ANDROID_ARCHIVE_FOLDER, saveImage } from "@/lib/native/output";
+
+export const AUTO_DOWNLOAD_SETUP = isAndroidApp()
+  ? ""
+  : "In Chrome, set Downloads → “Ask where to save each file” OFF and allow " +
+    "Automatic downloads for this site — otherwise a save dialog blocks the " +
+    "next guest.";
+
+/** Where saved photos end up, for the Admin copy. */
+export const ARCHIVE_LOCATION = isAndroidApp()
+  ? `${ANDROID_ARCHIVE_FOLDER} folder (Gallery)`
+  : "Downloads folder";
 
 /** `20260912-1435` — sorts chronologically in a folder listing. */
 function stamp(d: Date = new Date()): string {
@@ -41,12 +54,25 @@ export function compositeFilename(code: string, at?: Date): string {
 }
 
 /**
- * Writes a data URL to the device's Downloads folder.
+ * Writes a data URL to the device's Downloads folder (the gallery, in the
+ * Android app).
  *
- * Returns false rather than throwing: a failed archive save must never take the
- * QR screen down with it, since the guest's actual copy is the upload.
+ * Resolves false rather than throwing: a failed archive save must never take
+ * the QR screen down with it, since the guest's actual copy is the upload.
  */
-export function saveToDevice(dataUrl: string, filename: string): boolean {
+export async function saveToDevice(
+  dataUrl: string,
+  filename: string,
+): Promise<boolean> {
+  if (isAndroidApp()) {
+    try {
+      await saveImage(dataUrl, filename);
+      return true;
+    } catch (e) {
+      console.warn("[Mad Shots] Could not save to the gallery.", e);
+      return false;
+    }
+  }
   try {
     const a = document.createElement("a");
     a.href = dataUrl;

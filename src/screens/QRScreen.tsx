@@ -55,7 +55,7 @@ export function QRScreen() {
   useEffect(() => {
     if (!autoDownload || !composite || saved.current) return;
     saved.current = true;
-    setArchived(saveToDevice(composite, compositeFilename(code)));
+    saveToDevice(composite, compositeFilename(code)).then(setArchived);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoDownload, composite]);
 

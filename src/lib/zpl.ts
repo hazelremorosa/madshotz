@@ -2,13 +2,8 @@ import type { Bitmap1 } from "@/lib/dither";
 import { mmToDots, type JobOpts } from "@/lib/tspl";
 
 /**
- * ZPL command encoding — the RW403B's other language.
- *
- * Its own self-test label reports `PCL: ZPL or TSPL`, so both are supported. This
- * exists because TSPL demonstrably produced nothing on real hardware while the
- * printer was otherwise proven healthy (it prints its own config label, FEED is
- * calibrated, and the vendor app prints), which makes the second language the
- * obvious thing to try rather than a hypothetical.
+ * ZPL command encoding — Zebra's label language, also spoken by the RW403B
+ * (its self-test reports `PCL: ZPL or TSPL`) and most other label printers.
  *
  * Two differences from `tspl.ts` matter:
  *
@@ -31,18 +26,6 @@ function clampInt(v: number, lo: number, hi: number): number {
 }
 
 const ascii = new TextEncoder();
-
-/** ZPL's built-in fonts are ASCII, and `^` and `~` are command introducers. */
-function toAscii(text: string): string {
-  return text
-    .replace(/[♥♡]/g, "<3")
-    .replace(/[""]/g, '"')
-    .replace(/['']/g, "'")
-    .replace(/[–—]/g, "-")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[^\x20-\x7e]/g, "")
-    .replace(/[\^~]/g, "-");
-}
 
 /**
  * Label setup shared by every job.
@@ -97,46 +80,5 @@ export function zplImageJob(bm: Bitmap1, o: JobOpts): Uint8Array {
       `^PQ${clampInt(o.copies, 1, 9)}`,
       "^XZ",
     ].join("\r\n") + "\r\n",
-  );
-}
-
-/**
- * A tiny text label for commissioning — a few hundred bytes, so it proves the
- * link and the geometry in about a second even over Bluetooth.
- */
-export function zplTestJob(o: JobOpts, lines: string[]): Uint8Array {
-  const headDots = mmToDots(o.stock.widthMm);
-  const tallDots = mmToDots(o.stock.heightMm);
-  const inset = mmToDots(3);
-
-  const body: string[] = [
-    ...preamble(o),
-    // A border proves the printable area matches the declared stock.
-    `^FO${inset},${inset}^GB${headDots - inset * 2},${tallDots - inset * 2},4^FS`,
-  ];
-
-  let y = inset + mmToDots(4);
-  lines.forEach((line, i) => {
-    const h = i === 0 ? 60 : 30;
-    body.push(`^FO${inset + mmToDots(3)},${y}^A0N,${h},${h}^FD${toAscii(line)}^FS`);
-    y += h + mmToDots(2);
-  });
-
-  body.push(`^PQ${clampInt(o.copies, 1, 9)}`, "^XZ");
-  return ascii.encode(body.join("\r\n") + "\r\n");
-}
-
-/**
- * Probe payloads for ZPL.
- *
- * `~WC` is the decisive one: it tells the printer to print its **own**
- * configuration label. If that produces paper, ZPL is arriving and being parsed,
- * and switching the language setting is the whole fix. It uses none of our
- * geometry, so it can't be defeated by a wrong label size or gap.
- */
-export function zplProbeBytes(id: "config" | "label"): Uint8Array {
-  if (id === "config") return ascii.encode("~WC\r\n");
-  return ascii.encode(
-    "^XA^LH0,0^MNY^FO40,40^A0N,60,60^FDZPL TEST^FS^PQ1^XZ\r\n",
   );
 }

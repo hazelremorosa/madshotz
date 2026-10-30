@@ -14,9 +14,7 @@ import { composeReceipt } from "@/lib/compose";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { formatDate } from "@/lib/date";
 import { sfx } from "@/lib/sound";
-import { loadPrinterConfig, printerDimensions } from "@/lib/printerConfig";
-import { injectPrintStyles } from "@/lib/systemPrint";
-import { usePrinter } from "@/lib/printer";
+import { usePrinter } from "@/lib/print/engine";
 
 const CAPTIONS = [
   "Warming up the paper…",
@@ -43,7 +41,7 @@ export function PrintingScreen() {
   const setComposite = useSession((s) => s.setComposite);
   const soundOn = useSession((s) => s.soundOn);
   const go = useSession((s) => s.go);
-  const printImage = usePrinter((s) => s.printImage);
+  const printImage = usePrinter((s) => s.print);
   const isPrintedSession = useRef(false);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameStyle = FRAME_STYLE_BY_ID(frameStyleId);
@@ -82,28 +80,13 @@ export function PrintingScreen() {
       .then((url) => {
         if (!alive) return;
         setComposite(url);
-        const config = loadPrinterConfig();
-        const dimensions = printerDimensions(config);
-        injectPrintStyles(dimensions.widthMm, dimensions.heightMm);
+        // Once per session (StrictMode runs this effect twice in dev). Fire and
+        // forget: a photo printer can take a minute, and the guest moves on to
+        // the QR screen meanwhile — PrintStatus follows the job there.
         if (!isPrintedSession.current) {
           isPrintedSession.current = true;
-          const settings = useSettings.getState();
-          settings.set("printerDeviceName", config.targetPrinterName);
-          // The final-screen Print action is an explicit print request. Keep
-          // the existing transport, but do not let its legacy enable gate
-          // silently discard this request.
-          settings.set("printEnabled", true);
-          window.requestAnimationFrame(() => {
-            if (!alive) return;
-            window.setTimeout(() => {
-              if (!alive) return;
-              void printImage(url).catch((error: unknown) => {
-                console.error("[Print Failure]:", error);
-              });
-            }, 500);
-          });
+          void printImage(url);
         }
-
       })
       .catch(() => undefined);
 

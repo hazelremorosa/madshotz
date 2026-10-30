@@ -1,0 +1,85 @@
+# Builds the signed Android APK in CI.
+#
+# Runs on demand (Actions → Android release → Run workflow) and on version tags
+# (`git tag v1.0.1 && git push --tags`), where it also attaches the APK to a
+# GitHub Release.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   base64 -w0 ~/.madshots/mad-shots-release.jks
+#   ANDROID_KEYSTORE_PASSWORD the keystore password
+#   ANDROID_KEY_ALIAS         madshots (unless you chose another)
+#   VITE_DELIVERY_BASE        the Cloudflare Worker URL from your .env
+name: Android release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MADSHOTS_NDK_VERSION: 28.2.13676358
+      MADSHOTS_BUILD_TOOLS: 36.1.0
+      MADSHOTS_PLATFORM: android-37.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;$MADSHOTS_PLATFORM" \
+            "build-tools;$MADSHOTS_BUILD_TOOLS" "ndk;$MADSHOTS_NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$MADSHOTS_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "MADSHOTS_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed APK
+        env:
+          MADSHOTS_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MADSHOTS_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          VITE_DELIVERY_BASE: ${{ secrets.VITE_DELIVERY_BASE }}
+        run: bash scripts/android/build-release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mad-shots-apk
+          path: release/*
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.mad_shots" parent="Theme.Material3.Light.NoActionBar">
+        <!-- The booth's cream stage, so the strips behind the system bars and the
+             first frame before the WebView paints match the page. -->
+        <item name="android:windowBackground">@color/booth_stage</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+    </style>
+</resources>

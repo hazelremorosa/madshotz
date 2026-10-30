@@ -1,7 +1,8 @@
 /**
- * TSPL command encoding for the Munbyn RealWriter 403B.
+ * TSPL command encoding — the TSC label language (Munbyn RW403B, TSC, Xprinter
+ * label models, and most "4×6 shipping label" printers).
  *
- * The 403B speaks **TSPL** (the TSC label language), *not* ESC/POS. That matters
+ * TSPL is *not* ESC/POS. That matters
  * a lot: ESC/POS is the receipt-printer language every "web thermal printing"
  * snippet on the internet uses, and none of it will work here. TSPL is
  * line-oriented ASCII — one command per line, CRLF-terminated — with `BITMAP`
@@ -32,11 +33,6 @@ export function mmToDots(mm: number, dpi = PRINTER_DPI): number {
   return Math.round((mm / MM_PER_INCH) * dpi);
 }
 
-/** Printer dots → millimetres. */
-export function dotsToMm(dots: number, dpi = PRINTER_DPI): number {
-  return (dots / dpi) * MM_PER_INCH;
-}
-
 /** A roll of stock the host has loaded. */
 export interface LabelStock {
   /** Label width in mm. The 403B head covers roughly 40–108 mm. */
@@ -50,41 +46,6 @@ export interface LabelStock {
    */
   gapMm: number;
 }
-
-/** Stock sizes worth one tap, including the two that fit our layouts. */
-export const LABEL_PRESETS: {
-  id: string;
-  label: string;
-  hint: string;
-  stock: LabelStock;
-}[] = [
-  {
-    id: "4x6",
-    label: '4 × 6"',
-    // 1 mm, not the 3 mm guessed originally: the RW403B's own self-test label
-    // reports "Label Length 152mm / GAP Length 1mm" for Munbyn's own stock.
-    hint: "The standard shipping label the printer ships with (1 mm gap).",
-    stock: { widthMm: 101.6, heightMm: 152.4, gapMm: 1 },
-  },
-  {
-    id: "2x6",
-    label: '2 × 6"',
-    hint: "Classic photobooth strip — matches the Quad layout exactly.",
-    stock: { widthMm: 50.8, heightMm: 152.4, gapMm: 1 },
-  },
-  {
-    id: "3x2",
-    label: '3 × 2"',
-    hint: "Small product label — fits the Single layout.",
-    stock: { widthMm: 76.2, heightMm: 50.8, gapMm: 1 },
-  },
-  {
-    id: "cont80",
-    label: "80 mm continuous",
-    hint: "Gapless roll — the printer cuts nothing, so length is up to you.",
-    stock: { widthMm: 80, heightMm: 150, gapMm: 0 },
-  },
-];
 
 export interface JobOpts {
   stock: LabelStock;
@@ -106,31 +67,8 @@ export interface JobOpts {
   invertRaster?: boolean;
 }
 
-export const JOB_DEFAULTS: Omit<JobOpts, "stock"> = {
-  density: 8,
-  speed: 4,
-  copies: 1,
-  invertRaster: true,
-};
-
 const ascii = new TextEncoder();
 
-/**
- * TSPL has no string escaping to speak of, and the built-in fonts are ASCII
- * only — a stray "♥" would arrive as multi-byte UTF-8 and print as garbage.
- */
-function toAscii(text: string): string {
-  return text
-    .replace(/[♥♡]/g, "<3")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[–—]/g, "-")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[^\x20-\x7e]/g, "")
-    .replace(/"/g, "'");
-}
-
-/** Joins ASCII lines and binary blobs into one buffer to hand the transport. */
 function concat(parts: (string | Uint8Array)[]): Uint8Array {
   const bufs = parts.map((p) => (typeof p === "string" ? ascii.encode(p) : p));
   const total = bufs.reduce((n, b) => n + b.length, 0);
@@ -200,153 +138,4 @@ function invert(data: Uint8Array): Uint8Array {
   const out = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i++) out[i] = data[i] ^ 0xff;
   return out;
-}
-
-/**
- * A tiny text-and-boxes label for commissioning.
- *
- * Deliberately not an image: it is a few hundred bytes rather than ~120 KB, so
- * it proves the connection and the stock geometry in about a second even over
- * Bluetooth. If this prints and a photo doesn't, the problem is the raster path,
- * not the link.
- */
-export function tsplTestJob(o: JobOpts, lines: string[]): Uint8Array {
-  const headDots = mmToDots(o.stock.widthMm);
-  const tallDots = mmToDots(o.stock.heightMm);
-  const inset = mmToDots(3);
-
-  const body: string[] = [
-    ...preamble(o),
-    // A border proves the printable area matches the stock the host declared.
-    `BOX ${inset},${inset},${headDots - inset},${tallDots - inset},4`,
-  ];
-
-  let y = inset + mmToDots(5);
-  lines.forEach((line, i) => {
-    // Font "3" is a legible built-in bitmap face; the first line prints double
-    // size as a headline.
-    const scale = i === 0 ? 2 : 1;
-    body.push(
-      `TEXT ${inset + mmToDots(3)},${y},"3",0,${scale},${scale},"${toAscii(line)}"`,
-    );
-    y += mmToDots(i === 0 ? 9 : 5);
-  });
-
-  // A greyscale ladder: the fastest way to find the right DENSITY for a stock.
-  const swatchY = Math.min(y + mmToDots(4), tallDots - inset - mmToDots(12));
-  const swatchW = Math.floor((headDots - inset * 2 - mmToDots(6)) / 6);
-  for (let i = 0; i < 6; i++) {
-    const bx = inset + mmToDots(3) + i * (swatchW + mmToDots(1));
-    // Progressively taller bars read as a coarse density ramp on paper.
-    body.push(`BAR ${bx},${swatchY},${swatchW},${mmToDots(2 + i)}`);
-  }
-
-  body.push(`PRINT ${clampInt(o.copies, 1, 9)},1`);
-  return concat([body.join("\r\n") + "\r\n"]);
-}
-
-/**
- * How wide, in dots, the raster should be rendered for a given stock — i.e. the
- * number to hand `imageToBitmap1` as `widthDots`.
- *
- * Clamped to whole bytes because TSPL positions bitmaps on byte boundaries, and
- * to the head width because dots past it are simply dropped.
- */
-export function rasterWidthForStock(stock: LabelStock, marginMm = 2): number {
-  const usable = Math.max(8, stock.widthMm - marginMm * 2);
-  return Math.floor(mmToDots(usable) / 8) * 8;
-}
-
-/** Dot height available on the stock, for fitting a whole design onto one label. */
-export function rasterHeightForStock(stock: LabelStock, marginMm = 2): number {
-  return Math.max(8, mmToDots(Math.max(4, stock.heightMm - marginMm * 2)));
-}
-
-// ── Protocol probes ─────────────────────────────────────────────────────────
-//
-// A job the printer accepts and silently discards is indistinguishable, from the
-// browser's side, from one it prints — `transferOut` reports success either way.
-// Each probe below is the smallest payload that proves one specific thing, so
-// "nothing comes out" can be narrowed down by observation instead of guesswork:
-//
-//   feed / formFeed  — does the motor move? If yes, TSPL is being parsed and the
-//                      fault is in our job content, not the language or the link.
-//   selfTest         — the printer prints its OWN config, using none of our
-//                      geometry or raster. Rules both in or out entirely.
-//   reset            — clears a printer sulking in an error state.
-//   minimalLabel     — TSPL stripped to the four commands that matter, in inch
-//                      units, in case DENSITY/SPEED/DIRECTION/REFERENCE or the
-//                      mm syntax is what's being rejected.
-//   escposHello      — if THIS prints and no TSPL does, the printer isn't
-//                      speaking TSPL and the encoder is simply the wrong one.
-//   statusQuery      — expects bytes back. Any reply proves the print engine is
-//                      listening rather than just buffering.
-
-export type ProbeId =
-  | "feed"
-  | "feedLf"
-  | "feedBare"
-  | "formFeed"
-  | "selfTest"
-  | "reset"
-  | "minimalLabel"
-  | "zplConfig"
-  | "zplLabel"
-  | "escposHello"
-  | "statusQuery";
-
-export const PROBES: { id: ProbeId; label: string; expect: string }[] = [
-  { id: "feed", label: "Feed", expect: "Paper should advance ~1 inch" },
-  // Line-ending and framing variants. TSPL is specified as CRLF, but firmware in
-  // this bracket is inconsistent, and a parser that ignores a command it can't
-  // frame looks exactly like one that never received it.
-  { id: "feedLf", label: "Feed (LF)", expect: "Same, with \n line endings only" },
-  { id: "feedBare", label: "Feed (bare)", expect: "Same, with no leading blank line" },
-  { id: "formFeed", label: "Form feed", expect: "Should advance to the next label" },
-  { id: "selfTest", label: "Self test", expect: "Printer prints its own settings" },
-  // Not plain "Reset" — the Danger zone in the same tab has a "Reset" that wipes
-  // every booth setting, and these sit inches apart.
-  { id: "reset", label: "Reset printer", expect: "Clears an error state; may re-calibrate" },
-  { id: "minimalLabel", label: "Minimal TSPL", expect: "A label reading TEST" },
-  // The printer's self-test reports "PCL: ZPL or TSPL", so ZPL is a real second
-  // option — and `~WC` uses none of our geometry, which makes it the cleanest
-  // single test of whether commands are arriving and being understood at all.
-  { id: "zplConfig", label: "ZPL config", expect: "Printer prints its config — proves ZPL works" },
-  { id: "zplLabel", label: "ZPL label", expect: "A label reading ZPL TEST" },
-  { id: "escposHello", label: "ESC/POS", expect: "Only prints if it is NOT TSPL" },
-  { id: "statusQuery", label: "Read status", expect: "Bytes come back" },
-];
-
-/** Builds a probe payload. Each is well under 100 bytes, so it can't stall. */
-export function probeBytes(id: Exclude<ProbeId, "zplConfig" | "zplLabel">): Uint8Array {
-  switch (id) {
-    // The leading CRLF flushes any half-finished command left in the buffer.
-    case "feed":
-      return concat(["\r\nFEED 200\r\n"]);
-    case "feedLf":
-      return concat(["\nFEED 200\n"]);
-    case "feedBare":
-      return concat(["FEED 200\r\n"]);
-    case "formFeed":
-      return concat(["\r\nFORMFEED\r\n"]);
-    case "selfTest":
-      return concat(["\r\nSELFTEST\r\n"]);
-    case "reset":
-      return concat(["\r\n~!@\r\n"]);
-    case "minimalLabel":
-      // Inch units, no optional commands, PRINT with a single argument.
-      return concat([
-        '\r\nSIZE 4,6\r\nGAP 0,0\r\nCLS\r\nTEXT 40,40,"3",0,2,2,"TEST"\r\nPRINT 1\r\n',
-      ]);
-    case "escposHello":
-      // ESC @ (init), text, feed, GS V 0 (cut/eject where supported).
-      return concat(["\x1b@", "MAD SHOTS ESC/POS TEST\n\n\n\n", "\x1dV\x00"]);
-    case "statusQuery":
-      return concat(["\x1b!?"]);
-  }
-}
-
-/** Whether a probe expects a reply worth reading back. */
-export function probeReadsBack(id: ProbeId): boolean {
-  return id === "statusQuery";
 }

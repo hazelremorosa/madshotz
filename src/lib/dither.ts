@@ -157,23 +157,6 @@ function toGrayscale(
   return gray;
 }
 
-/**
- * Natural pixel size of an image source.
- *
- * The print layer needs this *before* rasterising so it can work out a dot size
- * that fits the label without distorting the strip — `imageToBitmap1` stretches
- * to whatever size it is given, so aspect has to be settled beforehand.
- */
-export async function imageSize(
-  src: string,
-): Promise<{ width: number; height: number }> {
-  const img = await loadImage(src);
-  return {
-    width: img.naturalWidth || img.width,
-    height: img.naturalHeight || img.height,
-  };
-}
-
 /** Allocates an all-white bitmap of the given dot size. */
 function blankBitmap(width: number, height: number): Bitmap1 {
   const bytesPerRow = Math.ceil(width / 8);
@@ -336,15 +319,3 @@ export function bitmap1ToDataUrl(bm: Bitmap1): string {
   return canvas.toDataURL("image/png");
 }
 
-/** Share of dots that will actually be burned — a rough "is this too dark?" gauge. */
-export function inkCoverage(bm: Bitmap1): number {
-  let bits = 0;
-  for (let i = 0; i < bm.data.length; i++) {
-    let b = bm.data[i];
-    while (b) {
-      bits += b & 1;
-      b >>= 1;
-    }
-  }
-  return bits / (bm.width * bm.height);
-}

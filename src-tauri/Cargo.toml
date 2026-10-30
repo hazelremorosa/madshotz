@@ -1,0 +1,34 @@
+[package]
+name = "mad-shots"
+version = "1.0.0"
+description = "Mad Shots photobooth kiosk"
+authors = ["Mad Shots"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the desktop binary
+# (cargo can't have both named `mad_shots` on Windows).
+name = "mad_shots_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.4", features = [] }
+tauri-plugin-log = "2"
+
+[profile.release]
+# Small, fast native lib for the APK. The heavy lifting is in the webview, so
+# the Rust side gains nothing from unwinding or debug info.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

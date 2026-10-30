@@ -82,7 +82,7 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 | SMS delivery | Text the link to a phone number. | ⭐⭐ | M 🔌 |
 | One-tap social share | Instagram Story / Facebook / TikTok with pre-filled caption + hashtag. | ⭐⭐⭐ | M |
 | **Event gallery page** | A single link/QR showing ALL photos from the event (host & guests love this). | ⭐⭐⭐ | L 🔌 |
-| ~~Real printing~~ | **SHIPPED** — Munbyn RealWriter 403B over WebUSB/Web Bluetooth. See "Printing" below. | ⭐⭐⭐ | ✅ |
+| ~~Real printing~~ | **SHIPPED** — any printer from the Android app: silent Wi-Fi (IPP) photo printing, plus ESC/POS / TSPL / ZPL thermal over USB, Bluetooth or the network. See README → "Printing". | ⭐⭐⭐ | ✅ |
 | Zip / "download all" | Grab a whole session at once. | ⭐ | S |
 | Thumbnail/resized variants | Faster QR pages via Cloudflare Images transforms. | ⭐ | M 🔌 |
 
@@ -107,7 +107,7 @@ and a **PIN-locked Admin panel + kiosk lockdown** (see 🛠️ Admin & Operation
 | Session analytics | Count, popular layouts/filters, busy times. | ⭐⭐ | M 🔌 |
 | Live slideshow screen | Second display looping the event's photos. | ⭐⭐ | M 🔌 |
 | Multi-language | Tagalog / English toggle (or more). | ⭐⭐ | M |
-| Low-supplies warnings | Paper/ink alerts (once printing exists). | ⭐ | S |
+| ~~Low-supplies warnings~~ | **SHIPPED** for Wi-Fi printers — Admin shows ink levels and paper/jam/cover problems; the guest line says "Waiting: Out of paper" while a job is stuck. | ⭐ | ✅ |
 
 ## ✨ Engagement & "Wow"
 

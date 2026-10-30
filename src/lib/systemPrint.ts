@@ -1,49 +1,24 @@
 import type { LabelStock } from "@/lib/tspl";
-
-export function injectPrintStyles(widthMm: number, heightMm: number): void {
-  let style = document.getElementById("dynamic-booth-print-style");
-  if (!style) {
-    style = document.createElement("style");
-    style.id = "dynamic-booth-print-style";
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
-    @media print {
-      body * { visibility: hidden !important; }
-      #printable-receipt, #printable-receipt * { visibility: visible !important; }
-      #printable-receipt { position: fixed !important; left: 0 !important; top: 0 !important; width: ${widthMm}mm !important; height: ${heightMm}mm !important; margin: 0 !important; padding: 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; box-shadow: none !important; }
-    }
-  `;
-}
+import { isAndroidApp } from "@/lib/native";
+import { printImage } from "@/lib/native/output";
 
 /**
- * Printing through the operating system's own print path.
+ * Printing through the operating system's own print dialog.
  *
- * The other transports speak the printer's language directly. This one doesn't
- * speak any: it hands an **image** to whatever driver or print service the OS has,
- * and lets that do the halftoning, media handling and language. That's the point —
- * it's the only route that works without knowing anything about TSPL.
+ * The other routes (see `lib/print`) talk to the printer directly. This one
+ * hands an **image** to whatever driver or print service the OS has and lets it
+ * do the rest — the catch-all for a printer nothing else can reach, and the only
+ * printing a browser tab (the PWA) can do at all.
  *
- * Two things make it worth having:
- *
- * - **RawBT registers as an Android print service**, so this reaches the printer
- *   over Bluetooth Classic via the system print sheet.
- * - **On a Windows kiosk** with Munbyn's driver installed, Chrome's
- *   `--kiosk-printing` flag makes the same call completely silent.
- *
- * The trade-off is that it's the only transport we can't make silent on Android:
- * the system print sheet always appears. It also can't report success — once the
- * sheet is up, the page has no idea what happened.
- */
-
-/**
- * Prints a composite image via the OS.
+ * It's never silent: Android and Chrome both always show the dialog.
  *
  * Rendered in an isolated iframe rather than the live page. Printing the document
  * itself would drag in the whole booth UI — the KioskFrame transform, glass
  * blurs, fixed overlays — and a print stylesheet that has to suppress all of it
  * is far more fragile than a blank document containing one image.
+ *
+ * The Android app's WebView ignores `window.print()` outright, so there the
+ * image goes to Android's PrintManager instead, with the page size preset.
  */
 export function systemPrintImage(
   dataUrl: string,
@@ -52,6 +27,18 @@ export function systemPrintImage(
   copies = 1,
 ): Promise<void> {
   if (activePrint) return activePrint;
+
+  if (isAndroidApp()) {
+    activePrint = printImage(dataUrl, {
+      widthMm: stock.widthMm,
+      heightMm: stock.heightMm,
+      marginMm,
+      copies: Math.max(1, Math.min(5, Math.round(copies))),
+    }).finally(() => {
+      activePrint = null;
+    });
+    return activePrint;
+  }
 
   const printPromise = new Promise<void>((resolve, reject) => {
     if (!dataUrl) {
@@ -187,51 +174,3 @@ export function systemPrintImage(
 
 let activePrint: Promise<void> | null = null;
 
-/**
- * A small test image for the OS print path.
- *
- * The other transports test themselves with a few hundred bytes of TSPL, which
- * this route can't use — it only ever sends pictures. So it gets a picture:
- * generated at the label's aspect with a border, so a wrong media size or a
- * scaled-to-A4 mistake is obvious at a glance.
- */
-export function systemTestImage(stock: LabelStock): string {
-  const W = 800;
-  const H = Math.max(80, Math.round((W * stock.heightMm) / stock.widthMm));
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 6;
-  ctx.strokeRect(12, 12, W - 24, H - 24);
-
-  ctx.fillStyle = "#000000";
-  ctx.textAlign = "center";
-  ctx.font = "bold 64px system-ui, sans-serif";
-  ctx.fillText("MAD SHOTS", W / 2, 120);
-  ctx.font = "32px system-ui, sans-serif";
-  ctx.fillText(`${stock.widthMm} x ${stock.heightMm} mm`, W / 2, 180);
-  ctx.fillText("system print test", W / 2, 230);
-
-  // Corner ticks: if the driver scales or crops, these stop touching the border.
-  ctx.lineWidth = 4;
-  for (const [x, y] of [
-    [12, 12],
-    [W - 12, 12],
-    [12, H - 12],
-    [W - 12, H - 12],
-  ]) {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + (x < W / 2 ? 60 : -60), y);
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y + (y < H / 2 ? 60 : -60));
-    ctx.stroke();
-  }
-  return canvas.toDataURL("image/png");
-}

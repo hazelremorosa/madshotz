@@ -38,7 +38,11 @@ import {
 } from "@/store/events";
 import { composeTemplate } from "@/lib/composeTemplate";
 import { useFlowSteps } from "@/lib/flow";
-import { AUTO_DOWNLOAD_SETUP, compositeFilename } from "@/lib/download";
+import {
+  ARCHIVE_LOCATION,
+  AUTO_DOWNLOAD_SETUP,
+  compositeFilename,
+} from "@/lib/download";
 import {
   clearWelcomeMedia,
   saveWelcomeMedia,
@@ -46,7 +50,7 @@ import {
 } from "@/store/welcome";
 import { TemplateSlotEditor } from "@/components/admin/TemplateSlotEditor";
 import { DateField } from "@/components/admin/DateField";
-import { PrinterSetupSection } from "@/components/admin/PrinterSetupSection";
+import { PrinterSection } from "@/components/admin/PrinterSection";
 import { PREVIEW_PHOTO } from "@/lib/previewComposite";
 import type { EventTemplate } from "@/types";
 import {
@@ -336,7 +340,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
 
               <KioskSection onToast={toast} />
 
-              <PrinterSetupSection onToast={toast} />
+              <PrinterSection onToast={toast} />
 
           <Section
             emoji="💾"
@@ -347,7 +351,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               label="Auto-save each photo"
               hint={
                 s.autoDownload
-                  ? "On — every finished photo is written to this device's Downloads folder."
+                  ? `On — every finished photo is written to this device's ${ARCHIVE_LOCATION}.`
                   : "Off — nothing is written to this device. Guests still get their photo by QR or Share."
               }
             >
@@ -360,7 +364,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 }}
               />
             </Row>
-            {s.autoDownload && (
+            {s.autoDownload && AUTO_DOWNLOAD_SETUP && (
               <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
                 ⚠️ {AUTO_DOWNLOAD_SETUP}
               </p>

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Chip,
   NumberField,
   Row,
   Section,
@@ -10,1085 +9,744 @@ import {
   TextField,
   Toggle,
 } from "@/components/admin/controls";
-import {
-  DITHER_MODES,
-  bitmap1ToDataUrl,
-  inkCoverage,
-  type DitherMode,
-} from "@/lib/dither";
-import {
-  LABEL_PRESETS,
-  PROBES,
-  dotsToMm,
-  mmToDots,
-  rasterWidthForStock,
-} from "@/lib/tspl";
-import {
-  applyLabelPreset,
-  bluetoothSupported,
-  currentStock,
-  listAvailablePrinters,
-  rasterFor,
-  transportSupported,
-  usbSupported,
-  usePrinter,
-  type PrintStatus,
-} from "@/lib/printer";
-import { buildPreviewComposite } from "@/lib/previewComposite";
-import { RAWBT_FORMATS, type RawBtFormat } from "@/lib/rawbt";
-import {
-  BT_WRITE_MODES,
-  PRINT_ROTATIONS,
-  PRINT_TRANSPORTS,
-  useSettings,
-  type BtWriteMode,
-  type PrinterLanguage,
-  type PrintRotationSetting,
-  type PrintTransport,
-} from "@/store/settings";
 import { cn } from "@/lib/cn";
+import { DITHER_MODES, type DitherMode } from "@/lib/dither";
+import { isAndroidApp } from "@/lib/native";
+import {
+  blockingReasons,
+  describeReason,
+  renderPreview,
+  SYSTEM_PRINTER,
+  usePrinter,
+} from "@/lib/print/engine";
+import { LANGUAGES, papersFor, prettyKeyword } from "@/lib/print/paper";
+import type {
+  Connection,
+  FoundPrinter,
+  PrinterHealth,
+  PrinterLanguage,
+  PrintFit,
+  PrintQuality,
+  PrintRotate,
+} from "@/lib/print/types";
+import { buildPreviewComposite } from "@/lib/previewComposite";
+import { useSession } from "@/store/session";
+import { useSettings } from "@/store/settings";
 
-/**
- * Admin → System → Printing.
- *
- * This panel is doing more work than a settings form normally would, because the
- * printer is a *direct thermal* head and nothing about its output can be
- * predicted from the screen. The two things that earn their place:
- *
- * - **The 1-bit preview** renders through the exact same `rasterFor()` the print
- *   job uses, so the host tunes exposure against the real halftone instead of
- *   burning a roll of labels to find out.
- * - **The diagnostics readout** exposes the discovered USB endpoint / BLE UUIDs
- *   and the payload size. Those are the facts nobody can know until the printer
- *   is physically in hand, and surfacing them means commissioning it is a
- *   settings change rather than a code change and a redeploy.
- */
-
-/**
- * Hides the image-calibration controls (halftone, exposure, brightness,
- * contrast, density, speed) and the 1-bit preview.
- *
- * Owner's call (2026-07-25): run on fixed sensible values for now and decide
- * later whether these come back. Flip to `true` to restore the whole group —
- * the controls and the settings behind them are untouched, so nothing needs
- * rebuilding, and the values keep driving every print either way.
- *
- * The fixed values live in `DEFAULTS` in `store/settings.ts` (Floyd–Steinberg,
- * exposure 128, brightness 0, contrast 25) and `JOB_DEFAULTS` in `lib/tspl.ts`
- * (density 8, speed 4 — the conventional TSPL baseline this class of head ships
- * with). Same pattern as `ALLOW_FRAME_UPLOAD` in `AdminPanel`.
- */
-const SHOW_CALIBRATION = false;
-
-/**
- * Everything worth knowing about the current printer setup, as plain text.
- *
- * Exists because diagnosing a printer remotely means asking someone to scroll to
- * the bottom of a long panel and photograph a small grey box, and to read out
- * numbers that matter to the byte. One tap and a paste is far less lossy — and it
- * captures the settings around the binding, which a photo of the binding alone
- * leaves out.
- */
-/** `0x0483`-style, or "-" when nothing has been paired yet. */
-function hex4o(n: number | null): string {
-  return n === null ? "-" : `0x${n.toString(16).padStart(4, "0")}`;
-}
-
-function diagnosticsReport(
-  s: ReturnType<typeof useSettings.getState>,
-  printer: ReturnType<typeof usePrinter.getState>,
-): string {
-  const stock = currentStock();
-  const bound = printer.status !== "offline" && !!printer.detail;
-  const lines = [
-    "MAD SHOTS — printer diagnostics",
-    new Date().toISOString(),
-    // A report taken while disconnected has no binding in it, and that is not
-    // obvious from a wall of settings — it cost a full round trip to discover.
-    ...(bound
-      ? []
-      : [
-          "",
-          "*** NOT CONNECTED — there is no binding in this report. ***",
-          '*** Plug in the OTG cable, tap "Choose printer", then copy again. ***',
-        ]),
-    `UA: ${navigator.userAgent}`,
-    `WebUSB: ${usbSupported() ? "yes" : "no"}   Web Bluetooth: ${bluetoothSupported() ? "yes" : "no"}`,
-    "",
-    `status:    ${printer.status}`,
-    `device:    ${printer.deviceName || "(none)"}`,
-    `binding:   ${printer.detail || "(not bound)"}`,
-  ];
-  if (printer.warning) lines.push(`warning:   ${printer.warning}`);
-  if (printer.lastError) lines.push(`lastError: ${printer.lastError}`);
-
-  lines.push(
-    "",
-    `transport: ${s.printTransport}   language: ${s.printerLanguage}`,
-    `enabled:   ${s.printEnabled}   autoPrint: ${s.autoPrint}   copies: ${s.printCopies}`,
-    `stock:     ${stock.widthMm} x ${stock.heightMm} mm, gap ${stock.gapMm} mm, margin ${s.printMarginMm} mm (${s.labelPresetId})`,
-    `fit:       ${s.printFit}   rotation: ${s.printRotate}`,
-    `geometry:  head ${mmToDots(stock.widthMm)} dots, raster ${rasterWidthForStock(stock, s.printMarginMm)} dots`,
-    `burn:      density ${s.printDensity}   speed ${s.printSpeed}`,
-    `halftone:  ${s.ditherMode} exposure ${s.ditherThreshold} brightness ${s.printBrightness} contrast ${s.printContrast} invertRaster ${s.printInvertRaster}`,
-    `usb:       interface ${s.usbInterface}, endpoint ${s.usbEndpoint}, chunk ${s.usbChunkSize}B, showAllDevices ${s.usbAnyDevice}`,
-    // Hex, to match the binding line above — comparing 0x0483 against 1155 is
-    // needless friction when the whole point is spotting a wrong device.
-    `usb ids:   ${hex4o(s.usbVendorId)}:${hex4o(s.usbProductId)}`,
-    `bluetooth: chunk ${s.btChunkSize}B, service "${s.btServiceUuid}", char "${s.btCharUuid}", device ${s.btDeviceId ?? "-"}`,
-    `last job:  ${printer.lastJobBytes ? `${(printer.lastJobBytes / 1024).toFixed(1)} KB` : "-"}   raster ${printer.lastRaster || "-"}`,
-  );
-  if (printer.probeResult)
-    lines.push("", "probe / sweep:", printer.probeResult);
-  return lines.join("\n");
-}
-
-/** One line on what each route actually is, since they differ fundamentally. */
-const TRANSPORT_HINT: Record<PrintTransport, string> = {
-  usb: "Direct over an OTG cable. Fastest, but the browser must be able to claim the printer interface.",
-  bluetooth:
-    "Direct over Bluetooth Low Energy. Slower, and only works if the printer accepts print data on a GATT characteristic.",
-  rawbt:
-    "Via the RawBT Android app, which reaches the printer over Bluetooth Classic — the same route the vendor app uses. Needs RawBT installed and paired.",
-  system:
-    "Hands the photo to the OS print dialog. The driver or Android print service does the halftoning, so nothing here needs to know TSPL.",
+const CONNECTION_LABEL: Record<Connection, { icon: string; label: string }> = {
+  ipp: { icon: "📶", label: "Wi-Fi" },
+  socket: { icon: "📶", label: "Wi-Fi (raw)" },
+  usb: { icon: "🔌", label: "USB" },
+  bluetooth: { icon: "🔵", label: "Bluetooth" },
+  ble: { icon: "🔵", label: "Bluetooth LE" },
+  system: { icon: "🗂️", label: "Print dialog" },
 };
 
-const STATUS_LABEL: Record<PrintStatus, string> = {
-  offline: "Not connected",
-  connecting: "Connecting…",
-  ready: "Ready",
-  printing: "Printing…",
-  error: "Problem",
-};
+const selectClass =
+  "w-full rounded-xl border border-cocoa/15 bg-white/80 px-3 py-2 text-sm text-cocoa outline-none focus:border-brand/50";
 
-const STATUS_TONE: Record<PrintStatus, string> = {
-  offline: "bg-cocoa/10 text-cocoa/50",
-  connecting: "bg-amber-100 text-amber-700",
-  ready: "bg-emerald-100 text-emerald-700",
-  printing: "bg-sky-100 text-sky-700",
-  error: "bg-red-100 text-red-600",
-};
-
+/**
+ * Admin → System → Printer. Find a printer, pick it, set the paper, test.
+ *
+ * Everything here is a setting in `store/settings.ts`; the engine in
+ * `lib/print/engine.ts` reads them at print time.
+ */
 export function PrinterSection({
   onToast,
 }: {
-  onToast: (message: string) => void;
+  onToast: (msg: string) => void;
 }) {
   const s = useSettings();
-  const set = useSettings((st) => st.set);
-  const printer = usePrinter();
-  /**
-   * Holds the report when the clipboard is unavailable. Android restricts
-   * clipboard writes in some contexts, and a diagnostics button that silently
-   * does nothing would be worse than no button — so fall back to showing the
-   * text for a long-press copy.
-   */
-  const [reportText, setReportText] = useState("");
+  const set = s.set;
+  const printer = s.printer;
+  const engine = usePrinter();
+  const [finding, setFinding] = useState(!printer);
 
-  const supported = transportSupported(s.printTransport);
-  const stock = currentStock();
-  const headDots = mmToDots(stock.widthMm);
-  const rasterDots = rasterWidthForStock(stock, s.printMarginMm);
-  const [availablePrinters, setAvailablePrinters] = useState<
-    Awaited<ReturnType<typeof listAvailablePrinters>>
-  >([]);
-
+  // Keep the health readout live while Admin is open.
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      const printers = await listAvailablePrinters();
-      if (active) setAvailablePrinters(printers);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [s.printTransport, s.printerDeviceName, s.printerSelectionId]);
+    if (!printer) return;
+    void usePrinter.getState().refreshHealth();
+    const iv = window.setInterval(
+      () => void usePrinter.getState().refreshHealth(),
+      10_000,
+    );
+    return () => window.clearInterval(iv);
+  }, [printer?.id]);
+
+  const pick = async (p: FoundPrinter) => {
+    if (await engine.choose(p)) {
+      setFinding(false);
+      onToast(`Printer set: ${p.name}`);
+    }
+  };
+
+  const test = async () => {
+    onToast("Test print sent");
+    const ok = await engine.printTest();
+    onToast(
+      ok ? "Test print done" : "Test print failed — see the message below",
+    );
+  };
 
   return (
     <Section
       emoji="🖨️"
-      title="Printer & Output Settings"
-      note="Choose the printer, paper, copies, and whether approved photos print automatically. Settings persist on this booth. Prints are black-and-white halftone; the colour copy goes out by QR."
+      title="Printer"
+      note={
+        isAndroidApp()
+          ? "Wi-Fi photo printers print silently — no dialog. Thermal printers work over USB, Bluetooth or the network."
+          : "In the browser, printing opens the print dialog. Install the Android app for silent Wi-Fi, USB and Bluetooth printing."
+      }
     >
       <Row
-        label="Print physical copies"
-        hint="Off = the booth behaves exactly as it did before, animation only."
+        label="Print each guest's photo"
+        hint={
+          printer
+            ? "Sent when the guest taps “Print it”."
+            : "Choose a printer below first. Off: the booth is digital-only (QR)."
+        }
       >
         <Toggle
+          label="Print each guest's photo"
           checked={s.printEnabled}
           onChange={(v) => set("printEnabled", v)}
-          label="Enable printing"
         />
       </Row>
 
-      {s.printEnabled && (
+      {printer && !finding && (
+        <PrinterCard
+          name={printer.name}
+          connection={printer.connection}
+          detail={printer.detail}
+          health={engine.health}
+          onTest={() => void test()}
+          onChange={() => setFinding(true)}
+          busy={
+            engine.status === "preparing" ||
+            engine.status === "sending" ||
+            engine.status === "printing"
+          }
+        />
+      )}
+
+      {(finding || !printer) && (
+        <Finder
+          onPick={(p) => void pick(p)}
+          onCancel={printer ? () => setFinding(false) : undefined}
+        />
+      )}
+
+      {engine.message && engine.status !== "idle" && (
+        <p
+          className={cn(
+            "rounded-xl px-3 py-2 text-xs leading-snug",
+            engine.status === "error"
+              ? "bg-amber-50 text-amber-800"
+              : "bg-white/60 text-cocoa/70",
+          )}
+        >
+          {engine.status === "error" ? "⚠️ " : "🖨️ "}
+          {engine.message}
+          {engine.status === "sending" &&
+          engine.progress > 0 &&
+          engine.progress < 1
+            ? ` ${Math.round(engine.progress * 100)}%`
+            : ""}
+        </p>
+      )}
+
+      {printer && !finding && (
         <>
-          {/* ── Connection ───────────────────────────────────────────────── */}
-          <Row label="Connection" stacked>
-            <Segmented<PrintTransport>
-              options={PRINT_TRANSPORTS}
-              value={s.printTransport}
-              onChange={(v) => set("printTransport", v)}
-            />
-          </Row>
-
-          <p className="-mt-1 text-xs leading-snug text-cocoa/50">
-            {TRANSPORT_HINT[s.printTransport]}
-          </p>
-
-          <Row
-            label="Printer selection"
-            hint="Pick the available printer, defaulting to the Epson L15150 when present."
-            stacked
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={s.printerSelectionId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  const nextPrinter = availablePrinters.find(
-                    (p) => p.id === nextId,
-                  );
-                  set("printerSelectionId", nextId);
-                  set("printerDeviceName", nextPrinter?.name ?? "");
-                }}
-                className="min-w-0 flex-1 rounded-xl border border-cocoa/15 bg-white/80 px-3 py-2 text-sm text-cocoa outline-none focus:border-brand/50"
-              >
-                {availablePrinters.length === 0 ? (
-                  <option value="">No printers detected</option>
-                ) : (
-                  availablePrinters.map((printer) => (
-                    <option key={printer.id} value={printer.id}>
-                      {printer.name}
-                    </option>
-                  ))
-                )}
-              </select>
-              <SmallButton
-                onClick={async () => {
-                  const printers = await listAvailablePrinters();
-                  setAvailablePrinters(printers);
-                  if (!s.printerSelectionId && printers[0]) {
-                    set("printerSelectionId", printers[0].id);
-                    set("printerDeviceName", printers[0].name);
-                  }
-                }}
-              >
-                Refresh
-              </SmallButton>
-            </div>
-          </Row>
-
-          {!supported &&
-            (s.printTransport === "usb" ||
-              s.printTransport === "bluetooth") && (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-700">
-                {s.printTransport === "usb" ? "WebUSB" : "Web Bluetooth"} isn't
-                available in this browser. Use Chrome on Android or desktop —
-                Safari and iOS support neither, so an iPad can't print.
-                {!usbSupported() &&
-                  !bluetoothSupported() &&
-                  " Neither API is present here."}
-              </p>
-            )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider",
-                STATUS_TONE[printer.status],
-              )}
-            >
-              {STATUS_LABEL[printer.status]}
-            </span>
-            {printer.deviceName && (
-              <span className="min-w-0 truncate text-xs text-cocoa/60">
-                {printer.deviceName}
-              </span>
-            )}
-            <span className="grow" />
-            {printer.status === "ready" || printer.status === "printing" ? (
-              <SmallButton onClick={() => void printer.disconnect()}>
-                Disconnect
-              </SmallButton>
-            ) : (
-              <SmallButton
-                tone="brand"
-                disabled={!supported || printer.status === "connecting"}
-                onClick={async () => {
-                  const ok = await printer.connect();
-                  onToast(ok ? "Printer connected" : "Not connected");
-                }}
-              >
-                {s.printTransport === "usb" ? "Choose printer" : "Pair printer"}
-              </SmallButton>
-            )}
-          </div>
-
-          {printer.status === "printing" && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-cocoa/10">
-              <div
-                className="h-full brand-fill transition-[width]"
-                style={{ width: `${Math.round(printer.progress * 100)}%` }}
-              />
-            </div>
-          )}
-
-          {printer.lastError && (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-xs leading-snug text-red-600">
-              {printer.lastError}
-            </p>
-          )}
-
-          {/* A non-printer-class binding is the difference between "sent" and
-              "printed", so it needs to be impossible to miss. */}
-          {printer.warning && (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
-              ⚠️ {printer.warning}
-            </p>
-          )}
-
-          {s.printTransport === "bluetooth" && (
-            <p className="text-xs leading-snug text-cocoa/50">
-              Some thermal printers advertise two Bluetooth names. Pick the one
-              ending <span className="font-semibold">-BLE</span> — a
-              <span className="font-semibold"> -SPP</span> or
-              <span className="font-semibold"> -COM</span> entry is Bluetooth
-              Classic, which no web page can reach.
-            </p>
-          )}
-
-          {s.printTransport === "rawbt" && (
-            <>
-              <Row
-                label="Payload format"
-                hint="How the job is encoded into the rawbt: URL. RawBT's accepted form isn't documented clearly — try these in order."
-                stacked
-              >
-                <Segmented<RawBtFormat>
-                  options={RAWBT_FORMATS.map((f) => ({
-                    value: f.value,
-                    label: f.label,
-                  }))}
-                  value={s.rawbtFormat}
-                  onChange={(v) => set("rawbtFormat", v)}
-                />
-              </Row>
-              <p className="-mt-1 text-xs leading-snug text-cocoa/50">
-                {RAWBT_FORMATS.find((f) => f.value === s.rawbtFormat)?.hint}
-              </p>
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
-                RawBT can't report back, so “sent” only means the job reached
-                Android — never that it printed. Pair the printer inside the
-                RawBT app first, and note that a photo may exceed what an
-                Android intent will carry.
-              </p>
-            </>
-          )}
-
-          <Row
-            label="Command language"
-            hint="This printer's self-test reports “ZPL or TSPL”. Only the hardware can say which one actually produces paper — if TSPL prints nothing, try ZPL."
-            stacked
-          >
-            <Segmented<PrinterLanguage>
-              options={[
-                { value: "tspl", label: "TSPL" },
-                { value: "zpl", label: "ZPL" },
-              ]}
-              value={s.printerLanguage}
-              onChange={(v) => set("printerLanguage", v)}
-            />
-          </Row>
-
-          <Row
-            label="Print automatically"
-            hint="Print as soon as the composite is ready, with nothing to tap."
-          >
-            <Toggle
-              checked={s.autoPrint}
-              onChange={(v) => set("autoPrint", v)}
-              label="Auto print"
-            />
-          </Row>
-
-          <Row label="Copies" hint="Identical labels per session.">
-            <NumberField
-              label="Copies"
-              value={s.printCopies}
-              onChange={(v) => set("printCopies", v)}
-              min={1}
-              max={9}
-            />
-          </Row>
-
-          {/* ── Stock ────────────────────────────────────────────────────── */}
-          <Row label="Label stock" hint="What's loaded in the printer." stacked>
-            <div className="flex flex-wrap gap-1.5">
-              {LABEL_PRESETS.map((p) => (
-                <Chip
-                  key={p.id}
-                  active={s.labelPresetId === p.id}
-                  onClick={() => applyLabelPreset(p.id)}
-                >
-                  {p.label}
-                </Chip>
-              ))}
-              <Chip
-                active={s.labelPresetId === "custom"}
-                onClick={() => set("labelPresetId", "custom")}
-              >
-                Custom
-              </Chip>
-            </div>
-          </Row>
-
-          <p className="-mt-1 text-xs leading-snug text-cocoa/50">
-            {LABEL_PRESETS.find((p) => p.id === s.labelPresetId)?.hint ??
-              "Measure the stock yourself — width is across the head, height is the feed direction."}
-          </p>
-
-          <Row
-            label="Width"
-            hint="Across the head. This model covers 40–108 mm."
-          >
-            <NumberField
-              label="Label width"
-              value={s.labelWidthMm}
-              onChange={(v) => {
-                set("labelWidthMm", v);
-                set("labelPresetId", "custom");
-              }}
-              min={20}
-              max={110}
-              step={0.1}
-              suffix="mm"
-            />
-          </Row>
-
-          <Row label="Height" hint="Feed direction.">
-            <NumberField
-              label="Label height"
-              value={s.labelHeightMm}
-              onChange={(v) => {
-                set("labelHeightMm", v);
-                set("labelPresetId", "custom");
-              }}
-              min={20}
-              max={300}
-              step={0.1}
-              suffix="mm"
-            />
-          </Row>
-
-          <Row
-            label="Gap"
-            hint="Space between die-cut labels. Set 0 for continuous roll — a wrong gap makes it feed blanks."
-          >
-            <NumberField
-              label="Label gap"
-              value={s.labelGapMm}
-              onChange={(v) => {
-                set("labelGapMm", v);
-                set("labelPresetId", "custom");
-              }}
-              min={0}
-              max={10}
-              step={0.5}
-              suffix="mm"
-            />
-          </Row>
-
-          <Row
-            label="Margin"
-            hint="Unprinted border — feed drift shows at the edges."
-          >
-            <NumberField
-              label="Print margin"
-              value={s.printMarginMm}
-              onChange={(v) => set("printMarginMm", v)}
-              min={0}
-              max={10}
-              step={0.5}
-              suffix="mm"
-            />
-          </Row>
-
-          <Row
-            label="Fit"
-            hint="Whole design on one label, or fill the width and let a long strip run on (continuous roll)."
-            stacked
-          >
-            <Segmented<"label" | "width">
-              options={[
-                { value: "label", label: "Fit the label" },
-                { value: "width", label: "Fill the width" },
-              ]}
-              value={s.printFit}
-              onChange={(v) => set("printFit", v)}
-            />
-          </Row>
-
-          <Row
-            label="Rotation"
-            hint="Auto turns a landscape design a quarter-turn so it fills portrait stock instead of a band across the top."
-            stacked
-          >
-            <Segmented<PrintRotationSetting>
-              options={PRINT_ROTATIONS}
-              value={s.printRotate}
-              onChange={(v) => set("printRotate", v)}
-            />
-          </Row>
-
-          {/* ── Calibration (hidden — see SHOW_CALIBRATION) ───────────────── */}
-          {SHOW_CALIBRATION && (
-            <>
-              <Row
-                label="Halftone"
-                hint="How grey is faked with black-or-nothing dots."
-                stacked
-              >
-                <div className="flex flex-wrap gap-1.5">
-                  {DITHER_MODES.map((m) => (
-                    <Chip
-                      key={m.id}
-                      active={s.ditherMode === m.id}
-                      onClick={() => set("ditherMode", m.id as DitherMode)}
-                    >
-                      {m.label}
-                    </Chip>
-                  ))}
-                </div>
-              </Row>
-
-              <p className="-mt-1 text-xs leading-snug text-cocoa/50">
-                {DITHER_MODES.find((m) => m.id === s.ditherMode)?.hint}
-              </p>
-
-              <Row
-                label="Exposure"
-                hint="Lower = more black. Start here if prints look muddy."
-                stacked
-              >
-                <Slider
-                  label="Dither threshold"
-                  value={s.ditherThreshold}
-                  onChange={(v) => set("ditherThreshold", v)}
-                  min={40}
-                  max={215}
-                  display={String(s.ditherThreshold)}
-                />
-              </Row>
-
-              {/* Redundant with Exposure — the two are algebraically the same
-                  knob with opposite signs. Kept only so the control matches the
-                  setting; pick one if this section ever comes back. */}
-              <Row label="Brightness" stacked>
-                <Slider
-                  label="Print brightness"
-                  value={s.printBrightness}
-                  onChange={(v) => set("printBrightness", v)}
-                  min={-60}
-                  max={60}
-                  display={`${s.printBrightness > 0 ? "+" : ""}${s.printBrightness}`}
-                />
-              </Row>
-
-              <Row
-                label="Contrast"
-                hint="Photos need a push to survive halftoning."
-                stacked
-              >
-                <Slider
-                  label="Print contrast"
-                  value={s.printContrast}
-                  onChange={(v) => set("printContrast", v)}
-                  min={-40}
-                  max={80}
-                  display={`${s.printContrast > 0 ? "+" : ""}${s.printContrast}`}
-                />
-              </Row>
-
-              <Row
-                label="Density"
-                hint="Burn intensity. Higher is darker but slower and wears the head."
-                stacked
-              >
-                <Slider
-                  label="Print density"
-                  value={s.printDensity}
-                  onChange={(v) => set("printDensity", v)}
-                  min={0}
-                  max={15}
-                  display={String(s.printDensity)}
-                />
-              </Row>
-
-              <Row
-                label="Speed"
-                hint="Inches per second. Slower prints darker."
-                stacked
-              >
-                <Slider
-                  label="Print speed"
-                  value={s.printSpeed}
-                  onChange={(v) => set("printSpeed", v)}
-                  min={1}
-                  max={6}
-                  display={`${s.printSpeed} ips`}
-                />
-              </Row>
-
-              <PrintPreview />
-            </>
-          )}
-
-          {/* ── Commissioning ────────────────────────────────────────────── */}
-          <Row
-            label="Test print"
-            hint="Text, a border and a density ladder — a few hundred bytes, so it's quick even over Bluetooth."
-          >
+          <PaperSettings />
+          {printer.language !== "image" && <ThermalSettings />}
+          <PrintPreview />
+          <div className="flex justify-end">
             <SmallButton
-              tone="brand"
-              disabled={printer.status === "printing"}
-              onClick={async () => {
-                const ok = await printer.printTest();
-                onToast(
-                  ok
-                    ? "Sent — if no label comes out, check the readout below"
-                    : "Test print failed",
-                );
-              }}
+              tone="danger"
+              onClick={() => void engine.forget().then(() => setFinding(true))}
             >
-              Print test
+              Remove printer
             </SmallButton>
-          </Row>
-
-          <Row
-            label="Print a sample photo"
-            hint="A full receipt with placeholder photos — the real raster path, end to end."
-          >
-            <SmallButton
-              disabled={printer.status === "printing"}
-              onClick={async () => {
-                const url = await buildPreviewComposite();
-                const ok = await printer.printImage(url);
-                onToast(
-                  ok
-                    ? "Sent — if no label comes out, check the readout below"
-                    : "Print failed",
-                );
-              }}
-            >
-              {/* Matches the row label. Calling it "Print preview" while the row
-                  said "Print a sample photo" read as two different things. */}
-              Print photo
-            </SmallButton>
-          </Row>
-
-          <Row
-            label="Negative image"
-            hint="If the first test print comes out inverted, flip this and nothing else."
-          >
-            <Toggle
-              checked={s.printInvertRaster}
-              onChange={(v) => set("printInvertRaster", v)}
-              label="Invert raster bits"
-            />
-          </Row>
-
-          {s.printTransport === "usb" && (
-            <Row
-              label="Show all USB devices"
-              hint="Only if the printer doesn't appear. Without the filter the chooser also lists non-printers, which accept a job and print nothing."
-            >
-              <Toggle
-                checked={s.usbAnyDevice}
-                onChange={(v) => set("usbAnyDevice", v)}
-                label="Show all USB devices"
-              />
-            </Row>
-          )}
-
-          {s.printTransport === "usb" && (
-            <>
-              <Row
-                label="Chunk size"
-                hint="Bytes per USB transfer. Lower it to 1024 or 512 if a job stalls before any progress."
-              >
-                <NumberField
-                  label="USB chunk size"
-                  value={s.usbChunkSize}
-                  onChange={(v) => set("usbChunkSize", v)}
-                  min={64}
-                  max={16384}
-                  step={512}
-                  suffix="B"
-                />
-              </Row>
-              <Row
-                label="Force interface"
-                hint="-1 auto-picks a printer-class interface. Set a number from the readout below only if that picks wrong."
-              >
-                <NumberField
-                  label="USB interface number"
-                  value={s.usbInterface}
-                  onChange={(v) => set("usbInterface", v)}
-                  min={-1}
-                  max={16}
-                />
-              </Row>
-              <Row
-                label="Force endpoint"
-                hint="-1 auto-picks the first bulk OUT."
-              >
-                <NumberField
-                  label="USB endpoint number"
-                  value={s.usbEndpoint}
-                  onChange={(v) => set("usbEndpoint", v)}
-                  min={-1}
-                  max={16}
-                />
-              </Row>
-            </>
-          )}
-
-          {s.printTransport === "bluetooth" && (
-            <>
-              <Row
-                label="Chunk size"
-                hint="Bytes per BLE write. 20 is the safe floor; raise it to speed prints up if it holds."
-              >
-                <NumberField
-                  label="Bluetooth chunk size"
-                  value={s.btChunkSize}
-                  onChange={(v) => set("btChunkSize", v)}
-                  min={20}
-                  max={512}
-                  step={20}
-                  suffix="B"
-                />
-              </Row>
-              <Row
-                label="Write mode"
-                hint="“No reply” is much faster, but a printer that only pretends to support it queues the write for ever — which shows up as a timeout. Try “With reply” if writes time out."
-                stacked
-              >
-                <Segmented<BtWriteMode>
-                  options={BT_WRITE_MODES}
-                  value={s.btWriteMode}
-                  onChange={(v) => set("btWriteMode", v)}
-                />
-              </Row>
-              <Row
-                label="Service UUID"
-                hint="Only if pairing reports no services. Find it in chrome://bluetooth-internals (Start Scan → tap the printer → Inspect). Short form like FF20 is fine."
-                stacked
-              >
-                <TextField
-                  value={s.btServiceUuid}
-                  onChange={(v) => set("btServiceUuid", v.trim())}
-                  placeholder="FF20  or  0000ff20-0000-1000-8000-00805f9b34fb"
-                  maxLength={40}
-                  mono
-                />
-              </Row>
-              <Row
-                label="Characteristic UUID"
-                hint="Optional — pins the write channel if several are exposed."
-                stacked
-              >
-                <TextField
-                  value={s.btCharUuid}
-                  onChange={(v) => set("btCharUuid", v.trim())}
-                  placeholder="auto"
-                  maxLength={40}
-                  mono
-                />
-              </Row>
-            </>
-          )}
-
-          {/* ── Protocol probe ───────────────────────────────────────────── */}
-          <div className="flex flex-col gap-2 rounded-xl border border-cocoa/10 bg-white/40 p-3">
-            <div className="text-sm font-semibold text-cocoa">
-              Protocol probe
-            </div>
-            <p className="text-xs leading-snug text-cocoa/55">
-              If a job reports “sent” but nothing comes out, the printer is
-              accepting bytes and discarding them — from here that looks
-              identical to success. Tap these in order and watch the hardware;
-              each one isolates a different layer.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {PROBES.map((probe) => (
-                <SmallButton
-                  key={probe.id}
-                  disabled={printer.status === "printing"}
-                  onClick={async () => {
-                    const msg = await printer.runProbe(probe.id);
-                    onToast(`${probe.label}: ${msg}`);
-                  }}
-                >
-                  {probe.label}
-                </SmallButton>
-              ))}
-            </div>
-            <ul className="flex flex-col gap-0.5 text-[11px] leading-snug text-cocoa/45">
-              {PROBES.map((probe) => (
-                <li key={probe.id}>
-                  <span className="font-semibold">{probe.label}</span> —{" "}
-                  {probe.expect}
-                </li>
-              ))}
-            </ul>
-            {s.printTransport === "usb" && (
-              <div className="rounded-lg border border-cocoa/15 bg-white/60 p-2.5">
-                <div className="text-xs font-bold text-cocoa">
-                  Ask the printer directly
-                </div>
-                <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
-                  These go over the USB control pipe, not the data endpoint, so
-                  the printer has to answer even if it's ignoring print jobs.{" "}
-                  <span className="font-semibold">Device ID</span> reports the
-                  command sets its firmware actually supports — that settles
-                  TSPL-vs-ZPL from the printer's own mouth.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <SmallButton
-                    tone="brand"
-                    disabled={printer.status === "printing"}
-                    onClick={async () =>
-                      onToast(await printer.askPrinter("deviceId"))
-                    }
-                  >
-                    Device ID
-                  </SmallButton>
-                  <SmallButton
-                    disabled={printer.status === "printing"}
-                    onClick={async () =>
-                      onToast(await printer.askPrinter("portStatus"))
-                    }
-                  >
-                    Printer status
-                  </SmallButton>
-                  <SmallButton
-                    disabled={printer.status === "printing"}
-                    onClick={async () =>
-                      onToast(await printer.askPrinter("softReset"))
-                    }
-                  >
-                    Soft reset
-                  </SmallButton>
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-lg border border-cocoa/15 bg-white/60 p-2.5">
-              <div className="text-xs font-bold text-cocoa">
-                Nothing moved at all?
-              </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-cocoa/55">
-                Then the bytes aren't reaching the print engine, and the channel
-                is wrong rather than the language. This writes a feed command to
-                every interface and endpoint the device exposes, pausing about 2
-                seconds on each. Watch the printer and note which step moves the
-                paper.
-              </p>
-              <div className="mt-2">
-                <SmallButton
-                  tone="brand"
-                  disabled={printer.status === "printing"}
-                  onClick={async () => {
-                    const msg = await printer.sweepChannels();
-                    onToast(msg);
-                  }}
-                >
-                  Find the print channel
-                </SmallButton>
-              </div>
-              {printer.sweepStep && (
-                <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">
-                  {printer.sweepStep}
-                </div>
-              )}
-            </div>
-
-            {printer.probeResult && (
-              <div className="whitespace-pre-line rounded-lg bg-cocoa/5 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-cocoa/70">
-                {printer.probeResult}
-              </div>
-            )}
-            <p className="text-[11px] leading-snug text-cocoa/45">
-              <span className="font-semibold">ZPL config printing</span> is the
-              answer to look for — it means ZPL arrives and is understood, so
-              set Command language to ZPL above and printing works.{" "}
-              <span className="font-semibold">Feed or Self test working</span>{" "}
-              means TSPL is understood too, and the fault is in the job we
-              build. <span className="font-semibold">Nothing at all</span> means
-              commands aren't reaching the print engine — try the Bluetooth
-              transport, since the vendor app uses it.
-            </p>
           </div>
-
-          {/* ── Diagnostics ──────────────────────────────────────────────── */}
-          <div className="rounded-xl bg-cocoa/5 px-3 py-2 font-mono text-[11px] leading-relaxed text-cocoa/60">
-            <div>
-              head {headDots} dots · raster {rasterDots} dots (
-              {Math.round(dotsToMm(rasterDots))} mm)
-            </div>
-            <div className="whitespace-pre-line break-words">
-              {printer.detail || "no device bound yet"}
-            </div>
-            {printer.lastJobBytes > 0 && (
-              <div>
-                last job {(printer.lastJobBytes / 1024).toFixed(1)} KB
-                {printer.lastRaster && ` · raster ${printer.lastRaster}`}
-              </div>
-            )}
-          </div>
-
-          <Row
-            label="Copy diagnostics"
-            hint="Puts this whole readout — binding, settings, last job, probe results — on the clipboard."
-          >
-            <SmallButton
-              onClick={async () => {
-                const text = diagnosticsReport(
-                  useSettings.getState(),
-                  usePrinter.getState(),
-                );
-                try {
-                  await navigator.clipboard.writeText(text);
-                  setReportText("");
-                  onToast("Diagnostics copied");
-                } catch {
-                  // No clipboard permission — show it instead so it can still
-                  // be selected and copied by hand.
-                  setReportText(text);
-                  onToast("Clipboard blocked — select the text below");
-                }
-              }}
-            >
-              Copy
-            </SmallButton>
-          </Row>
-
-          {reportText && (
-            <div className="flex flex-col gap-1.5">
-              <textarea
-                readOnly
-                value={reportText}
-                rows={10}
-                onFocus={(e) => e.currentTarget.select()}
-                className="w-full rounded-xl border border-cocoa/15 bg-white/80 p-2 font-mono text-[10px] leading-relaxed text-cocoa"
-              />
-              <SmallButton onClick={() => setReportText("")}>Hide</SmallButton>
-            </div>
-          )}
         </>
       )}
     </Section>
   );
 }
 
-/**
- * Live 1-bit preview.
- *
- * Debounced, because every slider nudge re-composites and re-dithers a
- * multi-megapixel canvas and dragging a slider would otherwise queue dozens of
- * those. Renders through `rasterFor()` — the print path itself — so this can't
- * quietly disagree with what comes out of the printer.
- */
-function PrintPreview() {
-  const [src, setSrc] = useState("");
-  const [coverage, setCoverage] = useState(0);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState("");
-  const seq = useRef(0);
+// ── Current printer ──────────────────────────────────────────────────────────
 
-  // Every setting that changes the dots on paper, flattened to one string so the
-  // effect has a stable primitive dependency. A selector returning an array would
-  // fail Object.is on every render and loop.
-  const st = useSettings();
-  const deps = [
-    st.labelWidthMm,
-    st.labelHeightMm,
-    st.printMarginMm,
-    st.printFit,
-    st.ditherMode,
-    st.ditherThreshold,
-    st.printBrightness,
-    st.printContrast,
-    st.defaultLayoutId,
-    st.defaultOverlayId,
-    st.designMode,
-    st.eventTemplateId,
-    st.eventName,
-    st.footerNote,
-  ].join("|");
+function healthLine(h: PrinterHealth | null): { text: string; ok: boolean } {
+  if (!h) return { text: "Status unknown", ok: true };
+  if (h.state === "offline")
+    return { text: h.message || "Can't reach the printer", ok: false };
+  const problems = blockingReasons(h.reasons);
+  if (problems.length)
+    return { text: problems.map(describeReason).join(", "), ok: false };
+  if (h.state === "stopped")
+    return { text: h.message || "Printer stopped", ok: false };
+  const warnings = h.reasons.filter((r) => r.endsWith("-warning"));
+  const base = h.state === "processing" ? "Printing" : "Ready";
+  return {
+    text: warnings.length
+      ? `${base} · ${warnings.map(describeReason).join(", ")}`
+      : base,
+    ok: true,
+  };
+}
 
-  useEffect(() => {
-    const mine = ++seq.current;
-    setBusy(true);
-    const t = window.setTimeout(async () => {
-      try {
-        const composite = await buildPreviewComposite();
-        const bitmap = await rasterFor(composite);
-        // A newer run started while this one was rendering — drop this result.
-        if (mine !== seq.current) return;
-        setSrc(bitmap1ToDataUrl(bitmap));
-        setCoverage(inkCoverage(bitmap));
-        setError("");
-      } catch (e) {
-        if (mine !== seq.current) return;
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (mine === seq.current) setBusy(false);
-      }
-    }, 220);
-    return () => window.clearTimeout(t);
-  }, [deps]);
+function PrinterCard({
+  name,
+  connection,
+  detail,
+  health,
+  onTest,
+  onChange,
+  busy,
+}: {
+  name: string;
+  connection: Connection;
+  detail?: string;
+  health: PrinterHealth | null;
+  onTest: () => void;
+  onChange: () => void;
+  busy: boolean;
+}) {
+  const conn = CONNECTION_LABEL[connection];
+  const line = healthLine(connection === "system" ? null : health);
+  const markers = (health?.markers ?? []).filter((m) => m.level >= 0);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="text-sm font-semibold text-cocoa">
-        What the printer will burn
-      </div>
-      <div className="text-xs leading-snug text-cocoa/50">
-        Actual 1-bit output at 203 dpi. Zoom in to judge the halftone — on
-        screen it's shown small, so the dots blur together the way they will on
-        paper.
-      </div>
-      <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-cocoa/15 bg-white">
-        {error ? (
-          <p className="p-3 text-xs text-red-600">{error}</p>
-        ) : src ? (
-          <img
-            src={src}
-            alt="Monochrome print preview"
-            className={cn(
-              "block w-full transition-opacity",
-              busy && "opacity-50",
-            )}
-          />
-        ) : (
-          <div className="p-6 text-center text-xs text-cocoa/40">
-            Rendering…
+    <div className="rounded-xl border border-cocoa/10 bg-white/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold text-cocoa">{name}</div>
+          <div className="text-xs text-cocoa/50">
+            {conn.icon} {detail ?? conn.label}
           </div>
-        )}
+          {connection !== "system" && (
+            <div
+              className={cn(
+                "mt-1 text-xs font-semibold",
+                line.ok ? "text-emerald-600" : "text-amber-600",
+              )}
+            >
+              ● {line.text}
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col gap-2">
+          <SmallButton tone="brand" onClick={onTest} disabled={busy}>
+            Test print
+          </SmallButton>
+          <SmallButton onClick={onChange}>Change</SmallButton>
+        </div>
       </div>
-      {!error && src && (
-        <div className="text-center font-mono text-[11px] text-cocoa/50">
-          {/* A receipt is mostly bare paper, so healthy coverage is only a few
-              percent — one decimal, or the useful range all reads as "0%". */}
-          {(coverage * 100).toFixed(1)}% ink coverage
-          {coverage > 0.55 && " — very dark, try raising Exposure"}
-          {coverage < 0.01 && " — almost nothing will print, lower Exposure"}
+
+      {markers.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {markers.map((m) => (
+            <div
+              key={m.name}
+              className="flex items-center gap-2 text-[11px] text-cocoa/60"
+            >
+              <span className="w-24 truncate">{m.name}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cocoa/10">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, m.level)}%`,
+                    background: m.color.split("#").filter(Boolean)[0]
+                      ? `#${m.color.split("#").filter(Boolean)[0]}`
+                      : "#5a4552",
+                  }}
+                />
+              </div>
+              <span className="w-8 text-right tabular-nums">{m.level}%</span>
+            </div>
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Finding a printer ────────────────────────────────────────────────────────
+
+function Finder({
+  onPick,
+  onCancel,
+}: {
+  onPick: (p: FoundPrinter) => void;
+  onCancel?: () => void;
+}) {
+  const engine = usePrinter();
+  const [ip, setIp] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  // Search as soon as the finder opens — the host came here to find one.
+  useEffect(() => {
+    if (!engine.found.length && !engine.searching) void engine.search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const add = async () => {
+    if (!ip.trim()) return;
+    setAdding(true);
+    const p = await engine.addByAddress(ip.trim());
+    setAdding(false);
+    if (p) onPick(p);
+  };
+
+  const groups = useMemo(() => {
+    const order: Connection[] = [
+      "ipp",
+      "usb",
+      "bluetooth",
+      "ble",
+      "socket",
+      "system",
+    ];
+    return order
+      .map((c) => ({ c, list: engine.found.filter((p) => p.connection === c) }))
+      .filter((g) => g.list.length);
+  }, [engine.found]);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-dashed border-cocoa/20 bg-white/50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-bold text-cocoa">
+          {engine.searching ? "Searching for printers…" : "Choose a printer"}
+        </div>
+        <div className="flex gap-2">
+          {onCancel && <SmallButton onClick={onCancel}>Cancel</SmallButton>}
+          {isAndroidApp() && (
+            <SmallButton
+              onClick={() => void engine.search()}
+              disabled={engine.searching}
+            >
+              {engine.searching ? "…" : "Search again"}
+            </SmallButton>
+          )}
+        </div>
+      </div>
+
+      {groups.map(({ c, list }) => (
+        <div key={c} className="flex flex-col gap-1.5">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-cocoa/40">
+            {CONNECTION_LABEL[c].icon} {CONNECTION_LABEL[c].label}
+          </div>
+          {list.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onPick(p)}
+              className="flex flex-col items-start rounded-xl border border-cocoa/10 bg-white/80 px-3 py-2 text-left active:scale-[0.99]"
+            >
+              <span className="text-sm font-semibold text-cocoa">{p.name}</span>
+              {p.detail && (
+                <span className="text-[11px] text-cocoa/50">{p.detail}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      ))}
+
+      {isAndroidApp() && (
+        <>
+          <Row
+            label="Add by IP address"
+            hint="When it doesn't show up — the IP is on the printer's network status sheet."
+            stacked
+          >
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TextField
+                  value={ip}
+                  onChange={setIp}
+                  placeholder="192.168.1.50"
+                  mono
+                  maxLength={64}
+                />
+              </div>
+              <SmallButton
+                tone="brand"
+                onClick={() => void add()}
+                disabled={adding || !ip.trim()}
+              >
+                {adding ? "…" : "Add"}
+              </SmallButton>
+            </div>
+          </Row>
+          <ul className="list-disc pl-4 text-[11px] leading-snug text-cocoa/50">
+            <li>Wi-Fi printers must be on the same network as this tablet.</li>
+            <li>
+              No venue Wi-Fi? Turn on the printer's Wi-Fi Direct, connect the
+              tablet to its “DIRECT-…” network, then add{" "}
+              <span className="font-mono">192.168.223.1</span> (Epson) above.
+              Photos queue for upload until the tablet is back online.
+            </li>
+            <li>
+              Bluetooth printers: pair them in Android Settings → Bluetooth
+              first (PIN is usually 0000 or 1234).
+            </li>
+            {!engine.searchedBluetooth && (
+              <li className="text-amber-700">
+                Bluetooth wasn't searched — allow “Nearby devices” for Mad Shots
+                in Android settings.
+              </li>
+            )}
+          </ul>
+        </>
+      )}
+
+      {!isAndroidApp() && (
+        <SmallButton tone="brand" onClick={() => onPick(SYSTEM_PRINTER)}>
+          Use the browser print dialog
+        </SmallButton>
+      )}
+    </div>
+  );
+}
+
+// ── Paper and layout ─────────────────────────────────────────────────────────
+
+function PaperSettings() {
+  const s = useSettings();
+  const set = s.set;
+  const printer = s.printer!;
+  const caps = printer.caps;
+  const papers = papersFor(printer);
+  const photo = printer.language === "image";
+  const borderlessOn = photo && s.printBorderless && !!caps?.borderless;
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-cocoa/10 pt-3">
+      <Row label="Paper" stacked>
+        <select
+          className={selectClass}
+          value={s.printPaperId}
+          onChange={(e) => set("printPaperId", e.target.value)}
+        >
+          {papers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+              {caps?.mediaReady.includes(p.id) ? " — loaded" : ""}
+            </option>
+          ))}
+        </select>
+      </Row>
+
+      {photo && caps && caps.mediaTypes.length > 1 && (
+        <Row
+          label="Paper type"
+          hint="Glossy photo paper prints best on a photo setting."
+          stacked
+        >
+          <select
+            className={selectClass}
+            value={s.printMediaType}
+            onChange={(e) => set("printMediaType", e.target.value)}
+          >
+            <option value="">Printer default</option>
+            {caps.mediaTypes.map((t) => (
+              <option key={t} value={t}>
+                {prettyKeyword(t)}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
+
+      {photo && caps && caps.mediaSources.length > 1 && (
+        <Row label="Paper tray" stacked>
+          <select
+            className={selectClass}
+            value={s.printMediaSource}
+            onChange={(e) => set("printMediaSource", e.target.value)}
+          >
+            <option value="">Printer default</option>
+            {caps.mediaSources.map((t) => (
+              <option key={t} value={t}>
+                {prettyKeyword(t)}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
+
+      {photo && caps?.borderless && (
+        <Row
+          label="Borderless"
+          hint="No white border from the printer — edge to edge, like a lab print. Use with Fill for a full-bleed photo."
+        >
+          <Toggle
+            label="Borderless"
+            checked={s.printBorderless}
+            onChange={(v) => set("printBorderless", v)}
+          />
+        </Row>
+      )}
+
+      {photo && printer.connection === "ipp" && (
+        <Row label="Quality" stacked>
+          <Segmented<PrintQuality>
+            value={s.printQuality}
+            onChange={(v) => set("printQuality", v)}
+            options={[
+              { value: "draft", label: "Fast" },
+              { value: "normal", label: "Normal" },
+              { value: "high", label: "Best" },
+            ]}
+          />
+        </Row>
+      )}
+
+      {photo && caps?.color && (
+        <Row label="Colour">
+          <Toggle
+            label="Colour"
+            checked={s.printColor}
+            onChange={(v) => set("printColor", v)}
+          />
+        </Row>
+      )}
+
+      <Row
+        label="Fit"
+        hint="Fit keeps the whole design on white; Fill covers the paper and trims the edges."
+        stacked
+      >
+        <Segmented<PrintFit>
+          value={s.printFit}
+          onChange={(v) => set("printFit", v)}
+          options={[
+            { value: "fit", label: "Fit" },
+            { value: "fill", label: "Fill" },
+          ]}
+        />
+      </Row>
+
+      <Row
+        label="Turn"
+        hint="Auto turns a design sideways when that uses more of the paper."
+        stacked
+      >
+        <Segmented<PrintRotate>
+          value={s.printRotate}
+          onChange={(v) => set("printRotate", v)}
+          options={[
+            { value: "auto", label: "Auto" },
+            { value: 0, label: "Upright" },
+            { value: 90, label: "Sideways" },
+          ]}
+        />
+      </Row>
+
+      <Row
+        label="Two per sheet"
+        hint="Prints the design twice side by side — e.g. two 2×6 strips on one 4×6, cut down the middle."
+      >
+        <Toggle
+          label="Two per sheet"
+          checked={s.printTwoUp}
+          onChange={(v) => set("printTwoUp", v)}
+        />
+      </Row>
+
+      <Row label="Copies" hint="Prints per guest.">
+        <NumberField
+          label="Copies"
+          value={s.printCopies}
+          onChange={(v) => set("printCopies", v)}
+          min={1}
+          max={5}
+        />
+      </Row>
+      {!borderlessOn && (
+        <Row label="Margin" hint="White border kept clear of the paper edge.">
+          <NumberField
+            label="Margin"
+            value={s.printMarginMm}
+            onChange={(v) => set("printMarginMm", v)}
+            min={0}
+            max={15}
+            step={0.5}
+            suffix="mm"
+          />
+        </Row>
+      )}
+    </div>
+  );
+}
+
+// ── Thermal ──────────────────────────────────────────────────────────────────
+
+function ThermalSettings() {
+  const s = useSettings();
+  const set = s.set;
+  const engine = usePrinter();
+  const lang = s.printer!.language;
+  const label = lang === "tspl" || lang === "zpl";
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-cocoa/10 pt-3">
+      <Row
+        label="Printer language"
+        hint={
+          LANGUAGES.find((l) => l.value === lang)?.hint ??
+          "If nothing prints, try the other languages."
+        }
+        stacked
+      >
+        <Segmented<PrinterLanguage>
+          value={lang}
+          onChange={(v) => engine.setLanguage(v)}
+          options={LANGUAGES.map((l) => ({ value: l.value, label: l.label }))}
+        />
+      </Row>
+
+      <Row
+        label="Halftone"
+        hint="Thermal paper is black or white — this is how photos become dots."
+        stacked
+      >
+        <Segmented<DitherMode>
+          value={s.ditherMode}
+          onChange={(v) => set("ditherMode", v)}
+          options={DITHER_MODES.map((m) => ({ value: m.id, label: m.label }))}
+        />
+      </Row>
+
+      <Row label="Contrast" hint="Raise if faces print flat and grey." stacked>
+        <Slider
+          label="Contrast"
+          value={s.printContrast}
+          onChange={(v) => set("printContrast", v)}
+          min={-50}
+          max={80}
+        />
+      </Row>
+      {label && (
+        <Row label="Darkness" hint="How hard the head burns." stacked>
+          <Slider
+            label="Darkness"
+            value={s.printDensity}
+            onChange={(v) => set("printDensity", v)}
+            min={0}
+            max={15}
+          />
+        </Row>
+      )}
+
+      {label && (
+        <>
+          <Row label="Label gap" hint="0 for continuous rolls.">
+            <NumberField
+              label="Label gap"
+              value={s.labelGapMm}
+              onChange={(v) => set("labelGapMm", v)}
+              min={0}
+              max={10}
+              step={0.5}
+              suffix="mm"
+            />
+          </Row>
+          <Row label="Speed" hint="Slower prints darker.">
+            <NumberField
+              label="Speed"
+              value={s.printSpeed}
+              onChange={(v) => set("printSpeed", v)}
+              min={1}
+              max={6}
+            />
+          </Row>
+        </>
+      )}
+      {lang === "escpos" && (
+        <Row
+          label="Cut after each print"
+          hint="For printers with an auto-cutter."
+        >
+          <Toggle
+            label="Cut after each print"
+            checked={s.printCut}
+            onChange={(v) => set("printCut", v)}
+          />
+        </Row>
+      )}
+      {lang === "tspl" && (
+        <Row
+          label="Negative image"
+          hint="Flip only if the test print comes out inverted."
+        >
+          <Toggle
+            label="Negative image"
+            checked={!s.printInvertRaster}
+            onChange={(v) => set("printInvertRaster", !v)}
+          />
+        </Row>
+      )}
+    </div>
+  );
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+/** The page exactly as it will print, re-rendered whenever a setting changes. */
+function PrintPreview() {
+  const s = useSettings();
+  const composite = useSession((st) => st.composite);
+  const [src, setSrc] = useState<string>("");
+  const deps = [
+    s.printer?.id,
+    s.printer?.language,
+    s.printPaperId,
+    s.printFit,
+    s.printRotate,
+    s.printTwoUp,
+    s.printMarginMm,
+    s.printBorderless,
+    s.ditherMode,
+    s.printContrast,
+    s.designMode,
+    s.eventTemplateId,
+  ];
+
+  useEffect(() => {
+    let alive = true;
+    const t = window.setTimeout(async () => {
+      try {
+        const base = composite || (await buildPreviewComposite());
+        const out = await renderPreview(base);
+        if (alive) setSrc(out);
+      } catch {
+        if (alive) setSrc("");
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composite, ...deps]);
+
+  return (
+    <div className="flex flex-col items-center gap-2 border-t border-cocoa/10 pt-3">
+      <div className="self-start text-sm font-semibold text-cocoa">
+        What will print
+      </div>
+      <div className="flex min-h-[120px] w-full items-center justify-center rounded-xl bg-cocoa/5 p-3">
+        {src ? (
+          <img
+            src={src}
+            alt="Print preview"
+            className="max-h-[300px] max-w-full bg-white shadow-md"
+          />
+        ) : (
+          <span className="text-xs text-cocoa/40">Rendering…</span>
+        )}
+      </div>
     </div>
   );
 }

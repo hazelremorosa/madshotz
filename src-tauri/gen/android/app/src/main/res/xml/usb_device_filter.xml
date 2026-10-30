@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- USB devices Mad Shots offers to open when plugged in. Matching here is what
+     lets the host tick "Always open Mad Shots when this device is connected",
+     which makes the USB grant permanent — so the booth reconnects to its printer
+     unattended after a reboot or a replug.
+
+     Class 7 is the USB printer class. If your printer reports a vendor class
+     instead (the Admin diagnostics show "vendor"), add its IDs in decimal, e.g.
+     <usb-device vendor-id="1155" product-id="22336" />. -->
+<resources>
+    <usb-device class="7" />
+</resources>

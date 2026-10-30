@@ -8,80 +8,28 @@ review & retake → grade with a filter → decorate with stickers & text → wa
 receipt print → scan the QR to take your memories home.
 
 > **Scope (this build):** the QR download is the primary deliverable; delivery runs
-> on Cloudflare (R2 + Worker). Physical printing is implemented for the **Munbyn
-> RealWriter 403B** and is **off by default** — enable and pair it in
-> Admin → System → Printing.
+> on Cloudflare (R2 + Worker). Printing is **off by default** — choose a printer
+> in Admin → System → Printer.
 
-### Printing (Munbyn RealWriter 403B)
+### Printing
 
-Direct thermal, 203 dpi, TSPL command language — _not_ ESC/POS, so the usual
-web-thermal-printing snippets don't apply. Every dot is burned or bare paper, so
-photos are halftoned to 1-bit; the full-colour version goes out via the QR.
+One pipeline for every printer (`src/lib/print/`): the composite is laid out on
+the chosen paper (fit/fill, auto-rotate, borderless, two per sheet), then sent
+either as a picture or as a halftoned raster in the printer's own language.
 
-There is no server in this path and there cannot be — a Vercel-hosted page can't
-reach a printer in the room. Bytes leave the tablet directly, two ways:
+| Printer                                       | Route                          | Notes                                                                                                                                     |
+| --------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wi-Fi photo printers** (Epson, HP, Canon…)  | IPP — Android app              | **Silent**, no dialog. Found automatically or by IP. Paper sizes, trays, media types, borderless and ink levels come from the printer itself; each job is followed until paper comes out. |
+| Thermal receipt printers (58/80 mm)           | ESC/POS over USB, Bluetooth, Wi-Fi | Bluetooth Classic (SPP) and BLE both work; pair Classic printers in Android settings first.                                             |
+| Thermal label printers (Munbyn RW403B, TSC, Zebra) | TSPL or ZPL over USB, Bluetooth, Wi-Fi | Language is read from the USB printer's own ID where it reports one.                                                              |
+| Anything else with an Android print plugin    | Android print dialog           | Always shows a dialog.                                                                                                                    |
+| The PWA in a browser                          | Browser print dialog           | Browsers can't reach Wi-Fi or Bluetooth printers directly; install the Android app for that.                                              |
 
-| Transport            | Use when                     | Notes                                                                                                                                                                |
-| -------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **WebUSB** (USB-OTG) | Preferred                    | ~120 KB raster in well under a second. Android has no vendor driver competing for the device. Needs a USB-C hub with PD pass-through if the tablet must also charge. |
-| **Web Bluetooth**    | Charging port must stay free | Slower — budget 5–20 s for a 4×6. Pick the printer's **`-BLE`** name; a `-SPP`/`-COM` entry is Bluetooth Classic and unreachable from any browser.                   |
-
-The **System** transport is also available when the printer is installed in the
-host operating system. For silent auto-printing, close existing Chrome or Brave
-windows and launch the booth with kiosk printing enabled:
-
-```text
-"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk --kiosk-printing http://localhost:5173/
-```
-
-For Brave, use:
-
-```text
-"C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe" --kiosk --kiosk-printing http://localhost:5173/
-```
-
-In Admin → **Printer & Output Settings**, choose **System**, enable physical
-printing and **Auto print**, and select the installed printer, such as
-`EPSON7EFDF8 / L15150 Series`. The isolated print document contains only the
-photo card and uses the selected paper dimensions, including `80mm × 150mm`.
-Browser-generated headers and footer URLs cannot be disabled by web CSS; use the
-browser's print policy/settings to keep them off.
-
-Both need HTTPS and one user gesture to pair; after that `getDevices()` lets the
-kiosk reconnect unattended on boot (`App.tsx`). **Chrome on Android or desktop
-only — Safari and iOS implement neither API, so an iPad cannot print.**
-
-| File                                  | Role                                                                                   |
-| ------------------------------------- | -------------------------------------------------------------------------------------- |
-| `lib/dither.ts`                       | Composite → 1-bit bitmap. Floyd–Steinberg / ordered Bayer / hard threshold.            |
-| `lib/tspl.ts`                         | TSPL job encoding (`SIZE`/`GAP`/`DENSITY`/`BITMAP`/`PRINT`), stock presets, dot maths. |
-| `lib/printer.ts`                      | Transports, silent reconnect, job serialisation, `usePrinter` store.                   |
-| `components/admin/PrinterSection.tsx` | Admin UI, live 1-bit preview, test print, diagnostics.                                 |
-
-**Fitting to the stock.** "Fit the label" scales any composite to sit inside the
-selected stock with its aspect intact — it letterboxes, never crops or stretches
-— and centres it in both axes (a raster taller than the label pins to the top so
-it loses its tail rather than both ends). Because it letterboxes, an aspect
-mismatch just wastes paper, so **Rotation** defaults to _Auto_ and turns a design
-a quarter-turn when that uses more of the label: a 3:2 landscape event template
-on 4×6 stock goes from **40% to 91%** of the label. Upright receipts and strips
-are left alone. Matching stock to content still helps most — the `quad` layout is
-exactly 1:3, so it fills **2×6** stock with almost no waste.
-
-Two things can only be settled with the hardware in hand, so both are settings
-rather than constants — commissioning needs no code change:
-
-- **BLE service/characteristic UUIDs.** Pairing walks the GATT tree for any
-  writable characteristic and reports what it found in the diagnostics readout.
-  Web Bluetooth only exposes services declared up front, so if the real one isn't
-  in `BLE_SERVICE_CANDIDATES`, paste it into Admin's _Service UUID_ field.
-- **Raster bit polarity.** TSPL's `BITMAP` treats a _clear_ bit as a dot to burn.
-  If the first test print comes out as a negative, flip _Negative image_.
-
-Start with **Print test** (a few hundred bytes: border, text, density ladder) to
-prove the link and the stock geometry before sending a photo.
-
----
+Native code: `src-tauri/gen/android/app/src/main/java/com/madshots/booth/printing/`
+— `Ipp.kt` (IPP/1.1 client over a raw socket), `DocumentFormats.kt` (JPEG → PDF /
+PWG raster fallbacks), `Discovery.kt` (mDNS, USB, paired Bluetooth, BLE scan),
+`Transports.kt` (USB, SPP, BLE, TCP 9100), `PrintEngine.kt`. Setup and tablet
+commissioning: **[docs/android.md](docs/android.md)**.
 
 ## Run it
 
@@ -95,11 +43,30 @@ npm run preview    # serve the production build
 Best experienced on a **portrait** touch device (Android tablet, iPad, Windows
 touchscreen). Installable as a PWA (fullscreen, portrait-locked).
 
+### Android app (APK)
+
+The same UI also ships as a native Android app (Tauri 2). Inside it, USB and
+Bluetooth printing, gallery auto-save, the print dialog, immersive kiosk mode and
+keep-awake run natively, because the Android WebView has none of the web APIs the
+PWA relies on.
+
+```bash
+npm run android:setup      # once: SDK, NDK, Rust targets
+npm run android:keystore   # once: release signing key — back it up!
+npm run android:release    # → release/mad-shots-<version>.apk (signed)
+npm run android:install    # adb install -r on a USB-connected tablet
+npm run android:dev        # live-reload on a device while developing
+```
+
+Full guide, including tablet commissioning and the on-device test checklist:
+**[docs/android.md](docs/android.md)**.
+
 ---
 
 ## Tech
 
-React 18 · TypeScript · Vite · TailwindCSS · Framer Motion · Zustand · vite-plugin-pwa.
+React 18 · TypeScript · Vite · TailwindCSS · Framer Motion · Zustand · vite-plugin-pwa ·
+Tauri 2 (Android app, Kotlin hardware bridge).
 
 ---
 
