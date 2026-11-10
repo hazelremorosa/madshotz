@@ -133,6 +133,18 @@ export const BRAND_PRESETS: BrandPreset[] = [
     brand: ["212 175 55", "196 164 132", "148 137 121"],
     stage: ["250 248 245", "240 235 228"],
   },
+  {
+    id: "red",
+    name: "Red",
+    brand: ["220 38 38", "244 63 94", "251 146 60"],
+    stage: ["255 245 245", "254 226 226"],
+  },
+  {
+    id: "maroon",
+    name: "Maroon",
+    brand: ["128 0 32", "159 18 57", "212 175 140"],
+    stage: ["253 245 245", "245 228 228"],
+  },
   // ── Dark themes ──
   {
     id: "midnight",
