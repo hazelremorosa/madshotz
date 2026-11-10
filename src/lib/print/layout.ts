@@ -44,6 +44,15 @@ function coverage(imgW: number, imgH: number, slot: Slot): number {
   return (imgW * s * imgH * s) / (slot.w * slot.h);
 }
 
+/**
+ * Two-up sheets: each strip is drawn at this fraction of its half-sheet, centred.
+ * Photo printers' "borderless" mode over-scans the page by a millimetre or two,
+ * and that used to shave the outer edge of the frame off the strips. A uniform
+ * scale keeps the strip's proportions; the sliver of white it leaves is trimmed
+ * with the cut down the middle.
+ */
+const TWO_UP_SAFE = 0.97;
+
 export async function renderPage(
   src: string,
   spec: PageSpec,
@@ -51,7 +60,9 @@ export async function renderPage(
   const img = await loadImage(src);
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  const m = Math.max(0, Math.round(spec.marginPx));
+  // Two strips share one sheet and are cut apart, so the sheet is split into
+  // exact halves; a page margin would squash them off their 2×6" shape.
+  const m = spec.twoUp ? 0 : Math.max(0, Math.round(spec.marginPx));
   const W = Math.round(spec.widthPx);
   const continuous = spec.heightPx <= 0;
   const cols = spec.twoUp ? 2 : 1;
@@ -68,7 +79,9 @@ export async function renderPage(
     else if (spec.rotate === "auto") {
       // "fit": whichever way round covers more. "fill": whichever crops less,
       // which is the same comparison.
-      quarter = coverage(ih, iw, slot) > coverage(iw, ih, slot) + 0.02;
+      // Never for two-up: a strip turned on its side wouldn't be a strip.
+      quarter =
+        !spec.twoUp && coverage(ih, iw, slot) > coverage(iw, ih, slot) + 0.02;
     }
   }
 
@@ -89,9 +102,9 @@ export async function renderPage(
   for (let c = 0; c < cols; c++) {
     const slot: Slot = { x: m + c * slotW, y: m, w: slotW, h: H - m * 2 };
     const scale =
-      spec.fit === "fill" && !continuous
+      spec.fit === "fill" && !continuous && !spec.twoUp
         ? Math.max(slot.w / pw, slot.h / ph)
-        : Math.min(slot.w / pw, slot.h / ph);
+        : Math.min(slot.w / pw, slot.h / ph) * (spec.twoUp ? TWO_UP_SAFE : 1);
     const dw = pw * scale;
     const dh = ph * scale;
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { useSettings } from "@/store/settings";
+import { guestOverlayCats, useSettings } from "@/store/settings";
 import { nextScreen, prevScreen } from "@/lib/flow";
 import { FILTER_BY_ID } from "@/data/filters";
 import {
@@ -57,6 +57,9 @@ export function FramesScreen() {
   const eventSubtitle = useSettings((s) => s.eventSubtitle);
   const eventName = useSettings((s) => s.eventName);
 
+  const guestCatsSaved = useSettings((s) => s.guestOverlayCategories);
+  const guestCats = useMemo(() => guestOverlayCats(), [guestCatsSaved]);
+
   const [tab, setTab] = useState<"color" | "pattern">("color");
   const filterCss = FILTER_BY_ID(filterId).css;
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
@@ -89,7 +92,7 @@ export function FramesScreen() {
             ...overlaysInCategory(eventType).map((o) => o.id),
             ...PHOTO_TEMPLATES.map((t) => t.id),
           ]
-        : overlaysInCategory("Classic").map((o) => o.id);
+        : guestCats.flatMap((c) => overlaysInCategory(c).map((o) => o.id));
     const label = (id: string) => {
       const customIdx = customFrames.findIndex((f) => f.id === id);
       if (customIdx >= 0) return `Custom ${customIdx + 1}`;
@@ -103,7 +106,7 @@ export function FramesScreen() {
         thumb: resolveOverlaySrc(id, 1, customFrames, overlayOpts),
       })),
     ];
-  }, [designMode, eventType, customFrames, overlayOpts]);
+  }, [designMode, eventType, customFrames, overlayOpts, guestCats]);
   const styles = FRAME_STYLES.filter((f) => f.kind === tab);
   // Let the receipt shrink to fit so the controls below never get pushed
   // under the fixed action bar (tall layouts like 3-strip).

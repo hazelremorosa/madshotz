@@ -22,6 +22,7 @@ import {
   MAX_CUSTOM_STICKERS,
   QR_RESET_OPTIONS,
   applyPalette,
+  guestOverlayCats,
   DARK_INK,
   LIGHT_INK,
   overlayCategoryFor,
@@ -72,6 +73,7 @@ import { PREVIEW_PHOTO } from "@/lib/previewComposite";
 import type { EventTemplate } from "@/types";
 import {
   ACCENT_BY_CATEGORY,
+  OVERLAY_CATEGORIES,
   overlaysInCategory,
   resolveOverlaySrc,
   type OverlayCategory,
@@ -1574,6 +1576,17 @@ function GuestStepsSection() {
   const s = useSettings();
   const set = useSettings((st) => st.set);
   const steps = useFlowSteps();
+  const guestCatsSaved = useSettings((st) => st.guestOverlayCategories);
+  const guestCats = guestOverlayCats();
+  const toggleCat = (c: OverlayCategory) => {
+    const on = guestCats.includes(c);
+    if (on && guestCats.length === 1) return; // always keep one family
+    set(
+      "guestOverlayCategories",
+      OVERLAY_CATEGORIES.filter((x) => (x === c ? !on : guestCats.includes(x))),
+    );
+  };
+  void guestCatsSaved;
 
   return (
     <Section
@@ -1610,6 +1623,33 @@ function GuestStepsSection() {
           checked={s.filtersEnabled}
           onChange={(v) => set("filtersEnabled", v)}
         />
+      </Row>
+      <Row
+        label="Overlays guests can pick"
+        hint="Choose which families show on the guests' Overlay row — e.g. add Christmas for the season."
+        stacked
+      >
+        <div className="flex flex-wrap gap-2">
+          {OVERLAY_CATEGORIES.map((c) => {
+            const on = guestCats.includes(c);
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleCat(c)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                  on
+                    ? "border-transparent brand-fill text-white"
+                    : "border-cocoa/15 bg-white/60 text-cocoa/60",
+                )}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
       </Row>
       <Row
         label="Filter intensity"
@@ -2063,6 +2103,7 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
   const [busy, setBusy] = useState(false);
 
   const full = customFrames.length >= MAX_CUSTOM_FRAMES;
+  const guestCats = guestOverlayCats();
 
   const onFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -2091,15 +2132,17 @@ function FrameOverlaySection({ onToast }: { onToast: (msg: string) => void }) {
   };
 
   // Scoped to the event's overlay family, plus host uploads.
-  const cat: OverlayCategory = designMode === "overlay" ? eventType : "Classic";
-  const opts = { accent: ACCENT_BY_CATEGORY[cat] };
+  const cats: OverlayCategory[] =
+    designMode === "overlay" ? [eventType] : guestCats;
   const options: { id: string; name: string; thumb: string | null }[] = [
     { id: "none", name: "None", thumb: null },
-    ...overlaysInCategory(cat).map((o) => ({
-      id: o.id,
-      name: o.name,
-      thumb: o.svg!(1, opts),
-    })),
+    ...cats.flatMap((cat) =>
+      overlaysInCategory(cat).map((o) => ({
+        id: o.id,
+        name: o.name,
+        thumb: o.svg!(1, { accent: ACCENT_BY_CATEGORY[cat] }),
+      })),
+    ),
     ...customFrames.map((cf, i) => ({
       id: cf.id,
       name: `Custom ${i + 1}`,

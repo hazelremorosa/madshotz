@@ -302,7 +302,11 @@ export async function composeReceipt(opts: ComposeOpts): Promise<string> {
 
   // Decorative frame overlay — full paper, above photos, below decorations.
   if (overlaySvg) {
-    const ov = await loadImage(overlaySvg).catch(() => null);
+    // One retry: an SVG/data-URL frame occasionally fails its first decode, and
+    // a print missing its frame can't be taken back.
+    const ov = await loadImage(overlaySvg)
+      .catch(() => loadImage(overlaySvg))
+      .catch(() => null);
     if (ov) ctx.drawImage(ov, 0, 0, W, H);
   }
 

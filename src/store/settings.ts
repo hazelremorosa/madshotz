@@ -14,6 +14,7 @@ import type {
 } from "@/lib/print/types";
 import {
   ACCENT_BY_CATEGORY,
+  OVERLAY_CATEGORIES,
   isKnownOverlay,
   type OverlayCategory,
   type OverlayOpts,
@@ -345,6 +346,8 @@ export interface SettingsState {
   defaultOverlayId: string;
   /** Show the overlay picker to guests on the Frames screen. */
   guestCanChangeOverlay: boolean;
+  /** Overlay families guests can pick from on a normal booth (Christmas, Wedding…). */
+  guestOverlayCategories: OverlayCategory[];
 
   // ── Event ─────────────────────────────────────────────────────────────────
   /** Current design: "standard" receipt, or a loaded event's "template"/"overlay". */
@@ -539,6 +542,7 @@ const DEFAULTS = {
   customFrames: [] as CustomFrame[],
   defaultOverlayId: "none",
   guestCanChangeOverlay: true,
+  guestOverlayCategories: ["Classic"] as OverlayCategory[],
 
   designMode: "standard" as DesignMode,
   activeEventId: null as string | null,
@@ -840,6 +844,13 @@ function withoutLegacyPrinting(saved: Partial<SettingsState>): Partial<SettingsS
 }
 
 // ── Derived helpers (safe to call outside React) ─────────────────────────────
+
+/** Overlay families a guest sees on a normal booth (never empty, known only). */
+export function guestOverlayCats(): OverlayCategory[] {
+  const saved = useSettings.getState().guestOverlayCategories;
+  const list = OVERLAY_CATEGORIES.filter((c) => saved?.includes(c));
+  return list.length ? list : ["Classic"];
+}
 
 /** True when this layout prints two strips per sheet (3 Strip + the toggle). */
 export function twoUpFor(layoutId: string): boolean {

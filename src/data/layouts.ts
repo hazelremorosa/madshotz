@@ -32,7 +32,9 @@ export const LAYOUTS: LayoutDef[] = [
     shots: 3,
     kind: "strip",
     frameAspect: 4 / 3,
-    paperAspect: 2 / 5,
+    // A true 2×6" strip (50.8 × 152.4 mm). It used to be 2:5, which left a band
+    // of white above and below once two strips were laid on a 4×6 sheet.
+    paperAspect: 1 / 3,
   },
   {
     id: "quad",

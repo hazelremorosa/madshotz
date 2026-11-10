@@ -124,6 +124,66 @@ const f = (n: number) => Math.round(n * 100) / 100;
 
 // ── Overlay builders ─────────────────────────────────────────────────────────
 
+// ── Christmas ────────────────────────────────────────────────────────────────
+
+const XMAS_RED = "#c62828";
+const XMAS_GREEN = "#2e7d32";
+const XMAS_GOLD = "#e6b422";
+
+/** A sprig of pine: a fan of needle-green blades. */
+function pineSprig(x: number, y: number, s: number, rot: number): string {
+  let blades = "";
+  for (let i = -3; i <= 3; i++) {
+    blades += `<ellipse cx='0' cy='${f(-s * 0.55)}' rx='${f(s * 0.11)}' ry='${f(s * 0.55)}' fill='${i % 2 ? XMAS_GREEN : "#1b5e20"}' transform='rotate(${i * 17})'/>`;
+  }
+  return `<g transform='translate(${f(x)} ${f(y)}) rotate(${rot})'>${blades}</g>`;
+}
+
+/** A shiny bauble with a gold cap. */
+function bauble(cx: number, cy: number, r: number, fill: string): string {
+  return (
+    `<rect x='${f(cx - r * 0.22)}' y='${f(cy - r * 1.25)}' width='${f(r * 0.44)}' height='${f(r * 0.4)}' rx='${f(r * 0.08)}' fill='${XMAS_GOLD}'/>` +
+    circle(cx, cy, r, fill) +
+    `<ellipse cx='${f(cx - r * 0.35)}' cy='${f(cy - r * 0.38)}' rx='${f(r * 0.18)}' ry='${f(r * 0.3)}' fill='#ffffff' opacity='0.45' transform='rotate(35 ${f(cx - r * 0.35)} ${f(cy - r * 0.38)})'/>`
+  );
+}
+
+/** Pine garland along the top and bottom, hung with baubles, with a red bow. */
+function christmasGarland(w: number, h: number): string {
+  const out: string[] = [];
+  const rnd = prng(2512);
+  const s = w * 0.075;
+  const cols = [XMAS_RED, XMAS_GOLD, "#1565c0", "#90a4ae"];
+  const edge = (y: number, dir: number) => {
+    const n = 11;
+    for (let i = 0; i <= n; i++) {
+      const x = (i / n) * w;
+      out.push(pineSprig(x, y, s, dir * (i % 2 ? 100 : 80)));
+    }
+    for (let i = 0; i < 6; i++) {
+      const x = w * (0.1 + i * 0.16);
+      out.push(bauble(x, y + dir * s * (0.9 + rnd() * 0.5), w * 0.026, cols[i % cols.length]));
+    }
+  };
+  edge(0, 1);
+  edge(h, -1);
+  // Side holly sprigs, kept clear of the photos.
+  for (const x of [0, w]) {
+    for (const y of [h * 0.22, h * 0.5, h * 0.78]) {
+      out.push(pineSprig(x, y, s * 0.8, x ? -90 : 90));
+    }
+  }
+  // Red bow top centre.
+  const bx = w / 2;
+  const by = s * 0.35;
+  const bow = w * 0.05;
+  out.push(
+    `<path d='M${f(bx)} ${f(by)} q${f(-bow * 1.8)} ${f(-bow)} ${f(-bow * 1.4)} ${f(bow * 0.9)} q${f(bow * 0.7)} ${f(bow * 0.3)} ${f(bow * 1.4)} ${f(-bow * 0.9)}z M${f(bx)} ${f(by)} q${f(bow * 1.8)} ${f(-bow)} ${f(bow * 1.4)} ${f(bow * 0.9)} q${f(-bow * 0.7)} ${f(bow * 0.3)} ${f(-bow * 1.4)} ${f(-bow * 0.9)}z' fill='${XMAS_RED}'/>`,
+  );
+  out.push(circle(bx, by, bow * 0.38, "#9e1b1b"));
+  return out.join("");
+}
+
 function goldBorder(w: number, h: number): string {
   const m = w * 0.028;
   return (
@@ -707,6 +767,7 @@ export const OVERLAYS: OverlayDef[] = [
   { id: "confetti", name: "Confetti", emoji: "🎊", category: "Classic", svg: (a) => wrap(a, confetti) },
   { id: "cl-corners", name: "Corners", emoji: "⌜", category: "Classic", svg: (a, o) => wrap(a, (w, h) => modernCorners(w, h, o?.accent ?? ACCENT_BY_CATEGORY.Classic)) },
   { id: "cl-band", name: "Bands", emoji: "▬", category: "Classic", svg: (a, o) => wrap(a, (w, h) => modernBand(w, h, o?.accent ?? ACCENT_BY_CATEGORY.Classic)) },
+  { id: "xmas-garland", name: "Christmas", emoji: "🎄", category: "Classic", svg: (a) => wrap(a, christmasGarland) },
 
   // ── Wedding ──
   { id: "wed-rings", name: "Rings", emoji: "💍", category: "Wedding", svg: (a) => wrap(a, weddingRings) },
