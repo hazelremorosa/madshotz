@@ -1,4 +1,17 @@
+import {
+  BUILT_IN_COVERS,
+  COVER_ASPECT,
+  builtInCover,
+  GUEST_ASPECT,
+  MIN_CROP_W,
+  cropHeight,
+  validCrop,
+  type CoverCrop,
+} from "@/assets/covers";
+import { CoverImage } from "@/components/CoverImage";
+import { cropGif } from "@/lib/cropGif";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import {
   BRAND_PRESETS,
@@ -9,6 +22,8 @@ import {
   MAX_CUSTOM_STICKERS,
   QR_RESET_OPTIONS,
   applyPalette,
+  DARK_INK,
+  LIGHT_INK,
   overlayCategoryFor,
   receiptFooter,
   receiptHeader,
@@ -44,7 +59,9 @@ import {
   compositeFilename,
 } from "@/lib/download";
 import {
+  clearCoverOverride,
   clearWelcomeMedia,
+  saveCoverOverride,
   saveWelcomeMedia,
   useWelcome,
 } from "@/store/welcome";
@@ -80,6 +97,7 @@ import {
   Toggle,
 } from "@/components/admin/controls";
 import { cn } from "@/lib/cn";
+import { LogoMark } from "@/components/Logo";
 
 const APP_VERSION = "1.0.0";
 
@@ -665,6 +683,7 @@ function ReceiptBrandingSection() {
 
 function PaletteSection() {
   const brandPresetId = useSettings((st) => st.brandPresetId);
+  const gradientButtons = useSettings((st) => st.gradientButtons);
   const set = useSettings((st) => st.set);
   const theme = useSession((st) => st.theme);
 
@@ -672,7 +691,7 @@ function PaletteSection() {
     <Section
       emoji="🎨"
       title="Palette"
-      note="Accents and background for the whole booth UI. Each chip is filled with its own background tone."
+      note="Accents and background for the whole booth UI. Each chip is filled with its own background tone. Dark palettes switch text and cards to light-on-dark."
     >
       <div className="flex flex-wrap gap-2">
         {BRAND_PRESETS.map((p) => (
@@ -687,12 +706,15 @@ function PaletteSection() {
             className={cn(
               "flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition-colors",
               brandPresetId === p.id
-                ? "border-[rgb(var(--brand-a))] text-cocoa shadow"
-                : "border-cocoa/15 text-cocoa/50",
+                ? "border-[rgb(var(--brand-a))] shadow"
+                : "border-cocoa/15",
             )}
             // The chip wears the palette's own stage tone, so the host can see
             // what the background becomes without having to apply it first.
-            style={{ background: `rgb(${p.stage[0]})` }}
+            style={{
+              background: `rgb(${p.stage[0]})`,
+              color: `rgb(${(p.dark ? DARK_INK : LIGHT_INK).ink} / ${brandPresetId === p.id ? 1 : 0.6})`,
+            }}
           >
             <span className="flex">
               {p.brand.map((c, i) => (
@@ -710,6 +732,24 @@ function PaletteSection() {
           </button>
         ))}
       </div>
+
+      <Row
+        label="Gradient buttons"
+        hint={
+          gradientButtons
+            ? "On — buttons and switches blend the palette's three colours."
+            : "Off — buttons and switches use the palette's first colour, no gradient."
+        }
+      >
+        <Toggle
+          label="Gradient buttons"
+          checked={gradientButtons}
+          onChange={(v) => {
+            set("gradientButtons", v);
+            applyPalette(theme);
+          }}
+        />
+      </Row>
     </Section>
   );
 }
@@ -963,6 +1003,316 @@ function EventsManager({ onToast }: { onToast: (msg: string) => void }) {
 // ── Custom stickers ─────────────────────────────────────────────────────────
 
 /**
+ * Full-size look at a home page before it goes live, plus a crop box.
+ *
+ * The preview is shaped like the guest screen (the ~540×780 design box) and
+ * framed the same way, so what the host sees is what guests get. "Crop" swaps
+ * it for the whole picture with a movable, resizable box on top — locked to the
+ * guest screen's shape, so there's nothing to stretch. The GIF is never
+ * re-cut: the crop is just the region guests are shown, and it keeps animating.
+ *
+ * Portalled to <body>: Admin's tab panes animate with transforms, which would
+ * otherwise trap a `fixed` overlay inside them.
+ */
+type Handle = "move" | "tl" | "tr" | "bl" | "br";
+
+function CoverPreview({
+  cover,
+  crop,
+  hasFile,
+  inUse,
+  showPrompt,
+  onPrev,
+  onNext,
+  onClose,
+  onUse,
+}: {
+  cover: { id: string; name: string; url: string | null };
+  /** The crop saved for this cover, or null for the original. */
+  crop: CoverCrop | null;
+  /** The cropped GIF itself is on this device (the crop record alone isn't enough). */
+  hasFile: boolean;
+  inUse: boolean;
+  showPrompt: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onClose: () => void;
+  onUse: (crop: CoverCrop | null) => Promise<void>;
+}) {
+  // The crop being tried. Only written back on "Use / Save", so playing around
+  // and cancelling leaves the guest screen untouched.
+  const [draft, setDraft] = useState<CoverCrop | null>(crop);
+  const [cropping, setCropping] = useState(false);
+  useEffect(() => {
+    setDraft(crop);
+    setCropping(false);
+  }, [cover.id, crop]);
+  const editor = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ h: Handle; x: number; y: number; c: CoverCrop } | null>(null);
+  const adjustable = cover.url !== null;
+  // Re-cutting is real work, so only do it when the crop actually differs.
+  const changed = JSON.stringify(draft) !== JSON.stringify(crop) || (!!draft && !hasFile);
+  const [saving, setSaving] = useState(false);
+
+  const rect = draft ?? { l: 0, t: 0, w: 1 };
+  const rh = cropHeight(rect.w);
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  const startCropping = () => {
+    setDraft((d) => d ?? { l: 0, t: 0, w: 1 });
+    setCropping(true);
+  };
+
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const h = (e.target as HTMLElement).dataset.h as Handle | undefined;
+    if (!h || !editor.current) return;
+    editor.current.setPointerCapture(e.pointerId);
+    drag.current = { h, x: e.clientX, y: e.clientY, c: rect };
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = editor.current;
+    if (!d || !el) return;
+    const b = el.getBoundingClientRect();
+    const c = d.c;
+    const ch = cropHeight(c.w);
+    if (d.h === "move") {
+      setDraft({
+        ...c,
+        l: clamp(c.l + (e.clientX - d.x) / b.width, 0, 1 - c.w),
+        t: clamp(c.t + (e.clientY - d.y) / b.height, 0, 1 - ch),
+      });
+      return;
+    }
+    // Corner resize: the opposite corner stays put, and the shape stays locked,
+    // so the pointer's horizontal distance from it decides the size.
+    const dirX = d.h === "tr" || d.h === "br" ? 1 : -1;
+    const dirY = d.h === "bl" || d.h === "br" ? 1 : -1;
+    const ax = dirX > 0 ? c.l : c.l + c.w;
+    const ay = dirY > 0 ? c.t : c.t + ch;
+    const px = (e.clientX - b.left) / b.width;
+    const maxW = Math.min(
+      dirX > 0 ? 1 - ax : ax,
+      ((dirY > 0 ? 1 - ay : ay) * GUEST_ASPECT) / COVER_ASPECT,
+    );
+    const w = clamp(dirX * (px - ax), MIN_CROP_W, maxW);
+    setDraft({
+      w,
+      l: dirX > 0 ? ax : ax - w,
+      t: dirY > 0 ? ay : ay - cropHeight(w),
+    });
+  };
+  const onUp = () => (drag.current = null);
+
+  const pct = (v: number) => `${v * 100}%`;
+  const corner = (h: Handle, pos: string) => (
+    <span
+      data-h={h}
+      className={cn(
+        "absolute h-7 w-7 rounded-full border-[3px] border-white bg-[rgb(var(--brand-a))] shadow",
+        pos,
+      )}
+    />
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full w-full max-w-[22rem] flex-col items-center gap-3"
+      >
+        <div className="flex w-full items-center justify-between text-white">
+          <div>
+            <div className="text-lg font-extrabold">{cover.name}</div>
+            <div className="text-xs text-white/70">
+              {cropping
+                ? "Crop — drag the box, resize from the corners"
+                : inUse
+                  ? "Currently in use"
+                  : "Preview — not applied yet"}
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close preview"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-lg"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex w-full items-center gap-2">
+          <button
+            type="button"
+            aria-label="Previous cover"
+            onClick={onPrev}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl text-white"
+          >
+            ‹
+          </button>
+
+          {cropping && cover.url ? (
+            // Editor: the whole picture, with everything outside the box dimmed.
+            <div
+              ref={editor}
+              className="relative mx-auto touch-none select-none overflow-hidden rounded-xl border-4 border-white/80 bg-black shadow-float"
+              style={{ aspectRatio: "9 / 16", maxHeight: "56vh" }}
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+            >
+              <img
+                src={cover.url}
+                alt=""
+                draggable={false}
+                className="pointer-events-none absolute inset-0 h-full w-full object-fill"
+              />
+              <div
+                data-h="move"
+                className="absolute cursor-move border-2 border-white"
+                style={{
+                  left: pct(rect.l),
+                  top: pct(rect.t),
+                  width: pct(rect.w),
+                  height: pct(rh),
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.6)",
+                }}
+              >
+                {/* Rule-of-thirds guides — pointer-transparent so the whole box drags. */}
+                <div className="pointer-events-none absolute inset-0">
+                  <div className="absolute inset-y-0 left-1/3 w-px bg-white/40" />
+                  <div className="absolute inset-y-0 left-2/3 w-px bg-white/40" />
+                  <div className="absolute inset-x-0 top-1/3 h-px bg-white/40" />
+                  <div className="absolute inset-x-0 top-2/3 h-px bg-white/40" />
+                </div>
+                {corner("tl", "-left-3.5 -top-3.5 cursor-nwse-resize")}
+                {corner("tr", "-right-3.5 -top-3.5 cursor-nesw-resize")}
+                {corner("bl", "-bottom-3.5 -left-3.5 cursor-nesw-resize")}
+                {corner("br", "-bottom-3.5 -right-3.5 cursor-nwse-resize")}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="relative mx-auto min-h-0 flex-1 overflow-hidden rounded-[1.75rem] border-4 border-white/80 bg-cream shadow-float"
+              style={{ aspectRatio: "540 / 780", maxHeight: "56vh" }}
+            >
+              {cover.url ? (
+                <CoverImage key={cover.id} url={cover.url} crop={draft} alt={`${cover.name} preview`} />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <LogoMark size={96} />
+                  <div className="mt-4 text-3xl font-extrabold tracking-tight text-cocoa">
+                    MAD <span className="brand-text">SHOTS</span>
+                  </div>
+                  <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.4em] text-cocoa/50">
+                    Studio Creative
+                  </div>
+                </div>
+              )}
+              {showPrompt && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
+                  <span className="rounded-full bg-white/85 px-4 py-2 text-[10px] font-semibold tracking-widest text-cocoa shadow-glass">
+                    TOUCH ANYWHERE TO BEGIN
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            type="button"
+            aria-label="Next cover"
+            onClick={onNext}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl text-white"
+          >
+            ›
+          </button>
+        </div>
+
+        {adjustable && (
+          <div className="flex w-full items-center gap-2">
+            {cropping ? (
+              <button
+                type="button"
+                onClick={() => setCropping(false)}
+                className="flex-1 rounded-full bg-white py-2.5 text-xs font-bold text-cocoa"
+              >
+                ✓ Done cropping
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startCropping}
+                className="flex-1 rounded-full bg-white/15 py-2.5 text-xs font-bold text-white"
+              >
+                ✂ Crop
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={!draft}
+              onClick={() => {
+                setDraft(null);
+                setCropping(false);
+              }}
+              className="rounded-full bg-white/15 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"
+            >
+              Reset crop
+            </button>
+          </div>
+        )}
+
+        {adjustable && draft && changed && (
+          <div className="text-center text-[11px] text-white/60">
+            Saving cuts a new, smaller GIF. “Reset crop” brings the original back.
+          </div>
+        )}
+
+        <div className="flex w-full gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="flex-1 rounded-full border border-white/30 bg-white/10 py-3.5 text-sm font-bold text-white [touch-action:manipulation] disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              if (inUse && !changed) return onClose();
+              setSaving(true);
+              try {
+                await onUse(draft);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="flex-1 rounded-full brand-fill py-3.5 text-sm font-bold text-white shadow-bloom [touch-action:manipulation] disabled:opacity-60"
+          >
+            {saving
+              ? "Cropping…"
+              : inUse
+                ? changed
+                  ? "Save crop"
+                  : "Keep this one"
+                : "Use this cover"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/**
  * The host's own artwork on the attract screen.
  *
  * "Use it" is kept separate from "upload it" on purpose: a host running two
@@ -980,10 +1330,22 @@ const LARGE_ARTWORK_BYTES = 8_000_000;
 function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
   const welcomeCustom = useSettings((st) => st.welcomeCustom);
   const welcomePrompt = useSettings((st) => st.welcomePrompt);
+  const welcomeCover = useSettings((st) => st.welcomeCover);
+  const welcomeCrops = useSettings((st) => st.welcomeCrops);
+  const coverFiles = useWelcome((st) => st.covers);
   const set = useSettings((st) => st.set);
   const media = useWelcome((st) => st.media);
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // Which cover the preview dialog is showing (null = closed).
+  const [previewId, setPreviewId] = useState<string | null>(null);
+
+  const covers = [
+    { id: "classic", name: "Classic", url: null as string | null },
+    ...BUILT_IN_COVERS,
+  ];
+  const previewIdx = covers.findIndex((c) => c.id === previewId);
+  const preview = previewIdx >= 0 ? covers[previewIdx] : null;
 
   const onFile = async (files: FileList | null) => {
     const file = files?.[0];
@@ -1017,6 +1379,103 @@ function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
         onChange={(e) => onFile(e.target.files)}
       />
 
+      <div>
+        <div className="mb-2 text-sm font-semibold text-cocoa">Home page</div>
+        <div className="flex flex-wrap gap-3">
+          {covers.map((c) => {
+            const active = !welcomeCustom && welcomeCover === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setPreviewId(c.id)}
+                className="relative w-[68px] text-center"
+              >
+                <div
+                  className={cn(
+                    "relative flex h-24 w-[68px] items-center justify-center overflow-hidden rounded-xl bg-cocoa/5 transition-all",
+                    active
+                      ? "scale-105 border-[3px] border-[rgb(var(--brand-a))] shadow-bloom ring-2 ring-[rgb(var(--brand-a))]/30 ring-offset-2 ring-offset-white/40"
+                      : "border-2 border-cocoa/10 opacity-80",
+                  )}
+                >
+                  {c.url ? (
+                    <img
+                      src={coverFiles[c.id]?.url ?? c.url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[10px] font-extrabold leading-tight tracking-tight text-cocoa">
+                      MAD
+                      <br />
+                      SHOTS
+                    </span>
+                  )}
+                </div>
+                {active && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full brand-fill text-[11px] font-bold text-white shadow ring-2 ring-white">
+                    ✓
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    "mt-1.5 text-xs",
+                    active ? "font-extrabold text-cocoa" : "text-cocoa/60",
+                  )}
+                >
+                  {c.id === "classic" ? "Classic" : c.name}
+                </div>
+                {active && (
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[rgb(var(--brand-a))]">
+                    In use
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {preview &&
+        createPortal(
+          <CoverPreview
+            cover={preview}
+            crop={validCrop(welcomeCrops[preview.id])}
+            hasFile={!!coverFiles[preview.id]}
+            inUse={!welcomeCustom && welcomeCover === preview.id}
+            showPrompt={welcomePrompt}
+            onPrev={() =>
+              setPreviewId(covers[(previewIdx - 1 + covers.length) % covers.length].id)
+            }
+            onNext={() => setPreviewId(covers[(previewIdx + 1) % covers.length].id)}
+            onClose={() => setPreviewId(null)}
+            onUse={async (crop) => {
+              try {
+                const original = builtInCover(preview.id);
+                const saved = validCrop(welcomeCrops[preview.id]);
+                const same = JSON.stringify(crop) === JSON.stringify(saved);
+                if (!crop) {
+                  await clearCoverOverride(preview.id);
+                } else if (original && !(same && coverFiles[preview.id])) {
+                  // Always cut from the original, never from an earlier crop.
+                  await saveCoverOverride(preview.id, await cropGif(original.url, crop));
+                }
+                const { [preview.id]: _old, ...rest } = welcomeCrops;
+                set("welcomeCrops", crop ? { ...rest, [preview.id]: crop } : rest);
+                set("welcomeCover", preview.id);
+                set("welcomeCustom", false);
+                setPreviewId(null);
+                onToast(`${preview.name} is now the home page`);
+              } catch (err) {
+                onToast(err instanceof Error ? err.message : "Couldn't crop that cover");
+              }
+            }}
+          />,
+          document.body,
+        )}
+
       <Row
         label="Use my artwork"
         hint={
@@ -1024,7 +1483,7 @@ function WelcomeScreenSection({ onToast }: { onToast: (msg: string) => void }) {
             ? "Upload an image or GIF below, then switch this on."
             : welcomeCustom
               ? "On — guests see your artwork instead of the Mad Shots screen."
-              : "Off — guests see the Mad Shots home page. Your upload is kept."
+              : "Off — guests see the home page chosen above. Your upload is kept."
         }
       >
         <Toggle

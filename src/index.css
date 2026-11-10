@@ -10,6 +10,9 @@
   /* Stage (page/background) tones — repainted per palette by applyPalette(). */
   --stage: 255 246 251; /* warm cream    */
   --stage-deep: 255 238 246;
+  /* Text tones — flipped light by applyPalette() on dark palettes. */
+  --ink: 90 69 82;
+  --ink-soft: 156 135 148;
   color-scheme: light;
 }
 
@@ -29,7 +32,7 @@ body {
      screen reads as part of the design rather than a bar beside it — and
      repaints with the Admin palette. */
   background: rgb(var(--stage));
-  color: #5a4552;
+  color: rgb(var(--ink));
   font-family: theme("fontFamily.sans");
   overflow: hidden;
   overscroll-behavior: none;
@@ -86,6 +89,30 @@ body {
       rgb(var(--brand-c))
     );
   }
+  /* Host chose flat buttons: one solid brand colour instead of the gradient. */
+  :root[data-solid-buttons="1"] .brand-fill {
+    background-image: none;
+    background-color: rgb(var(--brand-a));
+  }
+  /* Dark palettes: white glass becomes smoked glass, white cards dim down. */
+  :root[data-dark] .glass {
+    background: linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  :root[data-dark] .glass-strong {
+    background: linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.09));
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  :root[data-dark] .bg-white { background-color: rgb(255 255 255 / 0.14); }
+  :root[data-dark] .bg-white\/85,
+  :root[data-dark] .bg-white\/80 { background-color: rgb(255 255 255 / 0.12); }
+  :root[data-dark] .bg-white\/70,
+  :root[data-dark] .bg-white\/60 { background-color: rgb(255 255 255 / 0.1); }
+  :root[data-dark] .bg-white\/50,
+  :root[data-dark] .bg-white\/40 { background-color: rgb(255 255 255 / 0.07); }
+  :root[data-dark] .border-white\/90,
+  :root[data-dark] .border-white\/70,
+  :root[data-dark] .border-white\/50 { border-color: rgb(255 255 255 / 0.16); }
   .paper {
     background-color: #fffdfa;
     background-image:

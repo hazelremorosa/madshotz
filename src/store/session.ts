@@ -7,6 +7,7 @@ import type {
   ScreenId,
   Theme,
 } from "@/types";
+import { builtInCover } from "@/assets/covers";
 import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_FRAME_STYLE, DEFAULT_PHOTO_SHAPE } from "@/data/frames";
 import {
@@ -88,8 +89,18 @@ export interface SessionState {
   reset: () => void;
 }
 
+/**
+ * With a cover selected, open straight onto it. The logo splash looks like the
+ * classic home page, so showing it first made the classic screen peek out on
+ * every refresh. Classic itself keeps the splash.
+ */
+function startScreen(): ScreenId {
+  const { welcomeCustom, welcomeCover } = useSettings.getState();
+  return welcomeCustom || builtInCover(welcomeCover) ? "welcome" : "boot";
+}
+
 export const useSession = create<SessionState>((set, get) => ({
-  screen: "boot",
+  screen: startScreen(),
   direction: 1,
 
   theme: DEFAULT_THEME,

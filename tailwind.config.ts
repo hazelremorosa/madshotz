@@ -23,8 +23,9 @@ export default {
           deep: "rgb(var(--stage-deep) / <alpha-value>)",
         },
         cocoa: {
-          DEFAULT: "#5a4552",
-          soft: "#9c8794",
+          // Variables so dark palettes can flip text to light (see applyInkVars).
+          DEFAULT: "rgb(var(--ink) / <alpha-value>)",
+          soft: "rgb(var(--ink-soft) / <alpha-value>)",
         },
         paper: {
           DEFAULT: "#fffdfa",

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { CoverCrop } from "@/assets/covers";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
@@ -47,7 +48,13 @@ export interface BrandPreset {
   brand: [Rgb, Rgb, Rgb];
   /** [page, deeper] background tones. */
   stage: [Rgb, Rgb];
+  /** Dark stage: text and glass surfaces flip to light-on-dark. */
+  dark?: boolean;
 }
+
+/** Text tones: `ink` is the body/heading colour, `soft` the quieter one. */
+export const LIGHT_INK = { ink: "90 69 82", soft: "156 135 148" };
+export const DARK_INK = { ink: "246 240 252", soft: "163 154 180" };
 
 /** Stage tones for "default" — the original cute cream. */
 export const DEFAULT_STAGE: [Rgb, Rgb] = ["255 246 251", "255 238 246"];
@@ -124,6 +131,56 @@ export const BRAND_PRESETS: BrandPreset[] = [
     name: "Gold",
     brand: ["212 175 55", "196 164 132", "148 137 121"],
     stage: ["250 248 245", "240 235 228"],
+  },
+  // ── Dark themes ──
+  {
+    id: "midnight",
+    name: "Midnight",
+    brand: ["129 140 248", "167 139 250", "56 189 248"],
+    stage: ["15 17 32", "24 26 48"],
+    dark: true,
+  },
+  {
+    id: "neon-night",
+    name: "Neon Night",
+    brand: ["255 0 170", "0 234 255", "170 0 255"],
+    stage: ["14 8 24", "26 12 42"],
+    dark: true,
+  },
+  {
+    id: "noir-gold",
+    name: "Noir Gold",
+    brand: ["212 175 55", "230 200 120", "168 130 40"],
+    stage: ["16 15 13", "30 27 22"],
+    dark: true,
+  },
+  {
+    id: "rose-noir",
+    name: "Rose Noir",
+    brand: ["251 113 133", "244 114 182", "192 132 252"],
+    stage: ["22 11 18", "38 18 30"],
+    dark: true,
+  },
+  {
+    id: "deep-ocean",
+    name: "Deep Ocean",
+    brand: ["56 189 248", "45 212 191", "99 102 241"],
+    stage: ["8 20 32", "12 33 52"],
+    dark: true,
+  },
+  {
+    id: "forest-night",
+    name: "Forest Night",
+    brand: ["52 211 153", "132 204 22", "20 184 166"],
+    stage: ["10 22 18", "16 37 29"],
+    dark: true,
+  },
+  {
+    id: "graphite",
+    name: "Graphite",
+    brand: ["148 163 184", "203 213 225", "100 116 139"],
+    stage: ["18 20 24", "30 33 39"],
+    dark: true,
   },
 ];
 
@@ -367,6 +424,18 @@ export interface SettingsState {
    */
   welcomeCustom: boolean;
   /**
+   * Buttons, switches and progress bars use the palette's three-colour
+   * gradient. Off paints them in the palette's first colour instead.
+   */
+  gradientButtons: boolean;
+  /**
+   * Which home page shows when the host's own upload is off: "classic" is the
+   * original Mad Shots screen, anything else is a bundled cover's id.
+   */
+  welcomeCover: string;
+  /** Per-cover pan/zoom, keyed by cover id. Missing = the default framing. */
+  welcomeCrops: Record<string, CoverCrop>;
+  /**
    * Keep "TOUCH ANYWHERE TO BEGIN" over the artwork.
    *
    * On by default — full-bleed artwork with no prompt and guests stand there
@@ -502,6 +571,9 @@ const DEFAULTS = {
   // Off until the host actually uploads something — turning it on with nothing
   // stored would blank the attract screen.
   welcomeCustom: false,
+  gradientButtons: false,
+  welcomeCover: "cover-2",
+  welcomeCrops: {},
   welcomePrompt: true,
 
   // On by default: losing an event's photos is unrecoverable, and the booth's own
@@ -862,7 +934,23 @@ export function applyPalette(
   const preset =
     presetId && presetId !== "default" ? BRAND_PRESET_BY_ID(presetId) : null;
   applyBrandVars(preset ? preset.brand : theme.brand);
+  document.documentElement.dataset.solidButtons = useSettings.getState()
+    .gradientButtons
+    ? ""
+    : "1";
   applyStageVars(preset ? preset.stage : DEFAULT_STAGE);
+  applyInkVars(!!preset?.dark);
+}
+
+/** Flips text and glass surfaces for dark stages (see `[data-dark]` in index.css). */
+export function applyInkVars(dark: boolean) {
+  const root = document.documentElement;
+  const tones = dark ? DARK_INK : LIGHT_INK;
+  root.style.setProperty("--ink", tones.ink);
+  root.style.setProperty("--ink-soft", tones.soft);
+  root.style.colorScheme = dark ? "dark" : "light";
+  if (dark) root.dataset.dark = "1";
+  else delete root.dataset.dark;
 }
 
 /**

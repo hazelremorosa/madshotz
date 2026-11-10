@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { LogoMark } from "@/components/Logo";
 import { InstantCameraIcon, ReceiptPrinterIcon } from "@/components/BrandIcons";
@@ -7,6 +8,8 @@ import { useWelcome } from "@/store/welcome";
 import { ensureCameraStream } from "@/lib/camera";
 import { activeTemplate, templateLayout } from "@/store/templates";
 import { reconcileDesignMode } from "@/store/events";
+import { builtInCover, validCrop } from "@/assets/covers";
+import { CoverImage } from "@/components/CoverImage";
 
 export function WelcomeScreen() {
   const go = useSession((s) => s.go);
@@ -17,7 +20,19 @@ export function WelcomeScreen() {
   const welcomeCustom = useSettings((s) => s.welcomeCustom);
   const welcomePrompt = useSettings((s) => s.welcomePrompt);
   const media = useWelcome((s) => s.media);
-  const artwork = welcomeCustom ? media : null;
+  const mediaReady = useWelcome((s) => s.ready);
+  // Fade the artwork in once decoded, so a big GIF never pops in half-drawn.
+  const [loaded, setLoaded] = useState(false);
+  const welcomeCover = useSettings((s) => s.welcomeCover);
+  const crop = useSettings((s) => validCrop(s.welcomeCrops[welcomeCover]));
+  // The host's re-cut copy of a bundled cover, once it has loaded from IndexedDB.
+  const override = useWelcome((s) => s.covers[welcomeCover]);
+  const builtIn = builtInCover(welcomeCover);
+  const artwork = welcomeCustom && media
+    ? media
+    : builtIn
+      ? { url: override?.url ?? builtIn.url, fit: true }
+      : null;
 
   const begin = () => {
     // Warm the camera on the first user gesture so Capture is instant.
@@ -36,6 +51,20 @@ export function WelcomeScreen() {
     }
   };
 
+  // The host's upload is still being read from IndexedDB. Falling through now
+  // would flash the fallback screen for a moment before the real one lands, so
+  // hold a blank (still tappable) frame instead.
+  if ((welcomeCustom || (crop && builtIn)) && !mediaReady) {
+    return (
+      <button
+        type="button"
+        onClick={begin}
+        aria-label="Touch to begin"
+        className="block h-full w-full"
+      />
+    );
+  }
+
   if (artwork) {
     return (
       <button
@@ -47,11 +76,25 @@ export function WelcomeScreen() {
         {/* Cover, not contain: the design box is portrait (~540×780) and the
             host's file may be any shape. Cropping beats letterboxing on an
             attract screen. */}
-        <img
-          src={artwork.url}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        {"fit" in artwork ? (
+          // Bundled covers: top-anchored by default (their title sits near the
+          // top edge), or the region the host cropped to.
+          <CoverImage
+            url={artwork.url}
+            // The cropped file needs no further framing; the original with a saved
+            // crop (its copy went missing) is shown through the crop instead.
+            crop={override ? null : crop}
+            onLoad={() => setLoaded(true)}
+            imgClassName={`transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+          />
+        ) : (
+          <img
+            src={artwork.url}
+            alt=""
+            onLoad={() => setLoaded(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+          />
+        )}
 
         {welcomePrompt && (
           <>

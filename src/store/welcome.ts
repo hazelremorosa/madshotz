@@ -23,6 +23,8 @@ import { create } from "zustand";
 
 const DB_NAME = "madshots-welcome";
 const STORE = "media";
+/** Cropped copies of the bundled covers, one row per cover id. */
+const COVERS = "covers";
 /** Single-row store: there's only ever one piece of artwork. */
 const KEY = "current";
 
@@ -46,14 +48,23 @@ export interface WelcomeMedia {
   bytes: number;
 }
 
+/** A bundled cover the host re-cut — drawn instead of the original. */
+export interface CoverOverride {
+  url: string;
+  bytes: number;
+}
+
 interface WelcomeState {
   media: WelcomeMedia | null;
+  /** Cropped replacements for bundled covers, by cover id. */
+  covers: Record<string, CoverOverride>;
   /** False until the first read finishes, so Welcome can avoid a flash. */
   ready: boolean;
 }
 
 export const useWelcome = create<WelcomeState>(() => ({
   media: null,
+  covers: {},
   ready: false,
 }));
 
@@ -63,9 +74,15 @@ function openDb(): Promise<IDBDatabase> {
       reject(new Error("no indexeddb"));
       return;
     }
-    const req = indexedDB.open(DB_NAME, 1);
+    // v2 added the cropped-covers store; v1 databases keep their artwork.
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE, { keyPath: "key" });
+      const db = req.result;
+      for (const name of [STORE, COVERS]) {
+        if (!db.objectStoreNames.contains(name)) {
+          db.createObjectStore(name, { keyPath: "key" });
+        }
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -75,11 +92,12 @@ function openDb(): Promise<IDBDatabase> {
 function tx<T>(
   mode: IDBTransactionMode,
   run: (store: IDBObjectStore) => IDBRequest<T>,
+  name: string = STORE,
 ): Promise<T> {
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const store = db.transaction(STORE, mode).objectStore(STORE);
+        const store = db.transaction(name, mode).objectStore(name);
         const r = run(store);
         r.onsuccess = () => resolve(r.result);
         r.onerror = () => reject(r.error);
@@ -107,6 +125,13 @@ function toMedia(row: StoredMedia): WelcomeMedia {
 export async function hydrateWelcome(): Promise<void> {
   try {
     const row = await tx<StoredMedia | undefined>("readonly", (s) => s.get(KEY));
+    // Cropped covers load with the artwork, so `ready` means both are in place.
+    const rows = await tx<{ key: string; blob: Blob }[]>("readonly", (s) => s.getAll(), COVERS);
+    const covers: Record<string, CoverOverride> = {};
+    for (const r of rows) {
+      covers[r.key] = { url: URL.createObjectURL(r.blob), bytes: r.blob.size };
+    }
+    useWelcome.setState({ covers });
     publish(row ? toMedia(row) : null);
   } catch {
     // No IndexedDB (private mode, locked-down kiosk) — the booth just shows its
@@ -150,4 +175,33 @@ export async function clearWelcomeMedia(): Promise<void> {
     /* nothing stored / no IndexedDB — the publish below still clears the UI */
   }
   publish(null);
+}
+
+/** Swaps one cover's cropped copy, revoking the URL it replaces. */
+function publishCover(id: string, next: CoverOverride | null) {
+  const { covers } = useWelcome.getState();
+  const prev = covers[id];
+  if (prev) URL.revokeObjectURL(prev.url);
+  const { [id]: _gone, ...rest } = covers;
+  useWelcome.setState({ covers: next ? { ...rest, [id]: next } : rest });
+}
+
+/** Stores a cropped GIF to show in place of bundled cover `id`. */
+export async function saveCoverOverride(id: string, blob: Blob): Promise<void> {
+  try {
+    await tx("readwrite", (s) => s.put({ key: id, blob, ts: Date.now() }), COVERS);
+  } catch {
+    throw new Error("Couldn't save — this device is out of space");
+  }
+  publishCover(id, { url: URL.createObjectURL(blob), bytes: blob.size });
+}
+
+/** Drops the cropped copy, so the original cover shows again. */
+export async function clearCoverOverride(id: string): Promise<void> {
+  try {
+    await tx("readwrite", (s) => s.delete(id), COVERS);
+  } catch {
+    /* nothing stored — clearing the in-memory copy below is enough */
+  }
+  publishCover(id, null);
 }
