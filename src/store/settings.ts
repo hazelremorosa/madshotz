@@ -391,7 +391,12 @@ export interface SettingsState {
   printEnabled: boolean;
   /** The printer the host picked in Admin (see `lib/print`). */
   printer: SavedPrinter | null;
+  /** Copies per print — what a guest gets when they can't choose. */
   printCopies: number;
+  /** Let guests pick how many copies on the preview screen. */
+  printCopiesGuestEnabled: boolean;
+  /** Most copies a guest may ask for in one transaction (>= printCopies). */
+  printCopiesMax: number;
   /** Paper loaded — a PWG media keyword for photo printers, a preset for thermal. */
   printPaperId: string;
   /** 3 Strip / 4 Strip use 2×6" paper automatically (when the printer has it). */
@@ -554,11 +559,13 @@ const DEFAULTS = {
   idleTimeoutSec: 90,
   qrResetSec: 25,
 
-  // Printing starts OFF: a booth with no printer must behave exactly as it
-  // did before printing existed.
-  printEnabled: false,
+  // On by default: every guest's photo prints once a printer is chosen. With
+  // no printer chosen nothing is sent, so a booth without one is unaffected.
+  printEnabled: true,
   printer: null as SavedPrinter | null,
   printCopies: 1,
+  printCopiesGuestEnabled: true,
+  printCopiesMax: 10,
   printPaperId: "na_index-4x6_4x6in",
   printAutoPaper: true,
   printFit: "fit" as PrintFit,
@@ -833,6 +840,35 @@ function withoutLegacyPrinting(saved: Partial<SettingsState>): Partial<SettingsS
 }
 
 // ── Derived helpers (safe to call outside React) ─────────────────────────────
+
+/** True when this layout prints two strips per sheet (3 Strip + the toggle). */
+export function twoUpFor(layoutId: string): boolean {
+  return useSettings.getState().printTwoUp && layoutId === "strip";
+}
+
+/** Sheets of paper used for `copies` copies — two-up sheets carry two each. */
+export function sheetsFor(layoutId: string, copies: number): number {
+  return twoUpFor(layoutId) ? Math.ceil(copies / 2) : copies;
+}
+
+/** Hard ceiling for the copy limit (drivers and ESC/POS cap out around here). */
+export const MAX_COPIES_LIMIT = 10;
+
+/** The copy limits as actually enforced: sane even if storage held junk. */
+export function copyLimits(layoutId = "") {
+  const s = useSettings.getState();
+  const int = (n: unknown, fb: number) =>
+    Number.isFinite(n) ? Math.round(n as number) : fb;
+  const min = 1;
+  // 3 Strip prints two to a sheet, so a pair is the natural starting point.
+  const floor = twoUpFor(layoutId) ? 2 : min;
+  const def = Math.min(
+    MAX_COPIES_LIMIT,
+    Math.max(floor, int(s.printCopies, 1)),
+  );
+  const max = Math.min(MAX_COPIES_LIMIT, Math.max(def, int(s.printCopiesMax, 10)));
+  return { min, def, max };
+}
 
 /** Layouts the host has enabled, in data order (never empty). */
 export function enabledLayouts() {

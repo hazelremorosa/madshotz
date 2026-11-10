@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
-import { overlayOpts, useSettings } from "@/store/settings";
+import { copyLimits, overlayOpts, sheetsFor, twoUpFor, useSettings } from "@/store/settings";
 import { prevScreen, stepLabel } from "@/lib/flow";
 import { activeTemplate } from "@/store/templates";
 import { activeFilterCss } from "@/data/filters";
@@ -26,6 +26,15 @@ export function PreviewScreen() {
   const customFrames = useSettings((s) => s.customFrames);
   const items = useSession((s) => s.items);
   const go = useSession((s) => s.go);
+  const copies = useSession((s) => s.copies);
+  const setCopies = useSession((s) => s.setCopies);
+  const printEnabled = useSettings((s) => s.printEnabled && !!s.printer);
+  const guestCanChoose = useSettings((s) => s.printCopiesGuestEnabled);
+  // Re-read when the host changes the limits.
+  useSettings((s) => s.printCopiesMax + s.printCopies);
+  const { min, def, max } = copyLimits(layout.id);
+  const showCopies = printEnabled && guestCanChoose && max > min;
+  const qty = Math.min(max, Math.max(min, copies > 0 ? copies : def));
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
@@ -82,6 +91,54 @@ export function PreviewScreen() {
         </motion.div>
       </div>
 
+      {showCopies && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="glass-strong flex w-full max-w-sm flex-col items-center gap-2 rounded-xl2 px-5 py-3 shadow-glass"
+        >
+          <p className="text-sm font-semibold text-cocoa">
+            How many copies would you like?
+          </p>
+          <div className="flex items-center gap-5">
+            <button
+              type="button"
+              aria-label="Fewer copies"
+              disabled={qty <= min}
+              onClick={() => setCopies(qty - 1)}
+              className="glass flex h-12 w-12 items-center justify-center rounded-full text-2xl font-bold text-cocoa shadow-glass transition-transform active:scale-90 disabled:pointer-events-none disabled:opacity-35"
+            >
+              −
+            </button>
+            <span
+              aria-live="polite"
+              className="brand-text w-14 text-center font-mono text-4xl font-extrabold tabular-nums"
+            >
+              {qty}
+            </span>
+            <button
+              type="button"
+              aria-label="More copies"
+              disabled={qty >= max}
+              onClick={() => setCopies(qty + 1)}
+              className="glass flex h-12 w-12 items-center justify-center rounded-full text-2xl font-bold text-cocoa shadow-glass transition-transform active:scale-90 disabled:pointer-events-none disabled:opacity-35"
+            >
+              +
+            </button>
+          </div>
+          {twoUpFor(layout.id) && (
+            <p className="text-[11px] text-cocoa/60">
+              2 strips per sheet · {sheetsFor(layout.id, qty)}{" "}
+              {sheetsFor(layout.id, qty) === 1 ? "sheet" : "sheets"}
+            </p>
+          )}
+          {qty >= max && (
+            <p className="text-[11px] text-cocoa/50">Maximum {max} per order</p>
+          )}
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -92,7 +149,7 @@ export function PreviewScreen() {
           ← {stepLabel(back)}
         </Button>
         <Button variant="primary" onClick={() => go("printing", 1)} className="px-10">
-          Print it →
+          {showCopies ? `Print ${qty} ${qty === 1 ? "Copy" : "Copies"} →` : "Print it →"}
         </Button>
       </motion.div>
     </div>

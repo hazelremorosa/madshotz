@@ -50,7 +50,7 @@ export function escposImageJob(bm: Bitmap1, o: EscPosOpts): Uint8Array {
   put(0x1b, 0x64, 0x04); // ESC d 4 — feed past the tear bar
   if (o.cut) put(0x1d, 0x56, 0x42, 0x00); // GS V 66 0 — feed and partial cut
 
-  const copies = Math.max(1, Math.min(9, Math.round(o.copies)));
+  const copies = Math.max(1, Math.min(10, Math.round(o.copies)));
   const out = new Uint8Array(2 + bodyLen * copies);
   out.set([0x1b, 0x40]); // ESC @ — reset
   for (let c = 0; c < copies; c++) out.set(body, 2 + c * bodyLen);

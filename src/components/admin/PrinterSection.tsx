@@ -31,7 +31,7 @@ import type {
 } from "@/lib/print/types";
 import { buildPreviewComposite } from "@/lib/previewComposite";
 import { useSession } from "@/store/session";
-import { useSettings } from "@/store/settings";
+import { MAX_COPIES_LIMIT, useSettings } from "@/store/settings";
 
 const CONNECTION_LABEL: Record<Connection, { icon: string; label: string }> = {
   ipp: { icon: "📶", label: "Wi-Fi" },
@@ -565,13 +565,40 @@ function PaperSettings() {
         />
       </Row>
 
-      <Row label="Copies" hint="Prints per guest.">
+      <Row
+        label="Guests choose copies"
+        hint="Shows a “How many copies?” picker on the preview screen. Off = every guest gets the default number."
+      >
+        <Toggle
+          label="Guests choose copies"
+          checked={s.printCopiesGuestEnabled}
+          onChange={(v) => set("printCopiesGuestEnabled", v)}
+        />
+      </Row>
+      <Row label="Default copies" hint="Where the picker starts — and what everyone gets if guests can't choose. 3 Strip prints two per sheet, so it starts at 2 there and copies count strips (3–4 copies = 2 sheets).">
         <NumberField
-          label="Copies"
+          label="Default copies"
           value={s.printCopies}
-          onChange={(v) => set("printCopies", v)}
+          onChange={(v) => {
+            set("printCopies", v);
+            // The limit can never sit below the default.
+            if (v > s.printCopiesMax) set("printCopiesMax", v);
+          }}
           min={1}
-          max={5}
+          max={MAX_COPIES_LIMIT}
+        />
+      </Row>
+      <Row
+        label="Max copies per guest"
+        hint="The most a guest can pick in one go. Never below the default."
+      >
+        <NumberField
+          label="Max copies per guest"
+          value={s.printCopiesMax}
+          onChange={(v) => set("printCopiesMax", Math.max(v, s.printCopies))}
+          min={s.printCopies}
+          max={MAX_COPIES_LIMIT}
+          disabled={!s.printCopiesGuestEnabled}
         />
       </Row>
       {!borderlessOn && (

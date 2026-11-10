@@ -4,7 +4,12 @@ import { isAndroidApp } from "@/lib/native";
 import { systemPrintImage } from "@/lib/systemPrint";
 import { tsplImageJob, type JobOpts } from "@/lib/tspl";
 import { zplImageJob } from "@/lib/zpl";
-import { useSettings } from "@/store/settings";
+import {
+  copyLimits,
+  sheetsFor,
+  twoUpFor,
+  useSettings,
+} from "@/store/settings";
 import { escposImageJob } from "./escpos";
 import { renderPage, testPage } from "./layout";
 import * as nativePrint from "./native";
@@ -109,9 +114,26 @@ function settings() {
   return useSettings.getState();
 }
 
+/** Copies for this print: the guest's pick if they may choose, else the default. */
+export function copiesNow(): number {
+  const { min, def, max } = copyLimits(useSession.getState().layout.id);
+  if (!settings().printCopiesGuestEnabled) return def;
+  const n = Math.round(useSession.getState().copies);
+  if (!(n > 0)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Sheets to send to the printer. Copies count strips, so with two per sheet
+ * (3 Strip) 1–2 copies = 1 sheet, 3–4 = 2 sheets, 5–6 = 3 sheets.
+ */
+function sheetsNow(): number {
+  return sheetsFor(useSession.getState().layout.id, copiesNow());
+}
+
 /** Two-per-sheet only ever applies to the 3 Strip layout. */
 function twoUpActive(): boolean {
-  return settings().printTwoUp && useSession.getState().layout.id === "strip";
+  return twoUpFor(useSession.getState().layout.id);
 }
 
 export function currentPaper(): Paper {
@@ -177,7 +199,7 @@ function rawJob(
 ) {
   const s = settings();
   if (printer.language === "escpos")
-    return escposImageJob(bitmap, { copies: s.printCopies, cut: s.printCut });
+    return escposImageJob(bitmap, { copies: sheetsNow(), cut: s.printCut });
   const opts: JobOpts = {
     // A roll on a label printer: one label exactly as tall as the photo.
     stock: {
@@ -190,7 +212,7 @@ function rawJob(
     },
     density: s.printDensity,
     speed: s.printSpeed,
-    copies: s.printCopies,
+    copies: sheetsNow(),
     invertRaster: s.printInvertRaster,
   };
   return printer.language === "zpl"
@@ -269,7 +291,7 @@ export const usePrinter = create<PrinterState>()((set, get) => {
           page.toDataURL("image/jpeg", 0.92),
           { widthMm: w, heightMm: h, gapMm: 0 },
           0,
-          s.printCopies,
+          sheetsNow(),
         );
         set({
           status: "done",
@@ -293,7 +315,7 @@ export const usePrinter = create<PrinterState>()((set, get) => {
           fill: s.printFit === "fill",
           quality: s.printQuality,
           color: s.printColor,
-          copies: s.printCopies,
+          copies: sheetsNow(),
         });
         set({ status: "printing", progress: 0.5, message: "Printing…" });
         return await follow(printer, jobId, source);

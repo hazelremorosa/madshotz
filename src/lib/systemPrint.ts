@@ -33,7 +33,7 @@ export function systemPrintImage(
       widthMm: stock.widthMm,
       heightMm: stock.heightMm,
       marginMm,
-      copies: Math.max(1, Math.min(5, Math.round(copies))),
+      copies: Math.max(1, Math.min(10, Math.round(copies))),
     }).finally(() => {
       activePrint = null;
     });
@@ -122,7 +122,7 @@ export function systemPrintImage(
       return;
     }
 
-    const safeCopies = Math.max(1, Math.min(5, Math.round(copies)));
+    const safeCopies = Math.max(1, Math.min(10, Math.round(copies)));
 
     // @page carries the real label size, so the driver picks the right media
     // instead of defaulting to A4 and scaling the label into a corner.

@@ -12,6 +12,7 @@ import { DEFAULT_THEME } from "@/data/themes";
 import { DEFAULT_FRAME_STYLE, DEFAULT_PHOTO_SHAPE } from "@/data/frames";
 import {
   applyPalette,
+  copyLimits,
   startingLayout,
   startingOverlay,
   useSettings,
@@ -50,6 +51,8 @@ export interface SessionState {
   photoShape: PhotoShape;
   /** Decorative frame overlay laid over the whole receipt ("none" = off). */
   overlayId: string;
+  /** Copies this guest picked; 0 = not chosen yet (use the host default). */
+  copies: number;
 
   photos: CapturedPhoto[];
   /** When retaking one frame, the index being replaced. */
@@ -73,6 +76,8 @@ export interface SessionState {
   setFrameStyle: (id: string) => void;
   setPhotoShape: (shape: PhotoShape) => void;
   setOverlay: (id: string) => void;
+  /** Copies the guest asked for (clamped to the host's limits). */
+  setCopies: (n: number) => void;
 
   addPhoto: (dataUrl: string) => void;
   beginRetake: (index: number) => void;
@@ -111,6 +116,7 @@ export const useSession = create<SessionState>((set, get) => ({
   frameStyleId: DEFAULT_FRAME_STYLE.id,
   photoShape: DEFAULT_PHOTO_SHAPE,
   overlayId: startingOverlay(),
+  copies: 0,
 
   photos: [],
   retakeIndex: null,
@@ -133,7 +139,7 @@ export const useSession = create<SessionState>((set, get) => ({
 
   setLayout: (layout) => {
     // Changing the layout invalidates any captured frames.
-    set({ layout, photos: [], retakeIndex: null });
+    set({ layout, photos: [], retakeIndex: null, copies: 0 });
   },
 
   setFilter: (id) => set({ filterId: id }),
@@ -143,6 +149,10 @@ export const useSession = create<SessionState>((set, get) => ({
   setFrameStyle: (id) => set({ frameStyleId: id }),
   setPhotoShape: (shape) => set({ photoShape: shape }),
   setOverlay: (id) => set({ overlayId: id }),
+  setCopies: (n) => {
+    const { min, max } = copyLimits(get().layout.id);
+    set({ copies: Math.min(max, Math.max(min, Math.round(n) || min)) });
+  },
 
   addPhoto: (dataUrl) => {
     const { photos, retakeIndex, layout } = get();
@@ -196,6 +206,7 @@ export const useSession = create<SessionState>((set, get) => ({
       frameStyleId: DEFAULT_FRAME_STYLE.id,
       photoShape: DEFAULT_PHOTO_SHAPE,
       overlayId: startingOverlay(),
+      copies: 0,
       // Host settings (countdown, sound default, timings) live in the settings
       // store and are untouched by a session reset.
       soundOn: useSettings.getState().soundOn,
