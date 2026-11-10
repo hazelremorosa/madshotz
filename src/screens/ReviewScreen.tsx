@@ -29,14 +29,14 @@ export function ReviewScreen() {
         </p>
       </div>
 
-      <div className="no-bar mt-6 flex flex-1 snap-x snap-mandatory items-center gap-5 overflow-x-auto px-[14%] pb-40">
+      <div className="no-bar mt-6 flex flex-1 snap-x snap-mandatory items-center gap-5 overflow-x-auto px-[24%] pb-40">
         {photos.map((p, i) => (
           <motion.div
             key={p.id}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.06 }}
-            className="flex w-[72%] shrink-0 snap-center flex-col items-center gap-4"
+            className="flex w-full shrink-0 snap-center flex-col items-center gap-4"
           >
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl3 shadow-float">
               <img

@@ -8,7 +8,14 @@ import { useSettings } from "@/store/settings";
 import { escposImageJob } from "./escpos";
 import { renderPage, testPage } from "./layout";
 import * as nativePrint from "./native";
-import { defaultPaperId, resolvePaper, type Paper } from "./paper";
+import { useSession } from "@/store/session";
+import {
+  defaultPaperId,
+  isStripLayout,
+  resolvePaper,
+  stripPaper,
+  type Paper,
+} from "./paper";
 import type {
   FoundPrinter,
   PrinterHealth,
@@ -104,6 +111,11 @@ function settings() {
 
 export function currentPaper(): Paper {
   const s = settings();
+  // Strip layouts switch to the 2×6" paper on their own, when the printer has it.
+  if (s.printAutoPaper && isStripLayout(useSession.getState().layout.id)) {
+    const strip = stripPaper(s.printer);
+    if (strip) return strip;
+  }
   return resolvePaper(s.printer, s.printPaperId);
 }
 

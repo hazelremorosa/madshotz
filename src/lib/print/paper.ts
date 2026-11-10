@@ -49,6 +49,7 @@ export const THERMAL_PAPERS: Paper[] = [
 /** Friendly names for the PWG keywords a photo booth actually meets. */
 const KNOWN_MEDIA: Record<string, string> = {
   "na_index-4x6_4x6in": '4 × 6" (4R photo)',
+  "custom_2x6_2x6in": '2 × 6" (photo strip)',
   na_5x7_5x7in: '5 × 7" (5R photo)',
   "oe_photo-l_3.5x5in": '3.5 × 5" (L photo)',
   "na_govt-letter_8x10in": '8 × 10" (8R)',
@@ -69,6 +70,7 @@ const KNOWN_MEDIA: Record<string, string> = {
  */
 export const SHEET_PAPERS: Paper[] = [
   "na_index-4x6_4x6in",
+  "custom_2x6_2x6in",
   "na_5x7_5x7in",
   "oe_photo-l_3.5x5in",
   "iso_a6_105x148mm",
@@ -95,6 +97,9 @@ function sizeFromKeyword(
 }
 
 function mediaLabel(keyword: string, w: number, h: number): string {
+  // A 2×6" sheet goes by many keywords; name it by size.
+  if (Math.abs(w - 50.8) < 1 && Math.abs(h - 152.4) < 1)
+    return KNOWN_MEDIA["custom_2x6_2x6in"];
   return KNOWN_MEDIA[keyword] ?? `${Math.round(w)} × ${Math.round(h)} mm`;
 }
 
@@ -151,6 +156,20 @@ export function defaultPaperId(printer: SavedPrinter): string {
     if (hit) return hit.id;
   }
   return papers[0]?.id ?? "na_index-4x6_4x6in";
+}
+
+/** 3 Strip and 4 Strip print on 2×6" stock; everything else on the chosen sheet. */
+export function isStripLayout(layoutId: string): boolean {
+  return layoutId === "strip" || layoutId === "quad";
+}
+
+/** The 2×6" entry in a printer's paper list, if it has one. */
+export function stripPaper(printer: SavedPrinter | null): Paper | undefined {
+  return papersFor(printer).find(
+    (p) =>
+      p.id === "label-2x6" ||
+      (Math.abs(p.widthMm - 50.8) < 1 && Math.abs(p.heightMm - 152.4) < 1),
+  );
 }
 
 export function resolvePaper(printer: SavedPrinter | null, id: string): Paper {

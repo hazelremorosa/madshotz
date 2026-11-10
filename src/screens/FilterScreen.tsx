@@ -33,6 +33,8 @@ export function FilterScreen() {
   const go = useSession((s) => s.go);
   const enabledIds = useSettings((s) => s.enabledFilterIds);
   const customFrames = useSettings((s) => s.customFrames);
+  const intensityEnabled = useSettings((s) => s.intensityEnabled);
+  const beautyEnabled = useSettings((s) => s.beautyEnabled);
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const isNatural = filterId === "natural";
 
@@ -149,6 +151,7 @@ export function FilterScreen() {
 
       {/* Intensity + beauty controls */}
       <div className="mb-28 flex flex-col gap-3 px-6 pt-1">
+        {intensityEnabled && (
         <div className="glass-strong flex items-center gap-3 rounded-full px-4 py-2.5 shadow-glass">
           <span className="text-sm" aria-hidden>
             🎚️
@@ -171,7 +174,9 @@ export function FilterScreen() {
             {isNatural ? "—" : `${Math.round(filterIntensity * 100)}%`}
           </span>
         </div>
+        )}
 
+        {beautyEnabled && (
         <button
           type="button"
           onClick={toggleBeauty}
@@ -198,6 +203,7 @@ export function FilterScreen() {
             />
           </span>
         </button>
+        )}
       </div>
 
       <ActionBar

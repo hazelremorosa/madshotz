@@ -10,6 +10,15 @@ export const LAYOUTS: LayoutDef[] = [
     paperAspect: 4 / 5,
   },
   {
+    id: "4r",
+    name: "4R Photo",
+    shots: 1,
+    kind: "single",
+    // 4×6 in portrait — the standard 4R print.
+    frameAspect: 2 / 3,
+    paperAspect: 2 / 3,
+  },
+  {
     id: "duo",
     name: "2 Strip",
     shots: 2,
@@ -51,4 +60,4 @@ export const LAYOUTS: LayoutDef[] = [
   },
 ];
 
-export const DEFAULT_LAYOUT = LAYOUTS[2]; // 3 Strip
+export const DEFAULT_LAYOUT = LAYOUTS.find((l) => l.id === "strip")!; // 3 Strip

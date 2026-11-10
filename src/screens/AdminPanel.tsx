@@ -1612,6 +1612,26 @@ function GuestStepsSection() {
         />
       </Row>
       <Row
+        label="Filter intensity"
+        hint="The intensity slider on the filter screen. Off = full strength."
+      >
+        <Toggle
+          label="Filter intensity"
+          checked={s.intensityEnabled}
+          onChange={(v) => set("intensityEnabled", v)}
+        />
+      </Row>
+      <Row
+        label="Smooth skin"
+        hint="The smooth-skin switch on the filter screen. Off = no smoothing."
+      >
+        <Toggle
+          label="Smooth skin"
+          checked={s.beautyEnabled}
+          onChange={(v) => set("beautyEnabled", v)}
+        />
+      </Row>
+      <Row
         label="Stickers"
         hint="The “Decorate” screen, where guests add stickers and text."
       >

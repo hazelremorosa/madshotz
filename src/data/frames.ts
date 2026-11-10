@@ -73,7 +73,7 @@ export interface ShapeDef {
  * The shape every session starts on. It's also what guests are stuck with when
  * the host hides the shape picker, so it has to be the safe, flattering one.
  */
-export const DEFAULT_PHOTO_SHAPE: PhotoShape = "rounded";
+export const DEFAULT_PHOTO_SHAPE: PhotoShape = "sharp";
 
 export const PHOTO_SHAPES: ShapeDef[] = [
   { id: "rounded", name: "Rounded", emoji: "▢" },

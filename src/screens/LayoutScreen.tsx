@@ -27,6 +27,11 @@ export function LayoutScreen() {
     if (!shown.some((l) => l.id === layout.id)) setLayout(shown[0]);
   }, [shown, layout.id, setLayout]);
 
+  // With only a few layouts, a 2-column grid strands the last one alone on a
+  // row. Lay them out as a single, centred, larger row instead.
+  const few = shown.length <= 3;
+  const previewH = shown.length === 1 ? "h-72" : shown.length === 2 ? "h-60" : "h-48";
+
   return (
     <div className="flex h-full w-full flex-col pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))]">
       <div className="px-8 text-center">
@@ -36,7 +41,12 @@ export function LayoutScreen() {
         <p className="mt-1 text-sm text-cocoa/50">This sets how many shots</p>
       </div>
 
-      <div className="no-bar mt-4 grid flex-1 grid-cols-2 content-start gap-4 overflow-y-auto px-6 pb-40 pt-2">
+      <div className={cn(
+          "no-bar mt-4 flex-1 overflow-y-auto px-6 pb-40 pt-2",
+          few
+            ? "flex items-center justify-center gap-3"
+            : "grid grid-cols-2 content-start gap-4",
+        )}>
         {shown.map((l, i) => {
           const selected = layout.id === l.id;
           return (
@@ -57,6 +67,8 @@ export function LayoutScreen() {
               }}
               className={cn(
                 "relative flex flex-col items-center gap-3 rounded-xl2 p-4",
+                few && "min-w-0 flex-1 basis-0 justify-between",
+                few && shown.length === 1 && "max-w-[16rem]",
                 selected
                   ? "glass-strong shadow-bloom ring-[3px] ring-[rgb(var(--brand-a))]"
                   : "glass",
@@ -71,7 +83,7 @@ export function LayoutScreen() {
               >
                 ×{l.shots}
               </span>
-              <div className="flex h-28 w-full items-center justify-center">
+              <div className={cn("flex w-full items-center justify-center", few ? previewH : "h-28")}>
                 <div
                   className="paper h-full rounded-[4px] p-1.5 shadow-md"
                   style={{ aspectRatio: String(l.paperAspect) }}

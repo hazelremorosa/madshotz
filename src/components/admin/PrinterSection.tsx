@@ -437,6 +437,17 @@ function PaperSettings() {
         </select>
       </Row>
 
+      <Row
+        label="Match paper to layout"
+        hint="3 Strip and 4 Strip print on 2 × 6″; Single, 4R Photo and 2 Strip use the paper above."
+      >
+        <Toggle
+          label="Match paper to layout"
+          checked={s.printAutoPaper}
+          onChange={(v) => set("printAutoPaper", v)}
+        />
+      </Row>
+
       {photo && caps && caps.mediaTypes.length > 1 && (
         <Row
           label="Paper type"

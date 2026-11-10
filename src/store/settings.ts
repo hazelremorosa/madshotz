@@ -315,6 +315,10 @@ export interface SettingsState {
    */
   /** "Set the mood" — the filter reel, intensity and smooth-skin controls. */
   filtersEnabled: boolean;
+  /** The intensity slider on the filter screen (off = full strength). */
+  intensityEnabled: boolean;
+  /** The "Smooth skin" toggle on the filter screen. */
+  beautyEnabled: boolean;
   /** The photo-shape row on the Frames screen. */
   photoShapeEnabled: boolean;
   /** The frame colour/pattern row on the Frames screen. */
@@ -378,6 +382,8 @@ export interface SettingsState {
   printCopies: number;
   /** Paper loaded — a PWG media keyword for photo printers, a preset for thermal. */
   printPaperId: string;
+  /** 3 Strip / 4 Strip use 2×6" paper automatically (when the printer has it). */
+  printAutoPaper: boolean;
   /** "fit" letterboxes on white; "fill" covers the sheet and crops. */
   printFit: PrintFit;
   printRotate: PrintRotate;
@@ -499,13 +505,16 @@ const DEFAULTS = {
   guestCanSetCountdown: true,
   flashFill: false,
 
-  enabledLayoutIds: LAYOUTS.map((l) => l.id),
+  enabledLayoutIds: ["single", "duo", "strip"],
   enabledFilterIds: FILTERS.map((f) => f.id),
   defaultLayoutId: DEFAULT_LAYOUT.id,
 
   // Every guest step starts ON — a fresh booth offers the whole flow, and a
   // host only ever takes things away deliberately.
   filtersEnabled: true,
+  // Intensity and smooth skin are opt-in: the host turns them on in Admin.
+  intensityEnabled: false,
+  beautyEnabled: false,
   photoShapeEnabled: true,
   frameStyleEnabled: true,
   stickersEnabled: true,
@@ -539,6 +548,7 @@ const DEFAULTS = {
   printer: null as SavedPrinter | null,
   printCopies: 1,
   printPaperId: "na_index-4x6_4x6in",
+  printAutoPaper: true,
   printFit: "fit" as PrintFit,
   // Auto: landscape templates turn a quarter onto portrait paper, nothing else
   // moves, so this needs no host attention.
@@ -583,9 +593,9 @@ const DEFAULTS = {
   // lib/download.ts) — Admin shows that setup note whenever this is on.
   autoDownload: true,
 
-  // On by default: a booth that quietly stops delivering photos is the worst
-  // possible failure, so this only ever goes off by an explicit decision.
-  cloudUploadEnabled: true,
+  // Off by default: the host turns cloud upload on in Admin when they want QR
+  // delivery. (Photos still save to the device — see autoDownload.)
+  cloudUploadEnabled: false,
 
   kioskMode: false,
   keepAwake: true,
