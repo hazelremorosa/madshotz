@@ -556,7 +556,7 @@ function PaperSettings() {
 
       <Row
         label="Two per sheet"
-        hint="Prints the design twice side by side — e.g. two 2×6 strips on one 4×6, cut down the middle."
+        hint="3 Strip only: prints the strip twice side by side — two 2×6 strips on one 4×6 sheet, cut down the middle. Other layouts print one."
       >
         <Toggle
           label="Two per sheet"

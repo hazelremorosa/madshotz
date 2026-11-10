@@ -399,7 +399,7 @@ export interface SettingsState {
   /** "fit" letterboxes on white; "fill" covers the sheet and crops. */
   printFit: PrintFit;
   printRotate: PrintRotate;
-  /** Two copies side by side — a pair of 2×6 strips on one 4×6 sheet. */
+  /** Two copies side by side — a pair of 2×6 strips on one 4×6 sheet. 3 Strip only. */
   printTwoUp: boolean;
   /** Unprinted border in mm (ignored when printing borderless). */
   printMarginMm: number;
@@ -565,7 +565,7 @@ const DEFAULTS = {
   // Auto: landscape templates turn a quarter onto portrait paper, nothing else
   // moves, so this needs no host attention.
   printRotate: "auto" as PrintRotate,
-  printTwoUp: false,
+  printTwoUp: true,
   printMarginMm: 2,
 
   // Borderless is what guests expect from a photo print; it's only applied

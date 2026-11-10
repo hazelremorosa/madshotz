@@ -109,10 +109,20 @@ function settings() {
   return useSettings.getState();
 }
 
+/** Two-per-sheet only ever applies to the 3 Strip layout. */
+function twoUpActive(): boolean {
+  return settings().printTwoUp && useSession.getState().layout.id === "strip";
+}
+
 export function currentPaper(): Paper {
   const s = settings();
   // Strip layouts switch to the 2×6" paper on their own, when the printer has it.
-  if (s.printAutoPaper && isStripLayout(useSession.getState().layout.id)) {
+  // (Not when printing two per sheet: those go two-up on the full 4×6" sheet.)
+  if (
+    s.printAutoPaper &&
+    !twoUpActive() &&
+    isStripLayout(useSession.getState().layout.id)
+  ) {
     const strip = stripPaper(s.printer);
     if (strip) return strip;
   }
@@ -136,7 +146,7 @@ async function layoutFor(dataUrl: string, printer: SavedPrinter, paper: Paper) {
     marginPx: borderless ? 0 : px(s.printMarginMm),
     fit: s.printFit,
     rotate: s.printRotate,
-    twoUp: s.printTwoUp,
+    twoUp: twoUpActive(),
   });
 }
 
