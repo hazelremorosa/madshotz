@@ -211,7 +211,7 @@ class BoothPlugin(private val activity: Activity) : Plugin(activity) {
       }
       val widthMm = args.optDouble("widthMm", 101.6)
       val heightMm = args.optDouble("heightMm", 152.4)
-      val copies = args.optInt("copies", 1).coerceIn(1, 5)
+      val copies = args.optInt("copies", 1).coerceIn(1, 10)
       val marginMm = args.optDouble("marginMm", 0.0)
 
       // The label size goes in as a *hint*: a print service that knows the

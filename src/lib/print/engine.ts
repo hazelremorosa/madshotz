@@ -116,11 +116,11 @@ function settings() {
 
 /** Copies for this print: the guest's pick if they may choose, else the default. */
 export function copiesNow(): number {
-  const { min, def, max } = copyLimits(useSession.getState().layout.id);
+  const { min, step, def, max } = copyLimits(useSession.getState().layout.id);
   if (!settings().printCopiesGuestEnabled) return def;
   const n = Math.round(useSession.getState().copies);
   if (!(n > 0)) return def;
-  return Math.min(max, Math.max(min, n));
+  return Math.min(max, Math.max(min, Math.round(n / step) * step));
 }
 
 /**

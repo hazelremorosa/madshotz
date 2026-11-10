@@ -32,9 +32,9 @@ export function PreviewScreen() {
   const guestCanChoose = useSettings((s) => s.printCopiesGuestEnabled);
   // Re-read when the host changes the limits.
   useSettings((s) => s.printCopiesMax + s.printCopies);
-  const { min, def, max } = copyLimits(layout.id);
+  const { min, step, def, max } = copyLimits(layout.id);
   const showCopies = printEnabled && guestCanChoose && max > min;
-  const qty = Math.min(max, Math.max(min, copies > 0 ? copies : def));
+  const qty = Math.min(max, Math.max(min, Math.round((copies > 0 ? copies : def) / step) * step));
   const filterCss = activeFilterCss(filterId, filterIntensity, beautyOn);
   const frameBg = FRAME_STYLE_BY_ID(frameStyleId).bg;
   const frameOverlay = resolveOverlaySrc(overlayId, layout.paperAspect, customFrames, overlayOpts());
@@ -104,9 +104,9 @@ export function PreviewScreen() {
           <div className="flex items-center gap-5">
             <button
               type="button"
-              aria-label="Fewer copies"
+              aria-label={`${step} fewer`}
               disabled={qty <= min}
-              onClick={() => setCopies(qty - 1)}
+              onClick={() => setCopies(qty - step)}
               className="glass flex h-12 w-12 items-center justify-center rounded-full text-2xl font-bold text-cocoa shadow-glass transition-transform active:scale-90 disabled:pointer-events-none disabled:opacity-35"
             >
               −
@@ -119,9 +119,9 @@ export function PreviewScreen() {
             </span>
             <button
               type="button"
-              aria-label="More copies"
+              aria-label={`${step} more`}
               disabled={qty >= max}
-              onClick={() => setCopies(qty + 1)}
+              onClick={() => setCopies(qty + step)}
               className="glass flex h-12 w-12 items-center justify-center rounded-full text-2xl font-bold text-cocoa shadow-glass transition-transform active:scale-90 disabled:pointer-events-none disabled:opacity-35"
             >
               +

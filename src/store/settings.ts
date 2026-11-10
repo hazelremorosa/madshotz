@@ -859,15 +859,17 @@ export function copyLimits(layoutId = "") {
   const s = useSettings.getState();
   const int = (n: unknown, fb: number) =>
     Number.isFinite(n) ? Math.round(n as number) : fb;
-  const min = 1;
-  // 3 Strip prints two to a sheet, so a pair is the natural starting point.
-  const floor = twoUpFor(layoutId) ? 2 : min;
-  const def = Math.min(
-    MAX_COPIES_LIMIT,
-    Math.max(floor, int(s.printCopies, 1)),
+  // 3 Strip prints two to a sheet, so copies go 2, 4, 6… (whole sheets).
+  const step = twoUpFor(layoutId) ? 2 : 1;
+  const top = Math.floor(MAX_COPIES_LIMIT / step) * step;
+  const up = (n: number) => Math.ceil(n / step) * step;
+  const min = step;
+  const def = Math.min(top, Math.max(min, up(int(s.printCopies, 1))));
+  const max = Math.min(
+    top,
+    Math.max(def, Math.floor(int(s.printCopiesMax, 10) / step) * step),
   );
-  const max = Math.min(MAX_COPIES_LIMIT, Math.max(def, int(s.printCopiesMax, 10)));
-  return { min, def, max };
+  return { min, step, def, max };
 }
 
 /** Layouts the host has enabled, in data order (never empty). */

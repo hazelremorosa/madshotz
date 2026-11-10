@@ -150,8 +150,9 @@ export const useSession = create<SessionState>((set, get) => ({
   setPhotoShape: (shape) => set({ photoShape: shape }),
   setOverlay: (id) => set({ overlayId: id }),
   setCopies: (n) => {
-    const { min, max } = copyLimits(get().layout.id);
-    set({ copies: Math.min(max, Math.max(min, Math.round(n) || min)) });
+    const { min, step, max } = copyLimits(get().layout.id);
+    const snapped = Math.round(n / step) * step;
+    set({ copies: Math.min(max, Math.max(min, snapped || min)) });
   },
 
   addPhoto: (dataUrl) => {
