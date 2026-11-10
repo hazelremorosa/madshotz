@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { CoverCrop } from "@/assets/covers";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { settingsStorage } from "@/lib/settingsStorage";
 import type { Rgb, Theme } from "@/types";
 import { LAYOUTS, DEFAULT_LAYOUT } from "@/data/layouts";
 import { FILTERS } from "@/data/filters";
@@ -746,7 +747,7 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: SETTINGS_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => settingsStorage),
       // `adminOpen` is live UI state, never written to disk.
       partialize: ({ adminOpen: _adminOpen, ...rest }) => rest,
       merge: (persisted, current) => {
